@@ -1,3 +1,6 @@
+Brand/product name:
+FlowForward Systems
+
 1. What is FlowForward Systems in one sentence?
     FlowForward Systems is a portfolio and business automation platform that helps businesses design AI and automation workflows that move work forward, not just generate answers.
 
@@ -13,9 +16,9 @@
    - AI-powered tool
     User gives structured input then AI produces a useful structured output
    - Workflow automation
-    A trigger happens then AI perfoms predefined steps.
+    A trigger starts a predefined process, and the system performs actions across tools or steps. AI is optional, not required
    - Action-oriented AI workflow
-    AI supports a workflow decisionm system suggest or moves the next step forward with human review.
+    AI supports a workflow decision, then the system recommends or moves the next step forward with tracking and human review where needed.
    - Agentic workflow system
     AI works across multiple steps, uses tools, remebers context, takes safe actions, logs outcomes, and escalates when needed.
 
