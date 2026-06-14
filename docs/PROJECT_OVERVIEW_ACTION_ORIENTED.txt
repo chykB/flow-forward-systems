@@ -1,0 +1,21 @@
+1. What is FlowForward Systems in one sentence?
+	Flowforward Systems is a portfolio and business automation that help businessess design AI and automation workflows 
+
+2. Who is it for?
+
+3. What does “AI that acts, not just talks” mean?
+
+4. What is the difference between:
+   - ChatGPT wrapper
+   - AI-powered tool
+   - Workflow automation
+   - Action-oriented AI workflow
+   - Agentic workflow system
+
+5. What should V1 prove?
+
+6. What stack will V1 use?
+
+7. What stack comes later?
+
+8. What are we intentionally not building yet?
