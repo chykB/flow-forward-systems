@@ -20,7 +20,7 @@ FlowForward Systems
    - Action-oriented AI workflow
     AI supports a workflow decision, then the system recommends or moves the next step forward with tracking and human review where needed.
    - Agentic workflow system
-    AI works across multiple steps, uses tools, remebers context, takes safe actions, logs outcomes, and escalates when needed.
+    AI works across multiple steps, uses tools, remembers context, takes safe actions, logs outcomes, and escalates when needed.
 
 5. What should V1 prove?
     V1 should prove that you can clearly explain the problem, present services, show projects, publish insights, and build simple useful tools around AI automation workflows.
