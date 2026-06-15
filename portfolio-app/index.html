@@ -82,7 +82,7 @@
       </article>
     </section>
 
-    <section id="tools" aria-labelledby="tools-title">
+    <!-- <section id="tools" aria-labelledby="tools-title">
       <h2 id="tools-title">Free Tools</h2>
 
       <article>
@@ -99,6 +99,31 @@
         <h3>Sales Follow-Up Sequence Generator</h3>
         <p>A rule-based tool that helps create simple follow-up messages and reminder steps for leads that should not be forgotten.</p>
       </article>
+    </section> -->
+
+    <section id="tools" aria-labelledby="tools-title">
+      <h2 id="tools-title">Free Tools</h2>
+      <p>Use these rule-based tools to get a practical starting point for improving a workflow.</p>
+
+      <div class="tool-tabs" role="tablist" aria-label="Free workflow tools">
+        <button type="button" class="tool-tab is-active" data-tool="workflow-audit" aria-pressed="true">AI Workflow Audit Tool</button>
+        <button type="button" class="tool-tab" data-tool="alert-content" aria-pressed="false">Google Alert-To-Content Idea Generator</button>
+        <button type="button" class="tool-tab" data-tool="sales-follow-up" aria-pressed="false">Sales Follow-Up Sequence Generator</button>
+      </div>
+
+      <div class="tool-panel">
+        <form id="tool-form">
+          <div id="tool-fields"></div>
+          <button type="submit">Generate Recommendation</button>
+        </form>
+
+        <aside aria-live="polite">
+          <h3>Your Output</h3>
+          <div id="tool-output">
+            Choose a tool, add your details, and generate a practical starting point.
+          </div>
+        </aside>
+      </div>
     </section>
 
     <section id="projects" aria-labelledby="projects-title">
