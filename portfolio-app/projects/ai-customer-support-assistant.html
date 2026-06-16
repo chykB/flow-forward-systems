@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Customer Support Assistant | FlowForward Systems</title>
+  <link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+  <header>
+    <nav aria-label="Main navigation">
+      <a href="../index.html#home">Home</a>
+      <a href="../index.html#services">Services</a>
+      <a href="../index.html#tools">Tools</a>
+      <a href="../index.html#projects">Projects</a>
+      <a href="../blog.html">Blog</a>
+      <a href="../resources.html">Resources</a>
+      <a href="../about.html">About</a>
+      <a href="../index.html#contact">Contact</a>
+    </nav>
+
+    <section aria-labelledby="project-title">
+      <p>Project Hub + Demo Case Study</p>
+      <h1 id="project-title">AI Customer Support Assistant</h1>
+      <p>A support workflow project for classifying customer messages, identifying urgency, preparing response drafts, and keeping human review in sensitive cases.</p>
+    </section>
+  </header>
+
+  <main>
+    <section aria-labelledby="status-title">
+      <h2 id="status-title">Project Status</h2>
+
+      <article>
+        <h3>Project Level</h3>
+        <p>Standalone demo app.</p>
+      </article>
+
+      <article>
+        <h3>Agentic Level</h3>
+        <p>Low first, medium later. The first demo can classify and route support messages with rule-based logic. Later versions can use AI to summarize context, detect urgency, draft responses, and recommend next actions.</p>
+      </article>
+
+      <article>
+        <h3>Deployment / Showcase Status</h3>
+        <p>V1.2 project page and specification available. Rule-based support triage demo planned as the next standalone prototype.</p>
+      </article>
+
+      <article>
+        <h3>Proof Links</h3>
+        <p>Live demo: Planned.</p>
+        <p>GitHub/code: Planned.</p>
+        <p>Screenshots or walkthrough: Planned.</p>
+        <p>Architecture diagram: Planned.</p>
+      </article>
+    </section>
+
+    <section aria-labelledby="what-it-does-title">
+      <h2 id="what-it-does-title">What The Project Does</h2>
+      <p>The AI Customer Support Assistant helps teams sort incoming customer messages, identify urgency, prepare draft responses, and keep sensitive cases under human review.</p>
+      <p>The first planned demo will use rule-based logic to classify messages before any AI API is added.</p>
+    </section>
+
+    <section aria-labelledby="problem-title">
+      <h2 id="problem-title">Business Problem</h2>
+      <p>Customer messages are often slow to sort, prioritize, and answer. Support requests may arrive through email, forms, chat, social media, or messaging apps, and teams can lose time deciding what is urgent and who should respond.</p>
+      <p>This creates delayed replies, inconsistent service quality, missed complaints, and unnecessary pressure on support staff.</p>
+    </section>
+
+    <section aria-labelledby="manual-workflow-title">
+      <h2 id="manual-workflow-title">Manual Workflow</h2>
+
+      <article>
+        <h3>Current State</h3>
+        <p>A customer sends a message, a team member reads it manually, decides the issue type, judges urgency, drafts a response, and decides whether to escalate.</p>
+      </article>
+
+      <article>
+        <h3>Common Failure Points</h3>
+        <p>Urgent messages may be missed, complaints may not be escalated quickly, repetitive questions consume time, and response quality may vary across team members.</p>
+      </article>
+    </section>
+
+    <section aria-labelledby="automated-workflow-title">
+      <h2 id="automated-workflow-title">Automated Workflow</h2>
+
+      <article>
+        <h3>Trigger</h3>
+        <p>A new customer message is submitted through a form, inbox, support channel, or manual entry.</p>
+      </article>
+
+      <article>
+        <h3>Workflow Steps</h3>
+        <p>The message is classified by issue type, scored for urgency and sentiment, routed to the right response path, and prepared with a draft reply when appropriate.</p>
+      </article>
+
+      <article>
+        <h3>Final Outcome</h3>
+        <p>The support team can respond faster, prioritize risky messages, and keep a record of customer issues and response decisions.</p>
+      </article>
+    </section>
+
+    <section aria-labelledby="current-functionality-title">
+      <h2 id="current-functionality-title">Current V1.2 Functionality</h2>
+
+      <article>
+        <h3>Project Specification</h3>
+        <p>This page defines the support workflow, business problem, AI role, human review points, and future demo direction.</p>
+      </article>
+
+      <article>
+        <h3>Planned Rule-Based Demo</h3>
+        <p>The first working prototype should classify customer messages with simple rules, such as refund, complaint, technical issue, billing, general question, or urgent escalation.</p>
+      </article>
+    </section>
+
+    <section aria-labelledby="future-functionality-title">
+      <h2 id="future-functionality-title">Future Production Functionality</h2>
+
+      <article>
+        <h3>Message Intake</h3>
+        <p>Collect support messages from forms, email, chat, or CRM/support platforms.</p>
+      </article>
+
+      <article>
+        <h3>Issue Classification</h3>
+        <p>Classify messages by category, urgency, sentiment, customer type, and required next action.</p>
+      </article>
+
+      <article>
+        <h3>AI Draft Replies</h3>
+        <p>Generate suggested replies for human review, especially for repetitive support questions.</p>
+      </article>
+
+      <article>
+        <h3>Response Log</h3>
+        <p>Track message status, assigned owner, response draft, approval state, and final outcome.</p>
+      </article>
+    </section>
+
+    <section aria-labelledby="tools-title">
+      <h2 id="tools-title">Tools And Tech Stack</h2>
+
+      <article>
+        <h3>Current V1.2 Stack</h3>
+        <p>Static HTML and CSS for the project page. The first standalone demo can use HTML, CSS, and JavaScript with rule-based logic.</p>
+      </article>
+
+      <article>
+        <h3>Future Stack</h3>
+        <p>Next.js and TypeScript for the frontend, Python and FastAPI for backend workflow logic, AI provider integration, database storage for support logs, and AWS deployment.</p>
+      </article>
+    </section>
+
+    <section aria-labelledby="ai-role-title">
+      <h2 id="ai-role-title">AI Role</h2>
+      <p>AI can classify issue type, detect urgency, detect sentiment, summarize customer context, and draft replies. AI should not send sensitive customer-facing responses without human review.</p>
+    </section>
+
+    <section aria-labelledby="human-review-title">
+      <h2 id="human-review-title">Human Review Point</h2>
+      <p>A human should review refunds, legal issues, angry customers, complaints, sensitive requests, billing disputes, account changes, and any response that could affect customer trust.</p>
+    </section>
+
+    <section aria-labelledby="business-value-title">
+      <h2 id="business-value-title">Business Value And Money-Saving Impact</h2>
+
+      <article>
+        <h3>Workload Reduction</h3>
+        <p>Reduces manual support workload by helping teams classify and prioritize messages faster.</p>
+      </article>
+
+      <article>
+        <h3>Hiring Pressure</h3>
+        <p>Helps avoid hiring pressure for repetitive support tasks by reducing the time spent sorting and drafting common replies.</p>
+      </article>
+
+      <article>
+        <h3>Response Speed</h3>
+        <p>Improves response time by making urgent issues easier to identify and route.</p>
+      </article>
+
+      <article>
+        <h3>Customer Trust</h3>
+        <p>Keeps human review in sensitive cases so automation supports service quality instead of weakening it.</p>
+      </article>
+    </section>
+
+    <section aria-labelledby="reliability-title">
+      <h2 id="reliability-title">Reliability And Security Considerations</h2>
+
+      <article>
+        <h3>V1.2 Constraints</h3>
+        <p>This page is a static project specification and does not process or store customer messages.</p>
+      </article>
+
+      <article>
+        <h3>Future Reliability</h3>
+        <p>A production version should validate inputs, avoid duplicate tickets, track message status, log approvals, and preserve a clear escalation path.</p>
+      </article>
+
+      <article>
+        <h3>Data Protection</h3>
+        <p>Support workflows can contain sensitive customer data, so future versions should avoid unnecessary data collection and protect stored messages.</p>
+      </article>
+    </section>
+
+    <section aria-labelledby="screenshots-title">
+      <h2 id="screenshots-title">Screenshots Or Demo Notes</h2>
+      <p>Planned proof: a rule-based support triage demo that classifies sample messages and shows urgency, suggested response type, and human review requirement.</p>
+    </section>
+
+    <section aria-labelledby="learning-title">
+      <h2 id="learning-title">What This Project Shows</h2>
+      <p>This project shows how support operations can move from manual message sorting to structured triage, AI-assisted drafting, escalation rules, and human review.</p>
+    </section>
+
+    <section aria-labelledby="improvements-title">
+      <h2 id="improvements-title">What Would Improve Next</h2>
+
+      <article>
+        <h3>V1 Demo</h3>
+        <p>Build a rule-based support triage form that classifies sample customer messages in the browser.</p>
+      </article>
+
+      <article>
+        <h3>V3</h3>
+        <p>Add server-side AI for summarization, issue classification, sentiment detection, and draft replies.</p>
+      </article>
+
+      <article>
+        <h3>V4</h3>
+        <p>Add backend ticket logging, escalation workflows, approval history, and retry-safe notification handling.</p>
+      </article>
+    </section>
+
+    <section aria-labelledby="service-connection-title">
+      <h2 id="service-connection-title">Service Connection</h2>
+      <p>This project connects to Customer Support Automation, Workflow Audit, Workflow Automation Setup, and AI-Assisted Workflow Setup services.</p>
+      <a href="../index.html#contact">Discuss a support workflow</a>
+    </section>
+  </main>
+
+  <footer>
+    <p>&copy; 2026 FlowForward Systems. All rights reserved.</p>
+  </footer>
+</body>
+</html>
