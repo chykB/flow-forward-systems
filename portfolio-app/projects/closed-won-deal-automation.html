@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Closed-Won Deal Automation System | FlowForward Systems</title>
+  <link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+  <header>
+    <nav aria-label="Main navigation">
+      <a href="../index.html#home">Home</a>
+      <a href="../index.html#services">Services</a>
+      <a href="../index.html#tools">Tools</a>
+      <a href="../index.html#projects">Projects</a>
+      <a href="../blog.html">Blog</a>
+      <a href="../resources.html">Resources</a>
+      <a href="../about.html">About</a>
+      <a href="../index.html#contact">Contact</a>
+    </nav>
+
+    <section aria-labelledby="project-title">
+      <p>Production-Style Capstone Case Study</p>
+      <h1 id="project-title">Closed-Won Deal Automation System</h1>
+      <p>A technical capstone showing how a CRM closed-won event can trigger legal, signing, delivery, finance, audit, retry, and human escalation workflows.</p>
+    </section>
+  </header>
+
+  <main>
+    <section aria-labelledby="status-title">
+      <h2 id="status-title">Project Status</h2>
+
+      <article>
+        <h3>Project Level</h3>
+        <p>Production-style standalone capstone.</p>
+      </article>
+
+      <article>
+        <h3>Agentic Level</h3>
+        <p>High. This system is designed to coordinate multiple steps, use workflow state, handle exceptions, log outcomes, and escalate risky or failed cases to humans.</p>
+      </article>
+
+      <article>
+        <h3>Deployment / Showcase Status</h3>
+        <p>V1.2 architecture and case study page available. Backend/API proof, pseudocode, logs, audit trail, and deployment proof are planned for later phases.</p>
+      </article>
+
+      <article>
+        <h3>Proof Links</h3>
+        <p>Live demo: Planned.</p>
+        <p>GitHub/code: Planned.</p>
+        <p>Architecture diagram: Planned.</p>
+        <p>Webhook pseudocode: Planned.</p>
+        <p>Audit/log screenshot: Planned.</p>
+      </article>
+    </section>
+
+    <section aria-labelledby="what-it-does-title">
+      <h2 id="what-it-does-title">What The Project Does</h2>
+      <p>The Closed-Won Deal Automation System models what should happen after a CRM deal is marked as closed-won. It coordinates legal document generation, signature request, delivery system setup, finance record creation, audit logging, and failure handling.</p>
+      <p>In V1.2, this is an architecture and case study page. It does not run a backend yet.</p>
+    </section>
+
+    <section aria-labelledby="problem-title">
+      <h2 id="problem-title">Business Problem</h2>
+      <p>When a deal becomes closed-won, several teams usually need to act: sales, legal, delivery, finance, and customer success. If handoffs are manual, clients may miss NDAs, receive duplicate requests, wait too long for onboarding, or lack correct billing records.</p>
+      <p>The business risk is operational rework, client confusion, delayed onboarding, missed billing, and poor visibility into where the process failed.</p>
+    </section>
+
+    <section aria-labelledby="manual-workflow-title">
+      <h2 id="manual-workflow-title">Manual Workflow</h2>
+
+      <article>
+        <h3>Current State</h3>
+        <p>A salesperson marks a deal as won, then manually informs legal, delivery, finance, and operations. Each team creates its own tasks and records, often with repeated data entry.</p>
+      </article>
+
+      <article>
+        <h3>Common Failure Points</h3>
+        <p>NDAs may be missed or duplicated, signed documents may not trigger onboarding, finance records may be delayed, and teams may not know which step failed.</p>
+      </article>
+    </section>
+
+    <section aria-labelledby="automated-workflow-title">
+      <h2 id="automated-workflow-title">Automated Workflow</h2>
+
+      <article>
+        <h3>Trigger</h3>
+        <p>A CRM sends a closed-won webhook event when a deal reaches the closed-won stage.</p>
+      </article>
+
+      <article>
+        <h3>Workflow Steps</h3>
+        <p>The automation validates the webhook, checks idempotency, creates a workflow run, generates an NDA, sends it for signature, waits for signed-document event, creates delivery and finance records, and logs each step.</p>
+      </article>
+
+      <article>
+        <h3>Final Outcome</h3>
+        <p>The business gets a reliable, auditable post-sale handoff process with fewer duplicate records, fewer missed tasks, and clearer recovery paths when something fails.</p>
+      </article>
+    </section>
+
+    <section aria-labelledby="architecture-title">
+      <h2 id="architecture-title">Architecture</h2>
+
+      <article>
+        <h3>System Flow</h3>
+        <p>CRM Webhook -> API Gateway -> Webhook Listener -> Signature Verification -> Payload Validation -> Idempotency Check -> Workflow Orchestrator -> Audit Log -> Legal Document Service -> Signing Service -> Signed Event Handler -> Delivery System -> Finance System -> Monitoring + Alerts -> Human Escalation Queue.</p>
+      </article>
+
+      <article>
+        <h3>Systems Involved</h3>
+        <p>CRM, automation service, legal document service, signing service, delivery system, finance system, database/audit log, queue, monitoring system, and human escalation process.</p>
+      </article>
+    </section>
+
+    <section aria-labelledby="event-flow-title">
+      <h2 id="event-flow-title">Event Flow</h2>
+
+      <article>
+        <h3>Closed-Won Event</h3>
+        <p>The CRM sends a closed-won event containing deal ID, account ID, client contact, deal value, owner, timestamp, and event ID.</p>
+      </article>
+
+      <article>
+        <h3>Document Flow</h3>
+        <p>The automation creates an NDA request, sends it to the signing service, and waits for a signed-document webhook before continuing to downstream setup.</p>
+      </article>
+
+      <article>
+        <h3>Delivery And Finance Flow</h3>
+        <p>After signing, the system creates a delivery client record and finance billing record, then marks the workflow run complete.</p>
+      </article>
+    </section>
+
+    <section aria-labelledby="api-title">
+      <h2 id="api-title">API And Webhook Design</h2>
+
+      <article>
+        <h3>CRM Webhook Endpoint</h3>
+        <p><code>POST /api/webhooks/crm/deal-closed-won</code></p>
+        <p>Receives closed-won deal events from the CRM.</p>
+      </article>
+
+      <article>
+        <h3>Signed Document Endpoint</h3>
+        <p><code>POST /api/webhooks/signing/document-signed</code></p>
+        <p>Receives signed-document events from the signing provider.</p>
+      </article>
+
+      <article>
+        <h3>Admin Retry Endpoint</h3>
+        <p><code>POST /api/admin/workflow-runs/:id/retry</code></p>
+        <p>Allows an authenticated admin to retry a failed workflow step in a future version.</p>
+      </article>
+    </section>
+
+    <section aria-labelledby="idempotency-title">
+      <h2 id="idempotency And Duplicate Prevention">Idempotency And Duplicate Prevention</h2>
+
+      <article>
+        <h3>Event ID Check</h3>
+        <p>Every external event should include a unique event ID. If the same event arrives twice, the system should return the existing workflow status instead of creating duplicate NDAs, delivery records, or finance records.</p>
+      </article>
+
+      <article>
+        <h3>Workflow Run State</h3>
+        <p>The system should store workflow status and current step so it can resume from the failed step instead of repeating the entire workflow.</p>
+      </article>
+    </section>
+
+    <section aria-labelledby="retry-title">
+      <h2 id="retry-title">Retry Strategy</h2>
+
+      <article>
+        <h3>Temporary Failures</h3>
+        <p>Retry temporary provider failures with backoff, such as a signing service timeout or finance API rate limit.</p>
+      </article>
+
+      <article>
+        <h3>Validation Failures</h3>
+        <p>Do not retry invalid payloads or missing required data automatically. Send them to human review.</p>
+      </article>
+
+      <article>
+        <h3>Partial Failure Recovery</h3>
+        <p>If legal succeeds but finance fails, the system should not regenerate the NDA. It should resume from the finance step after the issue is resolved.</p>
+      </article>
+    </section>
+
+    <section aria-labelledby="monitoring-title">
+      <h2 id="monitoring-title">Monitoring And Observability</h2>
+
+      <article>
+        <h3>Logs</h3>
+        <p>Log request received, validation result, idempotency result, workflow step started, workflow step completed, provider error, retry attempt, and human escalation.</p>
+      </article>
+
+      <article>
+        <h3>Metrics</h3>
+        <p>Track workflow success rate, workflow failure rate, duplicate webhook count, average processing time, failed finance syncs, and failed document signing flows.</p>
+      </article>
+
+      <article>
+        <h3>Alerts</h3>
+        <p>Alert when repeated workflow failures happen, signing events are missing, finance sync fails repeatedly, or queue backlog grows.</p>
+      </article>
+    </section>
+
+    <section aria-labelledby="debugging-title">
+      <h2 id="debugging-title">Debugging Scenario</h2>
+
+      <article>
+        <h3>Missing Finance Record</h3>
+        <p>Search by workflow run ID, confirm the signed-document event arrived, inspect the audit log, identify whether delivery succeeded, check the finance step error, and retry only the failed finance step after validation.</p>
+      </article>
+
+      <article>
+        <h3>Duplicate NDA</h3>
+        <p>Search by external event ID and idempotency key, confirm whether duplicate webhook events were processed, and verify that document generation is protected by stored workflow state.</p>
+      </article>
+    </section>
+
+    <section aria-labelledby="scaling-title">
+      <h2 id="scaling-title">Scaling Plan</h2>
+
+      <article>
+        <h3>At 10x Volume</h3>
+        <p>Move long-running work to a queue, separate webhook intake from workflow processing, add concurrency controls, handle provider rate limits, and use managed AWS services for state, logs, and alerts.</p>
+      </article>
+
+      <article>
+        <h3>Future Deployment</h3>
+        <p>Python and FastAPI can handle webhook/API logic, AWS Lambda can process small steps, SQS can queue workflow work, DynamoDB or PostgreSQL can store workflow state, and CloudWatch can capture logs and alarms.</p>
+      </article>
+    </section>
+
+    <section aria-labelledby="ai-role-title">
+      <h2 id="ai-role-title">AI Role</h2>
+      <p>AI can optionally summarize deal context, detect missing fields, draft internal exception notes, and explain failure reasons. AI should not generate legal documents, approve billing, or trigger high-risk actions without human review.</p>
+    </section>
+
+    <section aria-labelledby="human-review-title">
+      <h2 id="human-review-title">Human Review Point</h2>
+      <p>A human should review missing client data, legal document exceptions, failed billing syncs, repeated failures, contract changes, high-value deals, and sensitive client records.</p>
+    </section>
+
+    <section aria-labelledby="business-value-title">
+      <h2 id="business-value-title">Business Value And Money-Saving Impact</h2>
+
+      <article>
+        <h3>Reduced Manual Handoffs</h3>
+        <p>Reduces the manual coordination needed between sales, legal, delivery, finance, and operations.</p>
+      </article>
+
+      <article>
+        <h3>Duplicate Prevention</h3>
+        <p>Prevents duplicate NDAs, duplicate client records, and repeated billing setup through idempotency and workflow state.</p>
+      </article>
+
+      <article>
+        <h3>Billing Accuracy</h3>
+        <p>Reduces missed billing records and delayed finance handoffs after a deal closes.</p>
+      </article>
+
+      <article>
+        <h3>Operational Recovery</h3>
+        <p>Makes failed steps visible and recoverable without restarting the entire workflow.</p>
+      </article>
+    </section>
+
+    <section aria-labelledby="reliability-title">
+      <h2 id="reliability-title">Reliability And Security Considerations</h2>
+
+      <article>
+        <h3>V1.2 Constraints</h3>
+        <p>This is an architecture and case study page. It does not run a live backend, store client data, or process real webhooks yet.</p>
+      </article>
+
+      <article>
+        <h3>Security Requirements</h3>
+        <p>Future versions should verify webhook signatures, validate payloads, protect admin routes, store secrets securely, use least-privilege permissions, and avoid logging sensitive full payloads.</p>
+      </article>
+
+      <article>
+        <h3>Reliability Requirements</h3>
+        <p>Future versions should use idempotency keys, audit logs, retry strategy, partial failure recovery, monitoring, and human escalation.</p>
+      </article>
+    </section>
+
+    <section aria-labelledby="screenshots-title">
+      <h2 id="screenshots-title">Screenshots Or Demo Notes</h2>
+      <p>Planned proof: architecture diagram, event sequence, webhook payload examples, pseudocode for the CRM webhook listener, audit log mock, and debugging walkthrough.</p>
+    </section>
+
+    <section aria-labelledby="learning-title">
+      <h2 id="learning-title">What This Project Shows</h2>
+      <p>This capstone shows production automation thinking: webhooks, validation, idempotency, retries, audit logs, partial failure recovery, monitoring, scaling, and human escalation.</p>
+    </section>
+
+    <section aria-labelledby="improvements-title">
+      <h2 id="improvements-title">What Would Improve Next</h2>
+
+      <article>
+        <h3>V1.2</h3>
+        <p>Add architecture diagram, payload examples, and webhook listener pseudocode.</p>
+      </article>
+
+      <article>
+        <h3>V4</h3>
+        <p>Build a backend webhook demo with validation, idempotency, workflow state, and audit logs.</p>
+      </article>
+
+      <article>
+        <h3>V5</h3>
+        <p>Add production-style deployment proof, monitoring, retry handling, scaling plan, and exception support.</p>
+      </article>
+    </section>
+
+    <section aria-labelledby="service-connection-title">
+      <h2 id="service-connection-title">Service Connection</h2>
+      <p>This project connects to Agentic Automation System Design, Workflow Automation Setup, RevOps Automation, and production automation architecture services.</p>
+      <a href="../index.html#contact">Discuss an automation system</a>
+    </section>
+  </main>
+
+  <footer>
+    <p>&copy; 2026 FlowForward Systems. All rights reserved.</p>
+  </footer>
+</body>
+</html>
