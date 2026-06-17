@@ -136,3 +136,53 @@ Date: 2026-06-16
 ## Notes
 
 V1.2 project pages are working locally through Live Server. Each project page acts as a project hub and case study, with project level, agentic level, deployment/showcase status, placeholder proof links, business value, human review points, and future improvement notes.
+
+# V1.3 Deployment Notes
+
+## Hosting Provider
+
+Cloudflare Pages
+
+## Live URL
+
+https://your-cloudflare-url.pages.dev
+
+## Deployment Source
+
+GitHub repository: chykB/flow-forward-systems  
+Branch: main  
+Public app folder: portfolio-app
+
+## Why Cloudflare Pages Was Chosen
+
+Cloudflare Pages was chosen for the first public deployment because it is simple, fast, free-friendly, supports GitHub-based deployments, and can deploy the static portfolio app directly from the portfolio-app folder.
+
+AWS Amplify remains a future option when AWS-specific deployment proof becomes more important.
+
+## Manual Test Results
+
+Homepage loads: pass  
+Blog page loads: pass  
+Resources page loads: pass  
+About page loads: pass  
+
+Homepage nav to Blog works: pass  
+Homepage nav to Resources works: pass  
+Homepage nav to About works: pass  
+
+All six project cards open their project pages: pass  
+Each project page links back to Home: pass  
+Each project page is readable on mobile: pass  
+
+Tool 1 switches and generates output: pass  
+Tool 2 switches and generates output: pass  
+Tool 3 switches and generates output: pass  
+
+Contact email link works: pass  
+No horizontal scroll: pass  
+No private docs visible: pass  
+Browser console has no critical errors: pass  
+
+## Phase Result
+
+V1.3 static deployment is complete. The FlowForward Systems portfolio app is publicly accessible and ready to be shared for review.
