@@ -64,3 +64,75 @@ Date: 2026-06-16
 ## Notes
 
 V1.1 content pages work locally through Live Server. Blog, Resources, and About pages are available as static pages. The existing V1 free tools continue to work after adding multi-page navigation.
+
+# V1.2 Project Page Test Notes
+
+Date: 2026-06-16
+
+## Scope Tested
+
+- Homepage project card links
+- Six individual project pages
+- Project page navigation
+- Project page styling
+- Required project metadata
+- Closed-Won Deal Automation capstone depth
+- Mobile layout
+
+## Results
+
+### Homepage Project Card Links
+
+- Sales Follow-Up Automation System: Pass
+- AI Customer Support Assistant: Pass
+- Google Alert-To-Content Generator: Pass
+- AI Operations Workflow Assistant: Pass
+- Closed-Won Deal Automation System: Pass
+- AI RevOps Workflow Intelligence System: Pass
+
+### Project Pages
+
+- Sales page loads: Pass
+- Support page loads: Pass
+- Alert-to-content page loads: Pass
+- Operations page loads: Pass
+- Closed-won page loads: Pass
+- RevOps page loads: Pass
+
+### CSS
+
+- All project pages load styling: Pass
+
+### Navigation
+
+- Each project page can navigate back Home: Pass
+- Each project page can navigate to Blog: Pass
+- Each project page can navigate to Resources: Pass
+- Each project page can navigate to About: Pass
+
+### Content Requirements
+
+- Each page has project level: Pass
+- Each page has agentic level: Pass
+- Each page has deployment/showcase status: Pass
+- Each page has proof links or placeholders: Pass
+- Each page has human review point: Pass
+- Each page has business value/money-saving impact: Pass
+
+### Capstone
+
+- Closed-won page includes architecture: Pass
+- Closed-won page includes event flow: Pass
+- Closed-won page includes webhook/API design: Pass
+- Closed-won page includes idempotency: Pass
+- Closed-won page includes retry strategy: Pass
+- Closed-won page includes monitoring/debugging/scaling: Pass
+
+### Mobile
+
+- All project pages readable on mobile: Pass
+- No horizontal scroll: Pass
+
+## Notes
+
+V1.2 project pages are working locally through Live Server. Each project page acts as a project hub and case study, with project level, agentic level, deployment/showcase status, placeholder proof links, business value, human review points, and future improvement notes.
