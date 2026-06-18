@@ -2,6 +2,7 @@ import { InfoCard } from "@/components/InfoCard";
 import { ProjectCard } from "@/components/ProjectCard";
 import { SectionHeader } from "@/components/SectionHeader";
 import { SiteShell } from "@/components/SiteShell";
+import { WorkflowTools } from "@/components/WorkflowTools";
 
 const maturityItems = [
   {
@@ -156,15 +157,11 @@ export default function Home() {
         <section id="tools" className="mx-auto max-w-6xl px-6 py-16">
           <SectionHeader
             title="Free Tools"
-            description="The interactive rule-based tools from V1 will be migrated into this V2 app in the next task."
+            description="Use these rule-based tools to get a practical starting point for improving a workflow."
           />
-          <div className="rounded-lg border border-[#D9DED8] bg-white p-6">
-            <p className="leading-7 text-[#5F6862]">
-              Tool migration is intentionally handled separately so the static
-              content structure stays clean before client-side state is added.
-            </p>
-          </div>
+          <WorkflowTools />
         </section>
+  
 
         <section id="projects" className="mx-auto max-w-6xl px-6 py-16">
           <SectionHeader title="Projects" />
