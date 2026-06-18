@@ -1,5 +1,102 @@
-
+import { InfoCard } from "@/components/InfoCard";
+import { ProjectCard } from "@/components/ProjectCard";
+import { SectionHeader } from "@/components/SectionHeader";
 import { SiteShell } from "@/components/SiteShell";
+
+const maturityItems = [
+  {
+    title: "Workflow Automation",
+    description:
+      "Basic automation for repetitive tasks such as lead capture, follow-up reminders, status tracking, and form-to-database workflows.",
+  },
+  {
+    title: "AI-Assisted Workflow Tools",
+    description:
+      "AI supports specific workflow steps by summarizing, classifying, drafting, generating ideas, or preparing outputs for human review.",
+  },
+  {
+    title: "Agentic Automation",
+    description:
+      "AI works across multiple steps, uses tools, makes recommendations, takes safe actions, logs outcomes, and escalates to humans when needed.",
+  },
+];
+
+const services = [
+  {
+    title: "Workflow Audit",
+    description:
+      "Review current processes to identify bottlenecks, repeated tasks, and automation opportunities.",
+  },
+  {
+    title: "Workflow Automation Setup",
+    description:
+      "Build simple automation workflows that connect tools and reduce manual follow-up.",
+  },
+  {
+    title: "AI-Assisted Workflow Setup",
+    description:
+      "Add AI support for drafting, summarizing, classifying, and preparing workflow actions.",
+  },
+  {
+    title: "Agentic Automation System Design",
+    description:
+      "Design more advanced automation systems that can move work through multiple steps with human oversight.",
+  },
+  {
+    title: "RevOps Automation",
+    description:
+      "Improve sales and revenue operations with cleaner handoffs, alerts, follow-ups, and reporting workflows.",
+  },
+  {
+    title: "AI Content Workflow",
+    description:
+      "Create structured AI-supported workflows for planning, drafting, repurposing, and publishing content.",
+  },
+  {
+    title: "AI Video Content Workflow",
+    description:
+      "Build repeatable systems for scripting, planning, generating, editing, and managing AI-assisted video content.",
+  },
+];
+
+const projects = [
+  {
+    title: "Sales Follow-Up Automation System",
+    description:
+      "A workflow system for tracking leads, creating follow-up tasks, and reducing missed revenue opportunities.",
+    href: "/projects/sales-follow-up-automation",
+  },
+  {
+    title: "AI Customer Support Assistant",
+    description:
+      "An AI-assisted support workflow for classifying customer requests, detecting urgency, and preparing response drafts for review.",
+    href: "/projects/ai-customer-support-assistant",
+  },
+  {
+    title: "Google Alert-To-Content Generator",
+    description:
+      "A content workflow that turns relevant alerts into structured ideas, drafts, scripts, and publishing prompts.",
+    href: "/projects/google-alert-to-content-generator",
+  },
+  {
+    title: "AI Operations Workflow Assistant",
+    description:
+      "A system for organizing operational tasks, summarizing updates, recommending next actions, and keeping work visible.",
+    href: "/projects/ai-operations-workflow-assistant",
+  },
+  {
+    title: "Closed-Won Deal Automation System",
+    description:
+      "A revenue workflow that triggers legal, delivery, finance, audit, and follow-up actions after a deal is marked closed-won.",
+    href: "/projects/closed-won-deal-automation",
+  },
+  {
+    title: "AI RevOps Workflow Intelligence System",
+    description:
+      "An AI-supported RevOps system for identifying workflow gaps, delayed handoffs, CRM issues, and revenue process leaks.",
+    href: "/projects/ai-revops-workflow-intelligence",
+  },
+];
 
 export default function Home() {
   return (
@@ -27,6 +124,77 @@ export default function Home() {
               Our focus is helping teams reduce revenue leakage caused by missed
               follow-ups, weak handoffs, CRM gaps, and disconnected workflows.
             </p>
+          </div>
+        </section>
+
+        <section className="mx-auto max-w-6xl px-6 py-16">
+          <SectionHeader title="Automation Maturity Model" />
+          <div className="grid gap-5 md:grid-cols-3">
+            {maturityItems.map((item) => (
+              <InfoCard
+                key={item.title}
+                title={item.title}
+                description={item.description}
+              />
+            ))}
+          </div>
+        </section>
+
+        <section id="services" className="mx-auto max-w-6xl px-6 py-16">
+          <SectionHeader title="Services" />
+          <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+            {services.map((service) => (
+              <InfoCard
+                key={service.title}
+                title={service.title}
+                description={service.description}
+              />
+            ))}
+          </div>
+        </section>
+
+        <section id="tools" className="mx-auto max-w-6xl px-6 py-16">
+          <SectionHeader
+            title="Free Tools"
+            description="The interactive rule-based tools from V1 will be migrated into this V2 app in the next task."
+          />
+          <div className="rounded-lg border border-[#D9DED8] bg-white p-6">
+            <p className="leading-7 text-[#5F6862]">
+              Tool migration is intentionally handled separately so the static
+              content structure stays clean before client-side state is added.
+            </p>
+          </div>
+        </section>
+
+        <section id="projects" className="mx-auto max-w-6xl px-6 py-16">
+          <SectionHeader title="Projects" />
+          <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+            {projects.map((project) => (
+              <ProjectCard
+                key={project.title}
+                title={project.title}
+                description={project.description}
+                href={project.href}
+              />
+            ))}
+          </div>
+        </section>
+
+        <section id="contact" className="mx-auto max-w-6xl px-6 py-16">
+          <div className="rounded-lg bg-[#174F42] p-8 md:p-10">
+            <h2 className="text-3xl font-bold text-white">
+              Book a Workflow Audit
+            </h2>
+            <p className="mt-4 max-w-2xl text-lg leading-8 text-white">
+              Ready to improve your workflows with practical AI and automation
+              systems?
+            </p>
+            <a
+              href="mailto:malikchika86@gmail.com"
+              className="mt-6 inline-block rounded-md bg-[#B8892E] px-5 py-3 font-bold text-[#17201C] hover:bg-white hover:text-[#174F42]"
+            >
+              Contact FlowForward Systems
+            </a>
           </div>
         </section>
       </main>
