@@ -7,26 +7,35 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <header id="home">
-    <nav aria-label="Main navigation">
-      <a href="#home">Home</a>
-      <a href="#services">Services</a>
-      <a href="#tools">Tools</a>
-      <a href="#projects">Projects</a>
-      <a href="blog.html">Blog</a>
-      <a href="resources.html">Resources</a>
-      <a href="about.html">About</a>
-      <a href="#contact">Contact</a>
-    </nav>
+  <header id="home" class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="index.html" aria-label="FlowForward Systems home">
+        <span class="brand-mark">FF</span>
+        <span class="brand-name">FlowForward Systems</span>
+      </a>
 
+      <nav class="nav-links" aria-label="Main navigation">
+        <a href="index.html">Home</a>
+        <a href="index.html#services">Services</a>
+        <a href="index.html#tools">Tools</a>
+        <a href="index.html#projects">Projects</a>
+        <a href="blog.html">Blog</a>
+        <a href="resources.html">Resources</a>
+        <a href="about.html">About</a>
+        <a href="index.html#contact">Contact</a>
+      </nav>
+
+      <div class="header-spacer" aria-hidden="true"></div>
+    </div>
+
+  
+  </header>
+  <main>
     <section aria-labelledby="hero-title">
       <h1 id="hero-title">FlowForward Systems</h1>
       <p>Action-oriented AI and automation workflows for sales, customer support, content, RevOps, and operations.</p>
       <p>We help businesses design clearer workflows, reduce manual tasks, and build automation systems that move work forward.</p>
     </section>
-  </header>
-
-  <main>
     <section aria-labelledby="maturity-title">
       <h2 id="maturity-title">Automation Maturity Model</h2>
 
@@ -170,7 +179,7 @@
     </section>
 
     <section id="contact" aria-labelledby="contact-title">
-      <h2 id="contact-title">Contact CTA</h2>
+      <h2 id="contact-title">Book a Workflow Audit</h2>
       <p>Ready to improve your workflows with practical AI and automation systems?</p>
       <a href="mailto:malikchika86@gmail.com">Contact FlowForward Systems</a>
     </section>
