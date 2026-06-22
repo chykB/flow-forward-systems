@@ -3,6 +3,7 @@ import { ProjectCard } from "@/components/ProjectCard";
 import { SectionHeader } from "@/components/SectionHeader";
 import { SiteShell } from "@/components/SiteShell";
 import { WorkflowTools } from "@/components/WorkflowTools";
+import { LeadCaptureForm } from "@/components/LeadCaptureForm";
 
 const maturityItems = [
   {
@@ -178,21 +179,11 @@ export default function Home() {
         </section>
 
         <section id="contact" className="mx-auto max-w-6xl px-6 py-16">
-          <div className="rounded-lg bg-[#174F42] p-8 md:p-10">
-            <h2 className="text-3xl font-bold text-white">
-              Book a Workflow Audit
-            </h2>
-            <p className="mt-4 max-w-2xl text-lg leading-8 text-white">
-              Ready to improve your workflows with practical AI and automation
-              systems?
-            </p>
-            <a
-              href="mailto:malikchika86@gmail.com"
-              className="mt-6 inline-block rounded-md bg-[#B8892E] px-5 py-3 font-bold text-[#17201C] hover:bg-white hover:text-[#174F42]"
-            >
-              Contact FlowForward Systems
-            </a>
-          </div>
+          <SectionHeader
+            title="Book a Workflow Audit"
+            description="Share the workflow you want to improve, and what kind of automation support you are considering."
+          />
+          <LeadCaptureForm />
         </section>
       </main>
     </SiteShell>
