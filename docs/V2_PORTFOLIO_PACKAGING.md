@@ -143,3 +143,70 @@ The V2 site emphasizes reducing revenue leakage caused by:
 The next phase is V2.1: lead capture and simple data storage.
 
 This should only begin after the V2 deployment is stable and documented.
+# V2.1A Lead Capture Test Notes
+
+## Scope
+
+This checkpoint adds a frontend lead capture form to the V2 Next.js app.
+
+The form does not save leads yet. It validates user input and prepares a structured email draft so a visitor can send a workflow audit request manually.
+
+## Why This Exists
+
+The project roadmap says Phase 6 should move from email-only contact to structured lead capture.
+
+This V2.1A step keeps the implementation small before adding backend storage, email notification, spam protection, and lead status tracking.
+
+## Form Fields
+
+- Name
+- Email
+- Business type
+- Workflow area
+- Service interest
+- Current challenge
+- Additional message
+
+## Current Behavior
+
+- Required fields are validated.
+- Invalid email addresses show an error.
+- Long inputs are limited.
+- A valid form prepares a structured email draft.
+- The visitor can open the email draft with a mailto link.
+- If the mailto link does not work, the visitor can copy the email draft manually.
+
+## Manual Test Results
+
+- Contact section shows lead capture form: pass
+- Submitting empty form shows validation errors: pass
+- Invalid email shows validation error: pass
+- Valid form shows Review Email Draft button: pass
+- Copyable email draft appears: pass
+- Email draft contains submitted details: pass
+- If mailto does not open, fallback still works: pass
+- Header Contact nav jumps to form: pass
+- Mobile form layout works: pass
+- No horizontal scroll: pass
+
+## Technical Validation
+
+- npm run lint: pass
+- npm run build: pass
+
+## Known Limitation
+
+This is not the full Phase 6 implementation yet.
+
+Leads are not saved to a database or lead tracker. No backend API, email notification service, spam protection, lead status model, or admin review flow exists yet.
+
+## Next Phase
+
+The next step is V2.1B: choose and implement simple lead storage.
+
+Possible paths:
+
+- Low-code form backend first
+- Google Sheets or Airtable lead tracker
+- Next.js API route with external storage
+- Python FastAPI backend later, aligned with the long-term roadmap
