@@ -10,6 +10,7 @@ type FormValues = {
   serviceInterest: string;
   currentChallenge: string;
   message: string;
+  companyWebsite: string;
 };
 
 type FormErrors = Partial<Record<keyof FormValues, string>>;
@@ -24,6 +25,7 @@ const initialValues: FormValues = {
   serviceInterest: "",
   currentChallenge: "",
   message: "",
+  companyWebsite: "",
 };
 
 const workflowAreas = [
@@ -104,8 +106,11 @@ ${values.message || "Not provided"}`;
 }
 
 
+type LeadCaptureFormProps = {
+  onDone?: () => void;
+};
 
-export default function LeadCaptureForm() {
+export default function LeadCaptureForm({ onDone }: LeadCaptureFormProps) {
   const [values, setValues] = useState<FormValues>(initialValues);
   const [errors, setErrors] = useState<FormErrors>({});
   const [formStep, setFormStep] = useState<FormStep>("editing");
@@ -215,13 +220,25 @@ export default function LeadCaptureForm() {
         <p className="mt-3 max-w-2xl leading-7 text-[#5F6862]">
           {statusMessage}
         </p>
-        <button
-          className="mt-6 rounded-md bg-[#174F42] px-5 py-3 font-bold text-white hover:bg-[#1F6F5B]"
-          type="button"
-          onClick={resetForm}
-        >
-          Submit Another Request
-        </button>
+        <div className="mt-6 flex flex-wrap gap-3">
+          {onDone ? (
+            <button
+              className="rounded-md bg-[#174F42] px-5 py-3 font-bold text-white hover:bg-[#1F6F5B]"
+              type="button"
+              onClick={onDone}
+            >
+              Done
+            </button>
+          ) : null}
+
+          <button
+            className="rounded-md border border-[#174F42] px-5 py-3 font-bold text-[#174F42] hover:bg-[#EDF3EF]"
+            type="button"
+            onClick={resetForm}
+          >
+            Submit Another Request
+          </button>
+        </div>
       </div>
     );
   }
@@ -235,6 +252,20 @@ export default function LeadCaptureForm() {
           void submitLead();
         }}
       >
+        <div className="hidden" aria-hidden="true">
+          <label htmlFor="company-website">Company website</label>
+          <input
+            id="company-website"
+            name="companyWebsite"
+            type="text"
+            tabIndex={-1}
+            autoComplete="off"
+            value={values.companyWebsite}
+            onChange={(event) =>
+              updateField("companyWebsite", event.target.value)
+            }
+          />
+        </div>
         <div className="grid gap-2">
           <label className="font-bold text-[#17201C]" htmlFor="lead-name">
             Name

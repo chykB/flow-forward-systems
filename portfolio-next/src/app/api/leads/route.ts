@@ -27,6 +27,7 @@ type LeadRequestBody = {
   serviceInterest?: unknown;
   currentChallenge?: unknown;
   message?: unknown;
+  companyWebsite?: unknown;
 };
 
 type LeadErrors = Partial<Record<keyof LeadRequestBody, string>>;
@@ -52,6 +53,11 @@ function validateLeadPayload(body: LeadRequestBody) {
   const serviceInterest = getString(body.serviceInterest);
   const currentChallenge = getString(body.currentChallenge);
   const message = getString(body.message);
+  const companyWebsite = getString(body.companyWebsite);
+
+  if (companyWebsite) {
+      errors.companyWebsite = "Unable to submit this request.";
+    }
 
   if (name.length < 2) {
     errors.name = "Enter your name.";

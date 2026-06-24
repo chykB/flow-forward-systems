@@ -3,7 +3,8 @@ import { ProjectCard } from "@/components/ProjectCard";
 import { SectionHeader } from "@/components/SectionHeader";
 import { SiteShell } from "@/components/SiteShell";
 import { WorkflowTools } from "@/components/WorkflowTools";
-import LeadCaptureForm from "@/components/LeadCaptureForm";
+import { ContactSection } from "@/components/ContactSection";
+
 
 const maturityItems = [
   {
@@ -178,13 +179,7 @@ export default function Home() {
           </div>
         </section>
 
-        <section id="contact" className="mx-auto max-w-6xl px-6 py-16">
-          <SectionHeader
-            title="Book a Workflow Audit"
-            description="Share the workflow you want to improve, and what kind of automation support you are considering."
-          />
-          <LeadCaptureForm />
-        </section>
+        <ContactSection />
       </main>
     </SiteShell>
   );
