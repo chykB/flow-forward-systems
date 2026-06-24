@@ -490,3 +490,35 @@ User
 - Cost and safety requirements documented.
 - No API key committed.
 - No AI code added yet.
+
+# V3 AI Workflow Audit API Contract
+
+## Endpoint
+
+POST /api/tools/workflow-audit
+
+## Purpose
+
+Accept structured workflow details and return an instant AI-assisted workflow analysis.
+
+This endpoint supports the AI Workflow Audit Tool.
+
+It does not support the Workflow Audit Form.
+
+## Request Body
+
+```json
+{
+  "businessType": "Agency",
+  "businessTypeOther": "",
+  "workflowArea": "Sales",
+  "workflowAreaOther": "",
+  "currentProcess": "Leads come through email and Instagram DMs. Follow-up is tracked manually.",
+  "mainProblem": "Follow-ups are missed and there is no clear next action.",
+  "toolsUsed": ["Gmail", "Google Sheets"],
+  "toolsUsedOther": "",
+  "monthlyVolume": "25-100",
+  "teamSize": "2-5",
+  "desiredOutcome": "Fewer missed leads and clearer follow-up tracking.",
+  "riskLevel": "Medium"
+}
