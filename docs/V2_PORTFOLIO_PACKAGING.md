@@ -324,3 +324,76 @@ Future improvements should include stronger rate limiting, production monitoring
 
 - npm run lint: pass
 - npm run build: pass
+
+# V2.1C Contact Flow Test Notes
+
+## Scope
+
+This checkpoint improves the V2 contact section and lead capture experience.
+
+The homepage contact section now gives visitors two clear paths:
+
+1. Book a consultation through Calendly.
+2. Book a workflow audit through an on-page modal form.
+
+## Contact Flow
+
+User -> Contact section -> Choose next step
+
+Consultation path:
+User clicks Book Consultation -> Calendly opens
+
+Workflow audit path:
+User clicks Book Workflow Audit -> Audit form modal opens -> User submits request -> Request saves to Supabase -> Success confirmation appears
+
+## Current Behavior
+
+- Book Consultation opens the Calendly scheduling link.
+- Book Workflow Audit opens the workflow audit form modal.
+- Close exits the modal without submitting.
+- Submit saves the audit request.
+- Success confirmation appears after submit.
+- Done closes the modal after confirmation.
+- Submit Another Request resets the form.
+- Email fallback remains available for failed submissions.
+- Honeypot spam protection is included.
+- Lead data is saved to Supabase.
+
+## Manual Test Results
+
+- Contact section appears on homepage: pass
+- Book Consultation opens Calendly: pass
+- Book Workflow Audit opens modal: pass
+- Close leaves modal without submitting: pass
+- Submit shows confirmation: pass
+- Done closes after confirmation: pass
+- Submit Another Request resets form: pass
+- Normal valid audit form saves to Supabase: pass
+- Success state works: pass
+- Hidden honeypot field is not visible: pass
+- Mobile layout works: pass
+- No horizontal scroll: pass
+
+## Technical Validation
+
+- npm run lint: pass
+- npm run build: pass
+
+## Known Limitation
+
+Duplicate prevention is not complete yet.
+
+The current API route includes a best-effort duplicate check, but duplicate records can still be created. Duplicate test rows are manually reviewed and deleted in Supabase for now.
+
+A future version should add stronger database-level duplicate protection, rate limiting, and production monitoring.
+
+## Deployment Note
+
+This feature has not been deployed yet.
+
+Before deploying to Cloudflare, production environment variables must be configured:
+
+- SUPABASE_URL
+- SUPABASE_SECRET_KEY
+
+Calendly link should also be verified in production.
