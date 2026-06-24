@@ -522,3 +522,46 @@ It does not support the Workflow Audit Form.
   "desiredOutcome": "Fewer missed leads and clearer follow-up tracking.",
   "riskLevel": "Medium"
 }
+
+# V3 Workflow Audit Rule-Based Fallback Plan
+
+## Purpose
+
+This document defines the rule-based fallback for the AI Workflow Audit Tool.
+
+The fallback keeps the tool useful when the AI provider is unavailable, quota is exhausted, parsing fails, or the API call returns an error.
+
+## Core Principle
+
+The tool should degrade gracefully.
+
+AI available:
+
+User -> API validation -> OpenAI -> AI-assisted workflow analysis
+
+AI unavailable:
+
+User -> API validation -> Rule-based fallback -> Structured workflow analysis
+
+## Why This Matters
+
+A production-minded workflow tool should not fail completely just because an AI provider fails.
+
+The fallback:
+
+- Protects user experience
+- Controls cost
+- Supports local development without AI credits
+- Keeps the demo usable
+- Shows reliability thinking
+- Preserves the same response shape as the AI output
+
+## Response Modes
+
+The API should return one of two modes:
+
+```json
+{
+  "mode": "ai",
+  "analysis": {}
+}
