@@ -448,6 +448,14 @@ export default function LeadCaptureForm({ onDone }: LeadCaptureFormProps) {
           Share the workflow you want to improve. I will review the workflow area,
           current challenge, and service interest so the follow-up can be practical.
         </p>
+        <div className="mt-5 rounded-md border border-[#D9DED8] bg-white p-4">
+          <p className="font-bold text-[#17201C]">Privacy note</p>
+          <p className="mt-2 leading-7 text-[#5F6862]">
+            Only share details you are comfortable sending for review. Do not include
+            passwords, payment details, private customer records, legal documents, or
+            confidential business files.
+          </p>
+        </div>
 
         {statusMessage ? (
           <p
