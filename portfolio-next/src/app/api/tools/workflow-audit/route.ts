@@ -598,7 +598,7 @@ function buildRuleBasedWorkflowAuditAnalysis(
   }
 
   return {
-    workflowSummary: `This ${workflowArea} workflow for ${businessType} appears to involve ${values.currentProcess}`,
+    workflowSummary: `This ${workflowArea} workflow for ${businessType} appears to involve a process where work is currently handled through the steps described by the user. The main issue to address is: ${values.mainProblem}`,
     maturityLevel: {
       level: areaRules.maturityLevel,
       reason: areaRules.maturityReason,

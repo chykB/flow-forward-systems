@@ -587,3 +587,76 @@ AI success:
   "mode": "ai",
   "analysis": {}
 }
+
+# V3 AI Workflow Audit UI Test Notes
+
+## Scope
+
+This checkpoint adds the frontend UI for the V3 AI Workflow Audit Tool.
+
+The old always-visible tool form is replaced with a cleaner card-and-modal experience.
+
+## UX Decision
+
+The homepage should not be cluttered with full tool forms.
+
+The tools section now shows tool cards. A user chooses a tool first, then the selected tool opens in a focused modal.
+
+## Workflow Audit Tool Positioning
+
+The AI Workflow Audit Tool is a self-serve analysis tool.
+
+It is separate from the Workflow Audit contact form.
+
+- Workflow Audit contact form = request help from FlowForward Systems.
+- AI Workflow Audit Tool = get instant workflow analysis.
+
+## Current Behavior
+
+- Tools section shows three tool cards.
+- AI Workflow Audit Tool opens in a modal.
+- Required fields validate before analysis.
+- "Other" business type shows a text field.
+- "Other" workflow area shows a text field.
+- "Other" tools shows a text field.
+- Valid form generates structured workflow analysis.
+- Fallback mode works when OpenAI quota is unavailable.
+- User-facing copy hides implementation details such as "rule-based fallback."
+- Analysis output uses "Current Workflow Stage" instead of internal maturity language.
+- Analysis sections render clearly.
+- Close button closes modal.
+- Mobile modal layout works.
+- No horizontal scroll.
+
+## Manual Test Results
+
+- Tools section shows three tool cards: pass
+- AI Workflow Audit Tool opens modal: pass
+- Empty AI audit form shows validation errors: pass
+- Other business type shows text field: pass
+- Other workflow area shows text field: pass
+- Other tools shows text field: pass
+- Valid AI audit form generates analysis: pass
+- Fallback mode works: pass
+- Analysis sections render clearly: pass
+- Close button closes modal: pass
+- Mobile modal layout works: pass
+- No horizontal scroll: pass
+
+## Technical Validation
+
+- npm run lint: pass
+- npm run build: pass
+
+## Known Limitation
+
+OpenAI quota was unavailable during testing, so the UI was verified using fallback output.
+
+The API still supports AI-assisted analysis when OpenAI quota and production secrets are available.
+
+## Next Step
+
+Move the remaining two tools into the modal flow:
+
+- Google Alert-To-Content Idea Generator
+- Sales Follow-Up Sequence Generator
