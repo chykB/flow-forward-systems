@@ -354,3 +354,139 @@ If results are saved later, store:
 - UX copy distinction documented.
 - No AI provider integration yet.
 - No API key added yet.
+
+# V3 Provider And Architecture Decision
+
+## Purpose
+
+This document defines the first implementation direction for V3 action-oriented AI workflow tools.
+
+## Decision
+
+The first V3 AI tool will use:
+
+- Frontend: Next.js + TypeScript
+- API layer: Next.js route handler first
+- AI provider: OpenAI
+- API interface: OpenAI Responses API
+- Storage: no tool output storage in the first version
+- Deployment: not deployed until API secrets and usage protection are ready
+
+## Why Next.js API Route First
+
+The app already uses Next.js.
+
+A Next.js route handler is the smallest useful backend layer for the first AI tool. It avoids creating a separate Python/FastAPI backend before the first AI workflow tool UX is proven.
+
+This does not replace the long-term roadmap.
+
+Python/FastAPI should still be introduced later when:
+
+- Multiple AI tools exist
+- Workflow logic becomes heavier
+- Tool results need richer logging
+- Background processing is needed
+- Integrations, webhooks, queues, and audit logs are added
+
+## Why OpenAI First
+
+OpenAI is a strong first provider for:
+
+- Structured workflow analysis
+- Prompt-controlled output
+- Server-side API usage
+- Future structured outputs
+- Future workflow reasoning and tool-calling patterns
+
+## First Tool
+
+The first AI tool remains:
+
+AI Workflow Audit Tool
+
+## First Tool Behavior
+
+The tool should:
+
+- Accept structured workflow inputs
+- Validate input server-side
+- Send a controlled prompt to OpenAI
+- Return structured workflow analysis
+- Include human review points
+- Include suggested next action
+- Include what would be logged
+- Include what should not be automated yet
+
+## What The Tool Must Not Do
+
+The first V3 tool must not:
+
+- Take external actions
+- Send emails
+- Update CRM records
+- Save sensitive data automatically
+- Claim guaranteed business outcomes
+- Pretend to be a full autonomous agent
+
+## Environment Variables
+
+Local development will require:
+
+- OPENAI_API_KEY
+
+The key must be stored in `.env.local`.
+
+The key must not be committed to Git.
+
+Production deployment will require the same secret to be configured in Cloudflare before the AI tool is deployed.
+
+## Cost Control
+
+The first implementation should:
+
+- Use one AI request per tool submission
+- Limit input length
+- Limit output length
+- Avoid streaming initially
+- Avoid saving tool outputs initially
+- Keep the tool behind server-side validation
+- Add rate limiting before serious public deployment
+
+## Safety Rules
+
+The API route should:
+
+- Treat user input as untrusted
+- Keep system instructions server-side
+- Separate user workflow details from tool instructions
+- Reject empty or very long inputs
+- Avoid requesting sensitive data
+- Include human review guidance in every output
+- Return safe error messages
+
+## Initial Architecture
+
+User
+-> AI Workflow Audit Tool UI
+-> Next.js API route
+-> OpenAI Responses API
+-> Structured workflow analysis returned to UI
+
+## Future Architecture
+
+User
+-> Next.js frontend
+-> Python FastAPI backend
+-> AI provider
+-> Database/logs
+-> Rate limiting
+-> Lead capture
+-> Workflow audit/service conversion path
+
+## Phase 7C Definition Of Done
+
+- Provider decision documented.
+- API architecture decision documented.
+- Cost and safety requirements documented.
+- No API key committed.
+- No AI code added yet.
