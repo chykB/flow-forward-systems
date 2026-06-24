@@ -565,3 +565,25 @@ The API should return one of two modes:
   "mode": "ai",
   "analysis": {}
 }
+
+# V3 Workflow Audit Fallback Test Notes
+
+## Scope
+
+This checkpoint adds a rule-based fallback to the V3 AI Workflow Audit API route.
+
+The endpoint first attempts to use OpenAI. If OpenAI is unavailable, quota is exhausted, output is empty, output parsing fails, or the API call errors, the route returns a structured rule-based workflow analysis instead.
+
+## Endpoint
+
+POST /api/tools/workflow-audit
+
+## Response Modes
+
+AI success:
+
+```json
+{
+  "mode": "ai",
+  "analysis": {}
+}
