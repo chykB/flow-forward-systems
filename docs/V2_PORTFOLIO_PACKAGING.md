@@ -210,3 +210,78 @@ Possible paths:
 - Google Sheets or Airtable lead tracker
 - Next.js API route with external storage
 - Python FastAPI backend later, aligned with the long-term roadmap
+
+# V2.1B Lead Storage Test Notes
+
+## Scope
+
+This checkpoint connects the V2 lead capture form to a server-side Next.js API route and Supabase storage.
+
+The goal is to move beyond email-only contact and save structured workflow audit requests.
+
+## Architecture
+
+User -> Lead Capture Form -> Next.js API Route -> Supabase lead_submissions table
+
+## Current Fields Saved
+
+- Name
+- Email
+- Business type
+- Workflow area
+- Service interest
+- Current challenge
+- Additional message
+- Source
+- Status
+- User agent
+- Submitted from
+- Created timestamp
+
+## Current Behavior
+
+- The form validates required fields.
+- The API route validates submitted data again on the server.
+- Valid requests are saved to Supabase.
+- A success confirmation appears after save.
+- The form can be reset with Submit Another Request.
+- Email fallback remains available for failed submissions.
+- Same email can submit different workflow requests.
+
+## Manual Test Results
+
+- Form validates: pass
+- Form saves to Supabase: pass
+- Success state works: pass
+- Same email can submit different requests: pass
+- Mobile layout works: pass
+- No horizontal scroll: pass
+
+## Known Limitation
+
+Duplicate prevention is not complete yet.
+
+The API route includes a best-effort duplicate check, but duplicate records can still be created. For now, duplicate test rows are manually reviewed and deleted in Supabase.
+
+A future version should add stronger database-level duplicate protection or a dedicated backend duplicate prevention strategy.
+
+## Security Notes
+
+- Supabase keys are stored in local environment variables.
+- `.env.local` must not be committed.
+- The Supabase secret key is used only server-side in the API route.
+- Lead data is not displayed publicly.
+- No admin dashboard exists yet.
+
+## Technical Validation
+
+- npm run lint: pass
+- npm run build: pass
+
+## Next Improvements
+
+- Add stronger duplicate protection.
+- Add spam protection or rate limiting.
+- Add email notification.
+- Add lead status review workflow.
+- Add production environment variables before deployment.

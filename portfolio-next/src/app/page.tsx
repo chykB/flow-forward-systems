@@ -3,7 +3,7 @@ import { ProjectCard } from "@/components/ProjectCard";
 import { SectionHeader } from "@/components/SectionHeader";
 import { SiteShell } from "@/components/SiteShell";
 import { WorkflowTools } from "@/components/WorkflowTools";
-import { LeadCaptureForm } from "@/components/LeadCaptureForm";
+import LeadCaptureForm from "@/components/LeadCaptureForm";
 
 const maturityItems = [
   {
