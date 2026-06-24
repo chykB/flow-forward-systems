@@ -285,3 +285,42 @@ A future version should add stronger database-level duplicate protection or a de
 - Add email notification.
 - Add lead status review workflow.
 - Add production environment variables before deployment.
+
+# V2.1C Spam Protection Test Notes
+
+## Scope
+
+This checkpoint adds basic spam protection to the V2 lead capture flow.
+
+The implementation uses a hidden honeypot field. Real visitors do not see or fill this field. Automated spam bots may fill it, and the API rejects the request.
+
+## Architecture
+
+User -> Lead Capture Form -> Hidden Honeypot Check -> Next.js API Route -> Supabase
+
+## Current Behavior
+
+- Normal valid form submissions still save to Supabase.
+- Success state still works.
+- Hidden honeypot field is not visible to users.
+- Honeypot value is checked server-side.
+- Honeypot value is not stored in Supabase.
+
+## Manual Test Results
+
+- Normal valid form still saves to Supabase: pass
+- Success state still works: pass
+- Hidden field is not visible: pass
+- Mobile layout works: pass
+- No horizontal scroll: pass
+
+## Known Limitation
+
+This is basic spam protection, not complete abuse prevention.
+
+Future improvements should include stronger rate limiting, production monitoring, and possibly CAPTCHA or Turnstile if spam becomes a real problem.
+
+## Technical Validation
+
+- npm run lint: pass
+- npm run build: pass
