@@ -524,3 +524,78 @@ Avoid implementation-facing copy like:
 - Source verification limitation is documented.
 - Output schema is documented.
 - Safety rules are documented.
+
+
+# V3 Tools Modal Refactor And Sales Tool Test Notes
+
+## Date
+June 25, 2026
+
+## Scope
+Refactored the V3 tools area so each tool is separated by responsibility and displayed through the modal tool experience.
+
+## Structure Verified
+- Shared list UI extracted to `SectionList`.
+- Content signal logic extracted to `src/lib/tools/contentSignal.ts`.
+- Content signal UI extracted to `ContentSignalTool`.
+- Workflow audit UI extracted to `WorkflowAuditTool`.
+- Sales workflow logic added in `src/lib/tools/salesWorkflow.ts`.
+- Sales workflow UI added in `SalesWorkflowTool`.
+- `WorkflowTools` now acts mainly as the tool launcher and modal wrapper.
+
+## Manual Test Results
+
+### Tools Section
+- AI Workflow Audit Tool card appears: Pass
+- Content Signal-To-Content Tool card appears: Pass
+- Sales Workflow Improvement Tool card appears: Pass
+- Tool card buttons align on desktop: Pass
+- Tool cards stack cleanly on mobile: Pass
+
+### AI Workflow Audit Tool
+- Opens modal: Pass
+- Empty form shows validation errors: Pass
+- Other business type shows text field: Pass
+- Other workflow area shows text field: Pass
+- Other tools shows text field: Pass
+- Valid form generates workflow analysis: Pass
+- Close button closes modal: Pass
+
+### Content Signal-To-Content Tool
+- Opens modal: Pass
+- Empty form shows validation errors: Pass
+- Other signal type shows text field: Pass
+- Valid form generates content plan: Pass
+- Content decision appears: Pass
+- Fresh angle appears: Pass
+- Draft output appears: Pass
+- Close button closes modal: Pass
+
+### Sales Workflow Improvement Tool
+- Opens modal: Pass
+- Empty form shows validation errors: Pass
+- Other business type shows text field: Pass
+- Other lead source shows text field: Pass
+- Other CRM/tool shows text field: Pass
+- Valid form generates sales workflow plan: Pass
+- Priority outcomes appear: Pass
+- Lead capture recommendations appear: Pass
+- Follow-up sequence appears: Pass
+- CRM fields appear: Pass
+- Suggested deal stages appear: Pass
+- Sales reporting metrics appear: Pass
+- Close button closes modal: Pass
+
+### General
+- Header still works: Pass
+- Contact section still works: Pass
+- Mobile modal layout works: Pass
+- No horizontal scroll: Pass
+- Browser console has no critical errors: Pass
+
+## Verification Commands
+- `npm run lint`: Pass
+- `npm run build`: Pass
+
+## Notes
+The old follow-up-only tool has been expanded into a broader Sales Workflow Improvement Tool. It now supports lead capture, speed-to-lead, qualification, follow-up, CRM fields, deal stages, reporting visibility, automation opportunities, and human review points.
