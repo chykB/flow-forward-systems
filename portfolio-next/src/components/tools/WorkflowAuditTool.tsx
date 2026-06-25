@@ -527,7 +527,7 @@ export function WorkflowAuditTool() {
           <div className="grid gap-6">
             <div>
               <p className="text-sm font-bold uppercase tracking-wide text-[#5F6862]">
-                Analysis status
+                Analysis Ready
               </p>
               <p className="mt-2 rounded-md bg-[#EDF3EF] p-3 font-bold text-[#17201C]">
                 Workflow analysis generated
@@ -536,7 +536,7 @@ export function WorkflowAuditTool() {
 
             <div>
               <h4 className="text-xl font-bold text-[#17201C]">
-                Your Workflow Analysis
+                Workflow Summary
               </h4>
               <p className="mt-3 leading-7 text-[#5F6862]">
                 {workflowAuditResult.analysis.workflowSummary}
@@ -545,7 +545,7 @@ export function WorkflowAuditTool() {
 
             <div>
               <h4 className="font-bold text-[#17201C]">
-                Current Workflow Stage
+                Current Workflow Condition
               </h4>
               <p className="mt-2 text-[#5F6862]">
                 <span className="font-bold text-[#17201C]">
@@ -580,7 +580,7 @@ export function WorkflowAuditTool() {
             </div>
 
             <SectionList
-              title="What A Future System Would Log"
+              title="What To Track Going Forward"
               items={workflowAuditResult.analysis.systemLogPreview}
             />
             <SectionList

@@ -442,7 +442,7 @@ export function SalesWorkflowTool() {
           <div className="grid gap-6">
             <div>
               <p className="text-sm font-bold uppercase tracking-wide text-[#5F6862]">
-                Sales workflow status
+                Sales Workflow Status
               </p>
               <p className="mt-2 rounded-md bg-[#EDF3EF] p-3 font-bold text-[#17201C]">
                 {result.salesWorkflowHealth.status}
@@ -454,7 +454,7 @@ export function SalesWorkflowTool() {
 
             <div>
               <h4 className="text-xl font-bold text-[#17201C]">
-                Sales Workflow Summary
+                Sales Process Summary
               </h4>
               <p className="mt-3 leading-7 text-[#5F6862]">
                 {result.workflowSummary}

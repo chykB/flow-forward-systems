@@ -67,7 +67,7 @@ export function ContentSignalTool() {
       >
         <div className="grid gap-2">
           <label className="font-bold text-[#17201C]" htmlFor="content-signal-type">
-            Signal type
+            Idea source
           </label>
           <select
             id="content-signal-type"
@@ -94,7 +94,7 @@ export function ContentSignalTool() {
         {contentSignalValues.signalType === "Other" ? (
           <div className="grid gap-2">
             <label className="font-bold text-[#17201C]" htmlFor="content-signal-type-other">
-              Describe the signal type
+              Describe the idea source
             </label>
             <input
               id="content-signal-type-other"
@@ -124,7 +124,7 @@ export function ContentSignalTool() {
               updateContentSignalField("signalText", event.target.value)
             }
             className="min-h-36 rounded-md border border-[#D9DED8] px-4 py-3 text-[#17201C]"
-            placeholder="Paste a signal, question, trend, article summary, customer note, or idea."
+            placeholder="Paste an alert, question, trend, article summary, customer note, or idea."
           />
           {contentSignalErrors.signalText ? (
             <p className="text-sm font-semibold text-red-700">
@@ -336,7 +336,7 @@ export function ContentSignalTool() {
           <div className="grid gap-6">
             <div>
               <p className="text-sm font-bold uppercase tracking-wide text-[#5F6862]">
-                Content decision
+                Recommended Content Decision
               </p>
               <p className="mt-2 rounded-md bg-[#EDF3EF] p-3 font-bold text-[#17201C]">
                 {contentSignalResult.contentDecision}
@@ -345,7 +345,7 @@ export function ContentSignalTool() {
 
             <div>
               <h4 className="text-xl font-bold text-[#17201C]">
-                Content Signal Summary
+                Idea Summary
               </h4>
               <p className="mt-3 leading-7 text-[#5F6862]">
                 {contentSignalResult.signalSummary}
@@ -353,19 +353,19 @@ export function ContentSignalTool() {
             </div>
 
             <SectionList
-              title="Source And Claim Notes"
+              title="Source And Accuracy Notes"
               items={contentSignalResult.sourceAndClaimNotes}
             />
 
             <div>
-              <h4 className="font-bold text-[#17201C]">Audience Fit</h4>
+              <h4 className="font-bold text-[#17201C]">Audience Angle</h4>
               <p className="mt-2 leading-7 text-[#5F6862]">
                 {contentSignalResult.audienceFit}
               </p>
             </div>
 
             <div>
-              <h4 className="font-bold text-[#17201C]">Content Potential</h4>
+              <h4 className="font-bold text-[#17201C]">Content Opportunity</h4>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 {Object.entries(contentSignalResult.contentPotential).map(
                   ([label, value]) => (
@@ -382,14 +382,14 @@ export function ContentSignalTool() {
 
             <div className="grid gap-4">
               <div className="rounded-md bg-[#EDF3EF] p-4">
-                <h4 className="font-bold text-[#17201C]">Obvious Take</h4>
+                <h4 className="font-bold text-[#17201C]">Common Take</h4>
                 <p className="mt-2 leading-7 text-[#5F6862]">
                   {contentSignalResult.obviousTake}
                 </p>
               </div>
 
               <div className="rounded-md bg-[#EDF3EF] p-4">
-                <h4 className="font-bold text-[#17201C]">Deeper Take</h4>
+                <h4 className="font-bold text-[#17201C]">Deeper Angle</h4>
                 <p className="mt-2 leading-7 text-[#5F6862]">
                   {contentSignalResult.deeperTake}
                 </p>

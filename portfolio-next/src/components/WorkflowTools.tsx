@@ -17,22 +17,22 @@ const tools: {
     key: "workflow-audit",
     title: "AI Workflow Audit Tool",
     description:
-      "Get an instant workflow analysis with bottlenecks, automation opportunities, human review points, and suggested next actions.",
-    buttonLabel: "Open Tool",
+      "Review a workflow and find bottlenecks, automation opportunities, human review points, and practical next steps.",
+    buttonLabel: "Analyze Workflow",
   },
   {
     key: "alert-content",
-    title: "Content Signal-To-Content Tool",
+    title: "Content Idea Planner",
     description:
-      "Turn a signal, question, trend, note, or idea into a useful content decision, fresh angle, and draft starting point.",
-    buttonLabel: "Open Tool",
+      "Turn an alert, article, customer question, trend, note, or idea into a content decision, fresh angle, and draft starting point.",
+    buttonLabel: "Plan Content",
   },
   {
     key: "sales-follow-up",
     title: "Sales Workflow Improvement Tool",
     description:
-      "Find gaps in lead capture, speed-to-lead, follow-up, CRM updates, deal tracking, reporting, and sales automation.",
-    buttonLabel: "Open Tool",
+      "Find gaps in lead capture, response time, follow-up, CRM updates, deal tracking, reporting, and sales automation.",
+    buttonLabel: "Improve Sales Workflow",
   },
 ];
 
@@ -82,16 +82,16 @@ export function WorkflowTools() {
                   {activeTool === "workflow-audit"
                     ? "AI Workflow Audit Tool"
                     : activeTool === "alert-content"
-                      ? "Content Signal-To-Content Tool"
+                      ? "Content Idea Planner"
                       : "Sales Workflow Improvement Tool"}
                 </h3>
 
                 <p className="mt-2 max-w-2xl leading-7 text-[#5F6862]">
                   {activeTool === "workflow-audit"
-                    ? "Get an instant AI-assisted workflow analysis with practical next steps and human review points."
+                    ? "Use this self-serve tool to understand where a workflow slows down and what can be improved first."
                     : activeTool === "alert-content"
-                      ? "Turn a signal, question, trend, note, or idea into a content decision, fresh angle, and draft starting point."
-                      : "Review your sales workflow and get practical improvements for lead capture, follow-up, CRM updates, deal stages, reporting, and automation."}
+                      ? "Use this tool to decide whether an idea is worth turning into content, what angle to use, and what to review before publishing."
+                      : "Use this tool to improve how leads are captured, followed up, qualified, tracked, and reported."}
                 </p>
               </div>
 
