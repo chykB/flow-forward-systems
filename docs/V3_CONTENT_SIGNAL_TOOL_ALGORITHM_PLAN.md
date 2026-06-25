@@ -599,3 +599,38 @@ Refactored the V3 tools area so each tool is separated by responsibility and dis
 
 ## Notes
 The old follow-up-only tool has been expanded into a broader Sales Workflow Improvement Tool. It now supports lead capture, speed-to-lead, qualification, follow-up, CRM fields, deal stages, reporting visibility, automation opportunities, and human review points.
+
+# V3 Tools Copy Polish Test Notes
+
+## Date
+June 25, 2026
+
+## Scope
+Polished user-facing copy for the V3 tools section, modal titles, modal descriptions, button labels, and result section labels.
+
+## Copy Decisions
+- Kept Workflow Audit Tool positioned as an instant self-serve analysis tool.
+- Renamed the content tool user-facing experience from signal-focused language to clearer idea/source language.
+- Kept the sales tool focused on improving lead capture, speed-to-lead, follow-up, CRM updates, deal tracking, reporting, and automation.
+- Replaced internal-feeling labels with clearer visitor-facing labels.
+
+## Manual Test Results
+
+### Tools Section
+- Tool card copy feels clear: Pass
+- Button labels are clear: Pass
+- Modal titles are clear: Pass
+- Modal descriptions are clear: Pass
+- Mobile cards still look good: Pass
+- No horizontal scroll: Pass
+
+### Result Labels
+- Workflow audit result labels feel user-facing: Pass
+- Content planner result labels feel user-facing: Pass
+- Sales workflow result labels feel user-facing: Pass
+- Mobile modal layout still works: Pass
+- No horizontal scroll: Pass
+
+## Verification Commands
+- `npm run lint`: Pass
+- `npm run build`: Pass
