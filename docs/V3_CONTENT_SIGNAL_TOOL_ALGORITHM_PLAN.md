@@ -634,3 +634,52 @@ Polished user-facing copy for the V3 tools section, modal titles, modal descript
 ## Verification Commands
 - `npm run lint`: Pass
 - `npm run build`: Pass
+
+# V3 Workflow Audit Upgrade Test Notes
+
+## Date
+June 29, 2026
+
+## Scope
+Upgraded the AI Workflow Audit Tool from a quick workflow diagnostic into a more complete workflow audit experience.
+
+## What Changed
+- Added workflow scope fields.
+- Added workflow purpose, people/roles, and start trigger.
+- Added handoff, decision point, exception, and failure-case fields.
+- Added problem evidence field.
+- Added automation goal, stakeholder perspective, baseline, target improvement, KPI owner, and review timeline fields.
+- Expanded API output to include workflow scope, workflow breakdown, handoff risks, decision points, automation readiness, KPI planning, and baseline tracking.
+- Added AI feature flag behavior through `WORKFLOW_AUDIT_AI_ENABLED`.
+- Default behavior can use structured analysis without calling OpenAI.
+
+## Manual Test Results
+
+### Workflow Audit Tool
+- Workflow Audit Tool opens: Pass
+- New audit fields appear: Pass
+- Empty required fields still show validation: Pass
+- Valid detailed audit generates result: Pass
+- Workflow Scope appears: Pass
+- Current Workflow Breakdown appears: Pass
+- Handoff Risks appears: Pass
+- Decision Points To Review appears: Pass
+- Automation Readiness appears: Pass
+- Success Measurement Plan appears: Pass
+- Recommended KPIs appear: Pass
+- Current Baseline To Capture appears: Pass
+- Suggested Next Action appears: Pass
+- Mobile modal layout works: Pass
+- No horizontal scroll: Pass
+
+## API Behavior
+- API returns `mode: structured-analysis` when AI is disabled or unavailable.
+- API output includes workflow scope, handoff risks, decision point review, automation readiness, success measurement plan, recommended KPIs, and baseline tracking.
+- API falls back safely if AI generation fails.
+
+## Verification Commands
+- `npm run lint`: Pass
+- `npm run build`: Pass
+
+## Notes
+The Workflow Audit Tool is still a self-serve planning aid, not a replacement for a full professional workflow audit. The deeper service remains the booked workflow audit consultation.
