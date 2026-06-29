@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { SectionList } from "@/components/tools/SectionList";
 import {
+  contentGoals,
   contentOutputFormats,
   contentPlatforms,
   contentTones,
@@ -197,8 +198,54 @@ export function ContentSignalTool() {
         </div>
 
         <div className="grid gap-2">
+          <label className="font-bold text-[#17201C]" htmlFor="content-goal">
+            Content goal
+          </label>
+          <select
+            id="content-goal"
+            value={contentSignalValues.contentGoal}
+            onChange={(event) =>
+              updateContentSignalField("contentGoal", event.target.value)
+            }
+            className="rounded-md border border-[#D9DED8] bg-white px-4 py-3 text-[#17201C]"
+          >
+            <option value="">Choose content goal</option>
+            {contentGoals.map((goal) => (
+              <option key={goal} value={goal}>
+                {goal}
+              </option>
+            ))}
+          </select>
+          {contentSignalErrors.contentGoal ? (
+            <p className="text-sm font-semibold text-red-700">
+              {contentSignalErrors.contentGoal}
+            </p>
+          ) : null}
+        </div>
+
+        <div className="grid gap-2">
+          <label className="font-bold text-[#17201C]" htmlFor="content-audience-pain">
+            Audience pain or question
+          </label>
+          <textarea
+            id="content-audience-pain"
+            value={contentSignalValues.audiencePainOrQuestion}
+            onChange={(event) =>
+              updateContentSignalField("audiencePainOrQuestion", event.target.value)
+            }
+            className="min-h-24 rounded-md border border-[#D9DED8] px-4 py-3 text-[#17201C]"
+            placeholder="Optional: what does your audience struggle with or want to understand?"
+          />
+          {contentSignalErrors.audiencePainOrQuestion ? (
+            <p className="text-sm font-semibold text-red-700">
+              {contentSignalErrors.audiencePainOrQuestion}
+            </p>
+          ) : null}
+        </div>
+
+        <div className="grid gap-2">
           <label className="font-bold text-[#17201C]" htmlFor="content-brand-pov">
-            Brand point of view
+            Your take or belief
           </label>
           <textarea
             id="content-brand-pov"
@@ -207,7 +254,7 @@ export function ContentSignalTool() {
               updateContentSignalField("brandPointOfView", event.target.value)
             }
             className="min-h-24 rounded-md border border-[#D9DED8] px-4 py-3 text-[#17201C]"
-            placeholder="Optional: what do you believe about this topic?"
+            placeholder="Optional: what do you believe, agree with, disagree with, or want your audience to understand?"
           />
           {contentSignalErrors.brandPointOfView ? (
             <p className="text-sm font-semibold text-red-700">
@@ -344,6 +391,16 @@ export function ContentSignalTool() {
             </div>
 
             <div>
+              <h4 className="font-bold text-[#17201C]">Claim Confidence</h4>
+              <p className="mt-2 leading-7 text-[#5F6862]">
+                <span className="font-bold text-[#17201C]">
+                  {contentSignalResult.claimConfidence.status}
+                </span>{" "}
+                - {contentSignalResult.claimConfidence.reason}
+              </p>
+            </div>
+
+            <div>
               <h4 className="text-xl font-bold text-[#17201C]">
                 Idea Summary
               </h4>
@@ -430,6 +487,11 @@ export function ContentSignalTool() {
             </div>
 
             <SectionList
+              title="Avoid Saying"
+              items={contentSignalResult.avoidSaying}
+            />
+
+            <SectionList
               title="Review Before Publishing"
               items={contentSignalResult.reviewBeforePublishing}
             />
@@ -437,6 +499,16 @@ export function ContentSignalTool() {
               title="Publishing Guidance"
               items={contentSignalResult.publishingGuidance}
             />
+            <SectionList
+              title="Repurposing Ideas"
+              items={contentSignalResult.repurposingIdeas}
+            />
+
+            <SectionList
+              title="What To Track After Publishing"
+              items={contentSignalResult.trackingSuggestions}
+            />
+
             <SectionList
               title="Follow-Up Ideas"
               items={contentSignalResult.followUpIdeas}

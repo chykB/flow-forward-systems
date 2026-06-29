@@ -5,6 +5,8 @@ export type ContentSignalValues = {
   sourceOrLink: string;
   creatorNiche: string;
   targetAudience: string;
+  contentGoal: string;
+  audiencePainOrQuestion: string;
   brandPointOfView: string;
   preferredPlatform: string;
   preferredOutputFormat: string;
@@ -25,6 +27,10 @@ export type ContentPotential = {
 export type ContentSignalResult = {
   signalSummary: string;
   contentDecision: string;
+  claimConfidence: {
+    status: string;
+    reason: string;
+  };
   sourceAndClaimNotes: string[];
   audienceFit: string;
   contentPotential: ContentPotential;
@@ -40,8 +46,11 @@ export type ContentSignalResult = {
     title: string;
     body: string;
   };
+  avoidSaying: string[];
   reviewBeforePublishing: string[];
   publishingGuidance: string[];
+  repurposingIdeas: string[];
+  trackingSuggestions: string[];
   followUpIdeas: string[];
 };
 
@@ -52,6 +61,8 @@ export const initialContentSignalValues: ContentSignalValues = {
   sourceOrLink: "",
   creatorNiche: "",
   targetAudience: "",
+  contentGoal: "",
+  audiencePainOrQuestion: "",
   brandPointOfView: "",
   preferredPlatform: "",
   preferredOutputFormat: "",
@@ -91,7 +102,7 @@ export const contentPlatforms = [
 
 export const contentOutputFormats = [
   "LinkedIn post",
-  "X thread",
+  "X post",
   "Short video script",
   "Carousel outline",
   "Blog outline",
@@ -112,6 +123,20 @@ export const contentTones = [
   "Story-driven",
 ];
 
+export const contentGoals = [
+  "Educate audience",
+  "Build authority",
+  "Drive engagement",
+  "Generate leads",
+  "Explain a trend",
+  "Answer a customer question",
+  "Promote an offer",
+  "Repurpose research",
+  "Start a conversation",
+  "Share a lesson learned",
+  "Not sure",
+];
+
 export function validateContentSignal(values: ContentSignalValues) {
   const errors: ContentSignalErrors = {};
 
@@ -129,6 +154,15 @@ export function validateContentSignal(values: ContentSignalValues) {
 
   if (!values.targetAudience.trim()) {
     errors.targetAudience = "Describe the audience this content is for.";
+  }
+
+  if (!values.contentGoal) {
+    errors.contentGoal = "Choose the goal for this content.";
+  }
+
+  if (values.audiencePainOrQuestion.trim().length > 400) {
+    errors.audiencePainOrQuestion =
+      "Audience pain or question must be 400 characters or less.";
   }
 
   if (!values.preferredPlatform) {
@@ -230,6 +264,59 @@ function getSourceAndClaimNotes(values: ContentSignalValues) {
   return notes;
 }
 
+function getClaimConfidence(values: ContentSignalValues) {
+  const signalType = resolveSignalType(values).toLowerCase();
+  const combinedText = `${values.signalText} ${values.sourceOrLink}`.toLowerCase();
+  const sensitive = textHas(combinedText, [
+    "legal",
+    "financial",
+    "medical",
+    "hiring",
+    "privacy",
+    "security",
+    "billing",
+    "compliance",
+  ]);
+
+  if (sensitive && !values.sourceOrLink) {
+    return {
+      status: "Verify before publishing",
+      reason:
+        "This idea touches a sensitive topic and no source was provided, so avoid strong claims until verified.",
+    };
+  }
+
+  if (sensitive) {
+    return {
+      status: "Use careful wording",
+      reason:
+        "This idea touches a sensitive topic. Cite the source where needed and avoid presenting the content as expert advice.",
+    };
+  }
+
+  if (signalType.includes("social") || signalType.includes("competitor")) {
+    return {
+      status: "Use as inspiration",
+      reason:
+        "This source is useful for spotting a conversation or market pattern, but should not be treated as verified fact by itself.",
+    };
+  }
+
+  if (!values.sourceOrLink) {
+    return {
+      status: "Commentary only",
+      reason:
+        "No source was provided, so frame this as your perspective or observation rather than a factual report.",
+    };
+  }
+
+  return {
+    status: "Safe for practical commentary",
+    reason:
+      "The idea can be used for commentary, but specific claims should still be checked before publishing.",
+  };
+}
+
 function getContentPotential(values: ContentSignalValues): ContentPotential {
   const text = `${values.signalText} ${values.targetAudience} ${values.creatorNiche}`;
   const highPractical = textHas(text, ["workflow", "how", "problem", "question", "mistake", "lead", "support", "sales", "customer", "automation", "step"]);
@@ -252,30 +339,35 @@ function getContentDecision(potential: ContentPotential) {
   return "Save for later or combine with more signals";
 }
 
-function getAudienceFit(audience: string) {
-  const normalized = audience.toLowerCase();
+function getAudienceFit(values: ContentSignalValues) {
+  const audience = values.targetAudience.toLowerCase();
+  const pain = values.audiencePainOrQuestion;
 
-  if (textHas(normalized, ["business owner", "founder", "operator"])) {
-    return "Keep the content practical. Connect the idea to time, cost, workflow, decisions, or revenue impact.";
+  const painContext = pain
+    ? ` Connect the content to this audience concern: ${pain}`
+    : "";
+
+  if (textHas(audience, ["business owner", "founder", "operator"])) {
+    return `Keep the content practical. Connect the idea to time, cost, workflow, decisions, or revenue impact.${painContext}`;
   }
 
-  if (textHas(normalized, ["executive", "leader", "manager"])) {
-    return "Focus on strategy, risk, tradeoffs, and business impact.";
+  if (textHas(audience, ["executive", "leader", "manager"])) {
+    return `Focus on strategy, risk, tradeoffs, and business impact.${painContext}`;
   }
 
-  if (textHas(normalized, ["technical", "developer", "engineer"])) {
-    return "Add depth, architecture, tradeoffs, and implementation detail.";
+  if (textHas(audience, ["technical", "developer", "engineer"])) {
+    return `Add depth, architecture, tradeoffs, and implementation detail.${painContext}`;
   }
 
-  if (textHas(normalized, ["creator", "coach"])) {
-    return "Make the idea useful, relatable, and easy to turn into action.";
+  if (textHas(audience, ["creator", "coach"])) {
+    return `Make the idea useful, relatable, and easy to turn into action.${painContext}`;
   }
 
-  if (textHas(normalized, ["student", "job seeker"])) {
-    return "Use examples, learning angles, and practical next steps.";
+  if (textHas(audience, ["student", "job seeker"])) {
+    return `Use examples, learning angles, and practical next steps.${painContext}`;
   }
 
-  return "Use plain language and make the relevance clear quickly.";
+  return `Use plain language and make the relevance clear quickly.${painContext}`;
 }
 
 function getInsightLayer(values: ContentSignalValues) {
@@ -357,6 +449,9 @@ function buildSelectedOutput(values: ContentSignalValues, freshAngle: string) {
   const audience = values.targetAudience || "your audience";
   const pov = values.brandPointOfView || freshAngle;
 
+  const goal = values.contentGoal || "create useful content";
+  const audiencePain = values.audiencePainOrQuestion || "a practical audience problem";
+
   if (values.preferredOutputFormat === "X thread") {
     return {
       title: "X Thread Draft",
@@ -366,15 +461,18 @@ function buildSelectedOutput(values: ContentSignalValues, freshAngle: string) {
 ${values.signalText}
 
 3/ Why it matters for ${audience}:
-This points to a practical decision, behavior, or workflow that deserves attention.
+This connects to ${audiencePain}.
 
-4/ My take:
+4/ Content goal:
+${goal}
+
+5/ My take:
 ${pov}
 
-5/ Practical lesson:
+6/ Practical lesson:
 Do not only react to the signal. Turn it into a clearer decision or next step.
 
-6/ What to do next:
+7/ What to do next:
 Pick one action your audience can take this week.`,
     };
   }
@@ -488,13 +586,71 @@ What is one workflow, decision, or behavior you would improve based on this?`,
   };
 }
 
+function getAvoidSaying(values: ContentSignalValues) {
+  const avoid = [
+    "Avoid copying wording from the original source.",
+    "Avoid making stronger claims than the source supports.",
+    "Avoid publishing private customer, company, or personal details.",
+  ];
+
+  if (values.topicsToAvoid) {
+    avoid.unshift(`Avoid these topics or angles: ${values.topicsToAvoid}`);
+  }
+
+  if (
+    textHas(`${values.signalText} ${values.sourceOrLink}`, [
+      "legal",
+      "financial",
+      "medical",
+      "hiring",
+      "privacy",
+      "security",
+      "billing",
+      "compliance",
+    ])
+  ) {
+    avoid.push("Avoid giving legal, financial, medical, compliance, or hiring advice as final guidance.");
+  }
+
+  return avoid;
+}
+
+function getRepurposingIdeas(values: ContentSignalValues) {
+  const format = values.preferredOutputFormat || "content";
+
+  return [
+    `Turn this ${format.toLowerCase()} into a shorter post.`,
+    "Turn the core idea into a checklist.",
+    "Turn the fresh angle into a short video script.",
+    "Turn the practical lesson into a carousel or visual breakdown.",
+    "Save the idea for a future newsletter or blog section.",
+  ];
+}
+
+function getTrackingSuggestions(values: ContentSignalValues) {
+  return [
+    "Content idea or source.",
+    "Audience.",
+    "Topic.",
+    "Fresh angle.",
+    "Format.",
+    `Platform: ${values.preferredPlatform || "Not selected."}`,
+    "CTA used.",
+    "Publish date.",
+    "Comments, saves, shares, clicks, or replies.",
+    "Best-performing line or hook.",
+    "Follow-up idea.",
+  ];
+}
+
 export function generateContentSignalResult(values: ContentSignalValues): ContentSignalResult {
   const signalType = resolveSignalType(values);
   const signalUse = getSignalUse(signalType);
   const sourceAndClaimNotes = getSourceAndClaimNotes(values);
   const contentPotential = getContentPotential(values);
   const contentDecision = getContentDecision(contentPotential);
-  const audienceFit = getAudienceFit(values.targetAudience);
+  const claimConfidence = getClaimConfidence(values);
+  const audienceFit = getAudienceFit(values);
   const insightLayer = getInsightLayer(values);
   const recommendedFormat = getRecommendedFormat(values);
   const selectedOutput = buildSelectedOutput(values, insightLayer.freshAngle);
@@ -502,6 +658,7 @@ export function generateContentSignalResult(values: ContentSignalValues): Conten
   return {
     signalSummary: `This ${signalType} can likely support ${signalUse}.`,
     contentDecision,
+    claimConfidence,
     sourceAndClaimNotes,
     audienceFit,
     contentPotential,
@@ -511,6 +668,7 @@ export function generateContentSignalResult(values: ContentSignalValues): Conten
     practicalLesson: insightLayer.practicalLesson,
     recommendedFormat,
     selectedOutput,
+    avoidSaying: getAvoidSaying(values),
     reviewBeforePublishing: [
       "Check factual claims before publishing.",
       "Cite or reference the source if you make a specific claim.",
@@ -524,11 +682,13 @@ export function generateContentSignalResult(values: ContentSignalValues): Conten
       "Add a visual if the idea involves a process, checklist, or contrast.",
       "Use hashtags only when they help discovery and do not clutter the post.",
     ],
+    repurposingIdeas: getRepurposingIdeas(values),
+    trackingSuggestions: getTrackingSuggestions(values),
     followUpIdeas: [
-      "Turn the same signal into a shorter post.",
-      "Create a checklist version.",
-      "Create a follow-up post with a practical example.",
-      "Save this signal as part of a larger content theme.",
+      "Create a shorter variation.",
+      "Create a more practical example.",
+      "Create a follow-up post from audience comments.",
+      "Save this idea as part of a larger content theme.",
     ],
   };
 }
