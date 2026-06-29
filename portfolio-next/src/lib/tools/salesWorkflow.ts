@@ -4,8 +4,10 @@ export type SalesWorkflowValues = {
   leadSources: string[];
   leadSourcesOther: string;
   monthlyLeadVolume: string;
+  averageDealValue: string;
   teamSize: string;
   currentResponseTime: string;
+  targetResponseTime: string;
   crmTool: string;
   crmToolOther: string;
   currentLeadProcess: string;
@@ -14,6 +16,9 @@ export type SalesWorkflowValues = {
   dealTrackingProcess: string;
   mainSalesGoals: string[];
   mainSalesProblem: string;
+  revenueLeakageEvidence: string;
+  salesWorkflowOwner: string;
+  targetImprovement: string;
 };
 
 export type SalesWorkflowErrors = Partial<
@@ -31,7 +36,12 @@ export type SalesWorkflowResult = {
     status: string;
     reason: string;
   };
+  salesWorkflowReadiness: {
+    status: string;
+    reason: string;
+  };
   priorityOutcomes: string[];
+  revenueLeakageSignals: string[];
   mainBottlenecks: string[];
   leadCaptureRecommendations: string[];
   speedToLeadRecommendations: string[];
@@ -40,8 +50,12 @@ export type SalesWorkflowResult = {
   crmFieldsToTrack: string[];
   suggestedDealStages: string[];
   salesReportingMetrics: string[];
+  salesKpiPlan: string[];
+  baselineToCapture: string[];
   automationOpportunities: string[];
+  suggestedFirstAutomation: string;
   humanReviewPoints: string[];
+  targetImprovement: string;
   suggestedNextAction: string;
   futureSystemLogPreview: string[];
   doNotAutomateYet: string[];
@@ -53,8 +67,10 @@ export const initialSalesWorkflowValues: SalesWorkflowValues = {
   leadSources: [],
   leadSourcesOther: "",
   monthlyLeadVolume: "",
+  averageDealValue: "",
   teamSize: "",
   currentResponseTime: "",
+  targetResponseTime: "",
   crmTool: "",
   crmToolOther: "",
   currentLeadProcess: "",
@@ -63,6 +79,9 @@ export const initialSalesWorkflowValues: SalesWorkflowValues = {
   dealTrackingProcess: "",
   mainSalesGoals: [],
   mainSalesProblem: "",
+  revenueLeakageEvidence: "",
+  salesWorkflowOwner: "",
+  targetImprovement: "",
 };
 
 export const salesBusinessTypes = [
@@ -99,6 +118,15 @@ export const monthlyLeadVolumeOptions = [
   "101-500",
   "501-1000",
   "More than 1000",
+  "Not sure",
+];
+
+export const averageDealValueOptions = [
+  "Less than $500",
+  "$500-$2,000",
+  "$2,001-$10,000",
+  "$10,001-$50,000",
+  "More than $50,000",
   "Not sure",
 ];
 
@@ -172,6 +200,27 @@ export function validateSalesWorkflow(values: SalesWorkflowValues) {
 
   if (!values.monthlyLeadVolume) {
     errors.monthlyLeadVolume = "Choose monthly lead volume.";
+  }
+
+  if (!values.averageDealValue) {
+    errors.averageDealValue = "Choose average deal value.";
+  }
+
+  if (!values.targetResponseTime) {
+    errors.targetResponseTime = "Choose target response time.";
+  }
+
+  if (values.revenueLeakageEvidence.trim().length > 500) {
+    errors.revenueLeakageEvidence =
+      "Revenue leakage evidence must be 500 characters or less.";
+  }
+
+  if (values.salesWorkflowOwner.trim().length > 120) {
+    errors.salesWorkflowOwner = "Sales workflow owner must be 120 characters or less.";
+  }
+
+  if (values.targetImprovement.trim().length > 400) {
+    errors.targetImprovement = "Target improvement must be 400 characters or less.";
   }
 
   if (!values.currentResponseTime) {
@@ -286,6 +335,79 @@ function getPriorityOutcomes(values: SalesWorkflowValues) {
   }
 
   return Array.from(outcomes).slice(0, 6);
+}
+
+function getRevenueLeakageSignals(values: SalesWorkflowValues) {
+  const signals: string[] = [];
+  const text = `${values.mainSalesProblem} ${values.revenueLeakageEvidence} ${values.followUpProcess} ${values.dealTrackingProcess}`;
+
+  if (textHas(text, ["miss", "missed", "forgot", "forget", "no follow", "not followed"])) {
+    signals.push("Leads or deals may be lost because follow-up is inconsistent.");
+  }
+
+  if (["Same day", "Next day", "More than 1 day", "Not sure"].includes(values.currentResponseTime)) {
+    signals.push("Slow first response may be reducing conversion from warm leads.");
+  }
+
+  if (textHas(text, ["proposal", "quote", "estimate"])) {
+    signals.push("Proposal or quote follow-up may be leaking revenue.");
+  }
+
+  if (textHas(text, ["crm", "spreadsheet", "not updated", "missing", "incomplete"])) {
+    signals.push("CRM or tracker gaps may be hiding sales opportunities.");
+  }
+
+  if (textHas(text, ["lost reason", "unknown", "not tracked"])) {
+    signals.push("Lost reasons may not be captured clearly enough to improve sales decisions.");
+  }
+
+  if (values.averageDealValue.includes("$10,001") || values.averageDealValue.includes("More than")) {
+    signals.push("Higher average deal value increases the cost of missed follow-up or weak handoffs.");
+  }
+
+  if (signals.length === 0) {
+    signals.push("Revenue leakage risk is most likely coming from weak visibility, delayed follow-up, or unclear next actions.");
+  }
+
+  return signals;
+}
+
+function getSalesWorkflowReadiness(values: SalesWorkflowValues) {
+  const hasLeadCapture = values.currentLeadProcess.trim().length >= 20;
+  const hasFollowUp = values.followUpProcess.trim().length >= 10;
+  const hasCrm = values.crmTool !== "No CRM yet";
+  const hasTarget = Boolean(values.targetImprovement);
+  const hasOwner = Boolean(values.salesWorkflowOwner);
+
+  if (hasLeadCapture && hasFollowUp && hasCrm && hasTarget && hasOwner) {
+    return {
+      status: "Ready for simple sales automation",
+      reason:
+        "Lead capture, follow-up, tracking, ownership, and target improvement are clear enough to automate one focused step.",
+    };
+  }
+
+  if (!hasCrm) {
+    return {
+      status: "Needs lead tracking structure first",
+      reason:
+        "A CRM or structured tracker should be in place before deeper sales automation is added.",
+    };
+  }
+
+  if (!hasTarget || !hasOwner) {
+    return {
+      status: "Needs accountability and target definition",
+      reason:
+        "The workflow needs a clear owner and target improvement before automation success can be measured.",
+    };
+  }
+
+  return {
+    status: "Partially ready",
+    reason:
+      "The workflow has useful structure, but it needs cleaner tracking, ownership, or measurement before deeper automation.",
+  };
 }
 
 function getMainBottlenecks(values: SalesWorkflowValues) {
@@ -473,6 +595,67 @@ function getSalesReportingMetrics(values: SalesWorkflowValues) {
   return metrics;
 }
 
+function getSalesKpiPlan(values: SalesWorkflowValues) {
+  const kpis = [
+    "First response time.",
+    "Lead capture completion rate.",
+    "Missed follow-up count.",
+    "Qualified lead rate.",
+    "Call booking rate.",
+    "Proposal follow-up rate.",
+    "CRM field completion rate.",
+    "Lost reason capture rate.",
+  ];
+
+  if (values.monthlyLeadVolume !== "Less than 25") {
+    kpis.push("Stage conversion rate.");
+    kpis.push("Stalled deal count.");
+  }
+
+  if (values.mainSalesGoals.includes("Improve closed-won handoff")) {
+    kpis.push("Closed-won handoff completion rate.");
+  }
+
+  return kpis;
+}
+
+function getBaselineToCapture(values: SalesWorkflowValues) {
+  const baseline = [
+    "Current average first response time.",
+    "Number of new leads per month.",
+    "Number of leads without a next follow-up date.",
+    "CRM or tracker fields currently completed.",
+    "Number of proposals waiting for follow-up.",
+    "Current lost reason capture rate.",
+  ];
+
+  if (values.revenueLeakageEvidence) {
+    baseline.unshift(`Submitted leakage evidence: ${values.revenueLeakageEvidence}`);
+  }
+
+  return baseline;
+}
+
+function getSuggestedFirstAutomation(values: SalesWorkflowValues) {
+  if (values.currentResponseTime !== values.targetResponseTime) {
+    return "Create a new-lead alert and first-response reminder so serious leads are contacted faster.";
+  }
+
+  if (values.mainSalesGoals.includes("Reduce missed follow-ups")) {
+    return "Create a follow-up reminder based on last contact date and next follow-up date.";
+  }
+
+  if (values.crmTool === "No CRM yet" || values.crmTool === "Spreadsheet") {
+    return "Create a structured lead tracker before adding deeper sales automation.";
+  }
+
+  if (values.mainSalesGoals.includes("Improve proposal follow-up")) {
+    return "Create a proposal follow-up reminder and proposal status field.";
+  }
+
+  return "Start with one sales tracker update or reminder that makes the next action visible.";
+}
+
 function getAutomationOpportunities(values: SalesWorkflowValues) {
   const opportunities = [
     "Create a lead record when a form or qualified inquiry arrives.",
@@ -499,11 +682,16 @@ export function generateSalesWorkflowResult(
   const businessType = resolveBusinessType(values);
   const crmTool = resolveCrmTool(values);
   const salesWorkflowHealth = getSalesWorkflowHealth(values);
+  const salesWorkflowReadiness = getSalesWorkflowReadiness(values);
+  const suggestedFirstAutomation = getSuggestedFirstAutomation(values);
 
   return {
     workflowSummary: `This ${businessType} sales workflow currently receives leads through ${values.leadSources.join(", ")} and tracks work using ${crmTool}. The main issue appears to be: ${values.mainSalesProblem}`,
     salesWorkflowHealth,
+    salesWorkflowReadiness,
     priorityOutcomes: getPriorityOutcomes(values),
+    revenueLeakageSignals: getRevenueLeakageSignals(values),
+    // priorityOutcomes: getPriorityOutcomes(values),
     mainBottlenecks: getMainBottlenecks(values),
     leadCaptureRecommendations: getLeadCaptureRecommendations(values),
     speedToLeadRecommendations: getSpeedToLeadRecommendations(values),
@@ -512,7 +700,10 @@ export function generateSalesWorkflowResult(
     crmFieldsToTrack: getCrmFieldsToTrack(values),
     suggestedDealStages: getSuggestedDealStages(values),
     salesReportingMetrics: getSalesReportingMetrics(values),
+    salesKpiPlan: getSalesKpiPlan(values),
+    baselineToCapture: getBaselineToCapture(values),
     automationOpportunities: getAutomationOpportunities(values),
+    suggestedFirstAutomation,
     humanReviewPoints: [
       "High-value leads",
       "Custom pricing",
@@ -521,9 +712,12 @@ export function generateSalesWorkflowResult(
       "Contract or legal questions",
       "Final customer-facing messages before automation sends anything",
     ],
-    suggestedNextAction:
-      "Create one sales tracker with lead source, owner, stage, last contact date, next follow-up date, and lost reason. Then choose one follow-up reminder to automate first.",
-    futureSystemLogPreview: [
+    targetImprovement:
+      values.targetImprovement ||
+      "Define a measurable target such as faster response time, fewer missed follow-ups, better CRM completion, or improved proposal follow-up.",
+
+    suggestedNextAction: `Start with this first automation: ${suggestedFirstAutomation}`,
+      futureSystemLogPreview: [
       "Lead source",
       "Submission time",
       "Assigned owner",
@@ -533,6 +727,9 @@ export function generateSalesWorkflowResult(
       "Next follow-up date",
       "Outcome",
       "Lost reason",
+      "Target response time",
+      "Sales workflow owner",
+      "KPI result",
     ],
     doNotAutomateYet: [
       "Pricing promises without review",

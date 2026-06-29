@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { SectionList } from "@/components/tools/SectionList";
 import {
+  averageDealValueOptions,
   crmToolOptions,
   generateSalesWorkflowResult,
   initialSalesWorkflowValues,
@@ -194,7 +195,7 @@ export function SalesWorkflowTool() {
           </div>
         ) : null}
 
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2">
           <div className="grid gap-2">
             <label className="font-bold text-[#17201C]" htmlFor="sales-monthly-lead-volume">
               Monthly lead volume
@@ -217,6 +218,31 @@ export function SalesWorkflowTool() {
             {errors.monthlyLeadVolume ? (
               <p className="text-sm font-semibold text-red-700">
                 {errors.monthlyLeadVolume}
+              </p>
+            ) : null}
+          </div>
+          <div className="grid gap-2">
+            <label className="font-bold text-[#17201C]" htmlFor="sales-average-deal-value">
+              Average deal value
+            </label>
+            <select
+              id="sales-average-deal-value"
+              value={values.averageDealValue}
+              onChange={(event) =>
+                updateField("averageDealValue", event.target.value)
+              }
+              className="rounded-md border border-[#D9DED8] bg-white px-4 py-3 text-[#17201C]"
+            >
+              <option value="">Choose average deal value</option>
+              {averageDealValueOptions.map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+            </select>
+            {errors.averageDealValue ? (
+              <p className="text-sm font-semibold text-red-700">
+                {errors.averageDealValue}
               </p>
             ) : null}
           </div>
@@ -265,6 +291,32 @@ export function SalesWorkflowTool() {
               </p>
             ) : null}
           </div>
+        </div>
+
+        <div className="grid gap-2">
+          <label className="font-bold text-[#17201C]" htmlFor="sales-target-response-time">
+            Target response time
+          </label>
+          <select
+            id="sales-target-response-time"
+            value={values.targetResponseTime}
+            onChange={(event) =>
+              updateField("targetResponseTime", event.target.value)
+            }
+            className="rounded-md border border-[#D9DED8] bg-white px-4 py-3 text-[#17201C]"
+          >
+            <option value="">Choose target response time</option>
+            {responseTimeOptions.map((time) => (
+              <option key={time} value={time}>
+                {time}
+              </option>
+            ))}
+          </select>
+          {errors.targetResponseTime ? (
+            <p className="text-sm font-semibold text-red-700">
+              {errors.targetResponseTime}
+            </p>
+          ) : null}
         </div>
 
         <div className="grid gap-2">
@@ -429,6 +481,74 @@ export function SalesWorkflowTool() {
           </p>
         ) : null}
 
+        <div className="rounded-md bg-[#EDF3EF] p-4">
+          <h4 className="font-bold text-[#17201C]">Revenue leakage and measurement</h4>
+          <p className="mt-2 text-sm leading-6 text-[#5F6862]">
+            Add what shows revenue may be leaking and how success should be measured.
+          </p>
+        </div>
+
+        <div className="grid gap-2">
+          <label className="font-bold text-[#17201C]" htmlFor="sales-leakage-evidence">
+            Evidence of missed revenue or sales leakage
+          </label>
+          <textarea
+            id="sales-leakage-evidence"
+            value={values.revenueLeakageEvidence}
+            onChange={(event) =>
+              updateField("revenueLeakageEvidence", event.target.value)
+            }
+            className="min-h-24 rounded-md border border-[#D9DED8] px-4 py-3 text-[#17201C]"
+            placeholder="Example: leads go cold, proposals are not followed up, CRM is incomplete, lost reasons are unknown."
+          />
+          {errors.revenueLeakageEvidence ? (
+            <p className="text-sm font-semibold text-red-700">
+              {errors.revenueLeakageEvidence}
+            </p>
+          ) : null}
+        </div>
+
+        <div className="grid gap-2">
+          <label className="font-bold text-[#17201C]" htmlFor="sales-workflow-owner">
+            Sales workflow owner
+          </label>
+          <input
+            id="sales-workflow-owner"
+            value={values.salesWorkflowOwner}
+            onChange={(event) =>
+              updateField("salesWorkflowOwner", event.target.value)
+            }
+            className="rounded-md border border-[#D9DED8] px-4 py-3 text-[#17201C]"
+            type="text"
+            placeholder="Example: founder, sales manager, RevOps owner"
+          />
+          {errors.salesWorkflowOwner ? (
+            <p className="text-sm font-semibold text-red-700">
+              {errors.salesWorkflowOwner}
+            </p>
+          ) : null}
+        </div>
+
+        <div className="grid gap-2">
+          <label className="font-bold text-[#17201C]" htmlFor="sales-target-improvement">
+            Target improvement
+          </label>
+          <textarea
+            id="sales-target-improvement"
+            value={values.targetImprovement}
+            onChange={(event) =>
+              updateField("targetImprovement", event.target.value)
+            }
+            className="min-h-24 rounded-md border border-[#D9DED8] px-4 py-3 text-[#17201C]"
+            placeholder="Example: respond within 15 minutes, reduce missed follow-ups, improve CRM completion, or follow up every proposal within 48 hours."
+          />
+          {errors.targetImprovement ? (
+            <p className="text-sm font-semibold text-red-700">
+              {errors.targetImprovement}
+            </p>
+          ) : null}
+        </div>
+
         <button
           className="rounded-md bg-[#174F42] px-5 py-3 font-bold text-white hover:bg-[#1F6F5B]"
           type="submit"
@@ -460,6 +580,21 @@ export function SalesWorkflowTool() {
                 {result.workflowSummary}
               </p>
             </div>
+
+            <div>
+              <h4 className="font-bold text-[#17201C]">Sales Workflow Readiness</h4>
+              <p className="mt-2 leading-7 text-[#5F6862]">
+                <span className="font-bold text-[#17201C]">
+                  {result.salesWorkflowReadiness.status}
+                </span>{" "}
+                - {result.salesWorkflowReadiness.reason}
+              </p>
+            </div>
+
+            <SectionList
+              title="Revenue Leakage Signals"
+              items={result.revenueLeakageSignals}
+            />
 
             <SectionList title="Priority Outcomes" items={result.priorityOutcomes} />
             <SectionList title="Main Bottlenecks" items={result.mainBottlenecks} />
@@ -497,10 +632,26 @@ export function SalesWorkflowTool() {
               title="Sales Reporting Metrics"
               items={result.salesReportingMetrics}
             />
+            <SectionList title="Sales KPI Plan" items={result.salesKpiPlan} />
+
+            <SectionList title="Baseline To Capture" items={result.baselineToCapture} />
             <SectionList
               title="Automation Opportunities"
               items={result.automationOpportunities}
             />
+            <div className="rounded-md bg-[#EDF3EF] p-4">
+              <h4 className="font-bold text-[#17201C]">Suggested First Automation</h4>
+              <p className="mt-2 leading-7 text-[#5F6862]">
+                {result.suggestedFirstAutomation}
+              </p>
+            </div>
+
+            <div className="rounded-md bg-[#EDF3EF] p-4">
+              <h4 className="font-bold text-[#17201C]">Target Improvement</h4>
+              <p className="mt-2 leading-7 text-[#5F6862]">
+                {result.targetImprovement}
+              </p>
+            </div>
             <SectionList title="Human Review Points" items={result.humanReviewPoints} />
 
             <div className="rounded-md bg-[#174F42] p-4 text-white">
