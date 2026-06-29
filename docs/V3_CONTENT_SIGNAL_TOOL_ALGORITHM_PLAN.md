@@ -683,3 +683,107 @@ Upgraded the AI Workflow Audit Tool from a quick workflow diagnostic into a more
 
 ## Notes
 The Workflow Audit Tool is still a self-serve planning aid, not a replacement for a full professional workflow audit. The deeper service remains the booked workflow audit consultation.
+
+
+# V3 Full Regression Test Notes
+
+## Date
+June 29, 2026
+
+## Scope
+Full regression test after upgrading the V3 workflow tools, content planner, sales workflow tool, and contact modal experience.
+
+## Homepage
+- Homepage loads: Pass
+- Header navigation works: Pass
+- Services section appears: Pass
+- Tools section appears: Pass
+- Projects section appears: Pass
+- Contact section appears: Pass
+- Footer appears: Pass
+
+## Workflow Audit Tool
+- Opens modal: Pass
+- New audit fields appear: Pass
+- Empty form validates required fields: Pass
+- Other business type shows text field: Pass
+- Other workflow area shows text field: Pass
+- Other tools shows text field: Pass
+- Valid detailed audit generates result: Pass
+- Workflow Scope appears: Pass
+- Current Workflow Breakdown appears: Pass
+- Handoff Risks appears: Pass
+- Decision Points To Review appears: Pass
+- Automation Readiness appears: Pass
+- Success Measurement Plan appears: Pass
+- Recommended KPIs appear: Pass
+- Current Baseline To Capture appears: Pass
+- Suggested Next Action appears: Pass
+- Close button works: Pass
+
+## Content Idea Planner
+- Opens modal: Pass
+- Content goal field appears: Pass
+- Drive engagement appears: Pass
+- Audience pain/question field appears: Pass
+- Your take or belief label appears: Pass
+- Empty form validates required fields: Pass
+- Other idea source shows text field: Pass
+- Valid form generates result: Pass
+- Recommended Content Decision appears: Pass
+- Claim Confidence appears: Pass
+- Idea Summary appears: Pass
+- Fresh Angle appears: Pass
+- Draft output appears: Pass
+- Avoid Saying appears: Pass
+- Repurposing Ideas appears: Pass
+- What To Track After Publishing appears: Pass
+- Close button works: Pass
+
+## Sales Workflow Improvement Tool
+- Opens modal: Pass
+- Average deal value appears: Pass
+- Target response time appears: Pass
+- Revenue leakage evidence appears: Pass
+- Sales workflow owner appears: Pass
+- Target improvement appears: Pass
+- Empty form validates required fields: Pass
+- Other business type shows text field: Pass
+- Other lead source shows text field: Pass
+- Other CRM/tool shows text field: Pass
+- Valid form generates result: Pass
+- Sales Workflow Readiness appears: Pass
+- Revenue Leakage Signals appears: Pass
+- Priority Improvements appears: Pass
+- Lead Capture Recommendations appears: Pass
+- Follow-Up Sequence appears: Pass
+- Sales KPI Plan appears: Pass
+- Baseline To Capture appears: Pass
+- Suggested First Automation appears: Pass
+- Close button works: Pass
+
+## Contact
+- Consultation button opens Calendly/new tab: Pass
+- Workflow audit button opens contact audit modal: Pass
+- Contact audit form validates: Pass
+- Contact audit form submits or shows expected local behavior: Pass
+- Contact modal close works: Pass
+
+## Pages
+- Blog page loads: Pass
+- Resources page loads: Pass
+- About page loads: Pass
+- All six project pages load: Pass
+- Project page navigation works: Pass
+- Project page service/contact links work: Pass
+
+## Responsive And Quality
+- Mobile homepage works: Pass
+- Mobile tools modals work: Pass
+- Mobile contact modal works: Pass
+- No horizontal scroll: Pass
+- Browser console has no critical errors: Pass
+
+## Verification Commands
+- `npm run lint`: Pass
+- `npm run build`: Pass
