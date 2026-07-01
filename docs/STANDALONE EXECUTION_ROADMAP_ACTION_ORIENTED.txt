@@ -1,0 +1,107 @@
+# standalone project 1
+
+# V1 UI Restructure Plan
+
+## Reason
+
+The first V1 implementation proved the workflow logic:
+
+- Records can be added.
+- Records can be selected.
+- Status can be updated.
+- Next action can be updated.
+- Tasks can be added.
+- Handoff notes can be added.
+- Activity history is logged.
+- Demo data persists locally.
+
+The current page layout stacks too many controls vertically. It works for testing, but it can become confusing for real users and will not scale well when there are many records.
+
+## UI Direction
+
+Move from a long stacked page to an app-style workspace.
+
+Recommended layout:
+
+1. Product header.
+2. Summary dashboard.
+3. Main workspace.
+4. Left side: compact record list.
+5. Right side: selected record detail.
+6. Detail area uses tabs.
+
+## Detail Tabs
+
+Use these tabs:
+
+- Overview.
+- Next Action.
+- Work Items.
+- Handoff Notes.
+- Activity.
+
+## Copy Decisions
+
+Use user-facing language.
+
+Keep:
+
+- Next Action.
+
+Rename:
+
+- Workflow Tasks -> Work Items.
+
+Definitions:
+
+- Next Action: the one action that should happen next for this lead or client.
+- Work Items: supporting tasks for follow-up, onboarding, delivery, approvals, payments, or handoff.
+
+## Scaling Requirements
+
+The record list should prepare for:
+
+- Search.
+- Stage filter.
+- Risk filter.
+- Owner filter.
+- Priority filter.
+- Sort by follow-up date.
+
+These filters do not all need to be built immediately, but the layout should support them.
+
+## Add Record Pattern
+
+The add-record form should not remain as a large always-visible section.
+
+Recommended V1 pattern:
+
+- Add Lead Or Client button.
+- Form appears in a modal or collapsible panel.
+- After submit, the new record is selected.
+
+## V1 Restructure Build Order
+
+1. Rename Workflow Tasks UI copy to Work Items.
+2. Create tab state for selected record detail.
+3. Split detail panel into tab sections.
+4. Move Next Action form into the Next Action tab.
+5. Move Work Item list/form into the Work Items tab.
+6. Move Handoff Note list/form into the Handoff Notes tab.
+7. Move Activity History into the Activity tab.
+8. Move Add Record form behind a button.
+9. Add compact list structure that can later support search and filters.
+10. Retest all existing V1 workflow behavior.
+
+## Definition Of Done
+
+The UI restructure is complete when:
+
+- The app no longer feels like one long stacked form.
+- Selected record details are organized into clear tabs.
+- Next Action and Work Items are visually distinct.
+- Add Record is not always visible.
+- Existing workflow behavior still works.
+- Local persistence still works.
+- Mobile layout remains usable.
+- No horizontal scroll.

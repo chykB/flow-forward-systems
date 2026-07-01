@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ClientRecordCard } from "@/components/ClientRecordCard";
 import { ClientRecordDetail } from "@/components/ClientRecordDetail";
 import { ClientRecordForm } from "@/components/ClientRecordForm";
@@ -27,7 +27,17 @@ import {
   getWaitingApprovals,
 } from "@/lib/dashboard";
 
-function buildPrioritySections(records: ClientWorkflowRecord[], tasks: WorkflowTask[],) {
+const storageKeys = {
+  activityLogs: "client-ops-activity-logs",
+  handoffNotes: "client-ops-handoff-notes",
+  records: "client-ops-records",
+  tasks: "client-ops-tasks",
+};
+
+function buildPrioritySections(
+  records: ClientWorkflowRecord[],
+  tasks: WorkflowTask[],
+) {
   return [
     {
       title: "Overdue Follow-Ups",
@@ -62,13 +72,72 @@ function buildPrioritySections(records: ClientWorkflowRecord[], tasks: WorkflowT
   ];
 }
 
-export default function Home() {
-  const [records, setRecords] = useState(demoClientWorkflowRecords);
-  const [activityLogs, setActivityLogs] = useState<ActivityLog[]>(demoActivityLogs);
-  const [handoffNotes, setHandoffNotes] = useState<HandoffNote[]>(demoHandoffNotes);
-  const [workflowTasks, setWorkflowTasks] = useState<WorkflowTask[]>(demoWorkflowTasks);
-  const [selectedRecordId, setSelectedRecordId] = useState(records[0]?.id);
+function readStoredValue<T>(key: string, fallback: T): T {
+  if (typeof window === "undefined") {
+    return fallback;
+  }
 
+  const storedValue = window.localStorage.getItem(key);
+
+  if (!storedValue) {
+    return fallback;
+  }
+
+  try {
+    return JSON.parse(storedValue) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeStoredValue<T>(key: string, value: T) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(key, JSON.stringify(value));
+}
+
+export default function Home() {
+    const [records, setRecords] = useState<ClientWorkflowRecord[]>(() =>
+      readStoredValue(storageKeys.records, demoClientWorkflowRecords),
+    );
+    const [activityLogs, setActivityLogs] = useState<ActivityLog[]>(() =>
+      readStoredValue(storageKeys.activityLogs, demoActivityLogs),
+    );
+    const [handoffNotes, setHandoffNotes] = useState<HandoffNote[]>(() =>
+      readStoredValue(storageKeys.handoffNotes, demoHandoffNotes),
+    );
+    const [workflowTasks, setWorkflowTasks] = useState<WorkflowTask[]>(() =>
+      readStoredValue(storageKeys.tasks, demoWorkflowTasks),
+    );
+    const [selectedRecordId, setSelectedRecordId] = useState(() => {
+      const storedRecords = readStoredValue(
+        storageKeys.records,
+        demoClientWorkflowRecords,
+      );
+
+      return storedRecords[0]?.id;
+    });
+  
+
+    
+
+    useEffect(() => {
+      writeStoredValue(storageKeys.records, records);
+    }, [records]);
+
+    useEffect(() => {
+      writeStoredValue(storageKeys.activityLogs, activityLogs);
+    }, [activityLogs]);
+
+    useEffect(() => {
+      writeStoredValue(storageKeys.handoffNotes, handoffNotes);
+    }, [handoffNotes]);
+
+    useEffect(() => {
+      writeStoredValue(storageKeys.tasks, workflowTasks);
+    }, [workflowTasks]);
   const prioritySections = useMemo(
     () => buildPrioritySections(records, workflowTasks),
     [records, workflowTasks],
@@ -160,6 +229,13 @@ export default function Home() {
     ]);
   }
 
+  function resetDemoData() {
+    setRecords(demoClientWorkflowRecords);
+    setActivityLogs(demoActivityLogs);
+    setHandoffNotes(demoHandoffNotes);
+    setWorkflowTasks(demoWorkflowTasks);
+    setSelectedRecordId(demoClientWorkflowRecords[0]?.id);
+  }
 
   return (
     <main className="min-h-screen bg-[#F7F8F6] text-[#17201C]">
@@ -196,8 +272,8 @@ export default function Home() {
         <div className="rounded-lg border border-[#D9DED8] bg-white p-6 shadow-sm">
           <h2 className="text-2xl font-bold">Today&apos;s Priority View</h2>
           <p className="mt-3 leading-7 text-[#5F6862]">
-            Demo mode uses safe sample information so you can review the
-            workflow without adding real client data.
+            Demo mode uses safe sample information. Changes are saved in this
+            browser so you can refresh and keep testing the workflow.
           </p>
 
           <div className="mt-6 grid gap-3">
@@ -210,6 +286,14 @@ export default function Home() {
               />
             ))}
           </div>
+
+          <button
+            className="mt-5 rounded-md border border-[#174F42] px-5 py-3 font-bold text-[#174F42] hover:bg-[#EDF3EF]"
+            type="button"
+            onClick={resetDemoData}
+          >
+            Reset Demo Data
+          </button>
         </div>
       </section>
 
@@ -258,8 +342,8 @@ export default function Home() {
           </p>
         </div>
 
-        <div className="mt-8 grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-          <div className="grid gap-4">
+        <div className="mt-8 grid items-start gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+          <div className="grid content-start gap-4">
             {records.map((record) => (
               <ClientRecordCard
                 isSelected={record.id === selectedRecord?.id}
@@ -282,7 +366,7 @@ export default function Home() {
             />
           ) : null}
         </div>
-      </section> 
+      </section>
     </main>
   );
 }
