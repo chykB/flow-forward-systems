@@ -7,7 +7,7 @@ import type {
   WorkflowTask,
 } from "@/lib/client-workflow-types";
 import { RecordStatusControls } from "@/components/RecordStatusControls";
-
+import { NextActionForm } from "@/components/NextActionForm";
 
 type ClientRecordDetailProps = {
   activityLogs: ActivityLog[];
@@ -69,6 +69,7 @@ export function ClientRecordDetail({
       </div>
 
         <RecordStatusControls record={record} onUpdateRecord={onUpdateRecord} />
+        <NextActionForm record={record} onUpdateRecord={onUpdateRecord} />
 
       <div className="mt-6">
         <h3 className="font-bold">Workflow Tasks</h3>
