@@ -1,65 +1,114 @@
-import Image from "next/image";
+const productHighlights = [
+  "See which leads and clients need action today.",
+  "Track follow-ups, approvals, payments, delivery, and client risk.",
+  "Keep handoff notes ready for a VA, assistant, or team member.",
+];
 
 export default function Home() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+    <main className="min-h-screen bg-[#F7F8F6] text-[#17201C]">
+      <section className="mx-auto grid min-h-screen max-w-6xl content-center gap-10 px-6 py-12 lg:grid-cols-[1fr_0.85fr] lg:items-center">
+        <div>
+          <p className="text-sm font-bold uppercase tracking-[0.18em] text-[#5F6862]">
+            Client Operations & Revenue Workflow
+          </p>
+          <h1 className="mt-5 max-w-3xl text-4xl font-bold leading-tight md:text-6xl">
+            Know what needs attention before client work slips.
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
+          <p className="mt-6 max-w-2xl text-lg leading-8 text-[#5F6862]">
+            Manage leads, clients, follow-ups, onboarding, delivery,
+            approvals, payment follow-up, client risk, and handoff notes in one
+            focused workflow system.
+          </p>
+
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+              className="rounded-md bg-[#174F42] px-5 py-3 text-center font-bold text-white hover:bg-[#1F6F5B]"
+              href="#demo"
             >
-              Templates
-            </a>{" "}
-            or the{" "}
+              View Demo Workflow
+            </a>
             <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+              className="rounded-md border border-[#174F42] px-5 py-3 text-center font-bold text-[#174F42] hover:bg-white"
+              href="#how-it-works"
             >
-              Learning
-            </a>{" "}
-            center.
+              See What It Tracks
+            </a>
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-[#D9DED8] bg-white p-6 shadow-sm">
+          <h2 className="text-2xl font-bold">Today&apos;s Priority View</h2>
+          <p className="mt-3 leading-7 text-[#5F6862]">
+            Demo mode will show sample leads and clients so the product can be
+            reviewed safely without exposing real client data.
+          </p>
+
+          <div className="mt-6 grid gap-3">
+            {productHighlights.map((highlight) => (
+              <div
+                className="rounded-md bg-[#EDF3EF] p-4 font-semibold text-[#17201C]"
+                key={highlight}
+              >
+                {highlight}
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section
+        className="mx-auto max-w-6xl px-6 py-16"
+        id="how-it-works"
+      >
+        <div className="max-w-3xl">
+          <p className="text-sm font-bold uppercase tracking-[0.18em] text-[#5F6862]">
+            What It Tracks
+          </p>
+          <h2 className="mt-4 text-3xl font-bold">
+            One workflow for the client lifecycle.
+          </h2>
+          <p className="mt-4 leading-8 text-[#5F6862]">
+            V1 starts with a thin but complete workflow: lead capture,
+            follow-up, onboarding, delivery, approvals, payment follow-up,
+            client risk, and handoff notes.
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+
+        <div className="mt-8 grid gap-4 md:grid-cols-3">
+          {[
+            "Lead and client records",
+            "Next actions and follow-up dates",
+            "Delivery, approval, and payment status",
+            "Risk flags and blocked work",
+            "SOP and handoff notes",
+            "Activity history",
+          ].map((item) => (
+            <article
+              className="rounded-lg border border-[#D9DED8] bg-white p-5"
+              key={item}
+            >
+              <h3 className="font-bold">{item}</h3>
+            </article>
+          ))}
         </div>
-      </main>
-    </div>
+      </section>
+
+      <section className="mx-auto max-w-6xl px-6 py-16" id="demo">
+        <div className="rounded-lg border border-[#D9DED8] bg-white p-6">
+          <p className="text-sm font-bold uppercase tracking-[0.18em] text-[#5F6862]">
+            Demo Mode
+          </p>
+          <h2 className="mt-4 text-3xl font-bold">
+            Safe sample data comes next.
+          </h2>
+          <p className="mt-4 max-w-3xl leading-8 text-[#5F6862]">
+            The next build step connects this product shell to sample workflow
+            records and shows what needs attention today. No real client data is
+            needed for the public demo.
+          </p>
+        </div>
+      </section>
+    </main>
   );
 }
