@@ -6,6 +6,7 @@ import { ClientRecordDetail } from "@/components/ClientRecordDetail";
 import { ClientRecordForm } from "@/components/ClientRecordForm";
 import { PriorityCard } from "@/components/PriorityCard";
 import { PrioritySummaryRow } from "@/components/PrioritySummaryRow";
+import { RecordFiltersBar } from "@/components/RecordFiltersBar";
 import type {
   ActivityLog,
   ClientWorkflowRecord,
@@ -26,6 +27,11 @@ import {
   getPaymentFollowUps,
   getWaitingApprovals,
 } from "@/lib/dashboard";
+import {
+  filterRecords,
+  getRecordOwners,
+  initialRecordFilters,
+} from "@/lib/record-filters";
 
 const storageKeys = {
   activityLogs: "client-ops-activity-logs",
@@ -164,9 +170,16 @@ export default function Home() {
       storageKeys.tasks,
       demoWorkflowTasks,
     );
+    const [recordFilters, setRecordFilters] = useState(initialRecordFilters);
     const [isAddRecordOpen, setIsAddRecordOpen] = useState(false);
     const [selectedRecordId, setSelectedRecordId] = useState(records[0]?.id);
-        
+    const filteredRecords = useMemo(
+      () => filterRecords(records, recordFilters),
+      [recordFilters, records],
+    );
+
+    const recordOwners = useMemo(() => getRecordOwners(records), [records]);
+    
   const prioritySections = useMemo(
     () => buildPrioritySections(records, workflowTasks),
     [records, workflowTasks],
@@ -396,9 +409,17 @@ export default function Home() {
           </p>
         </div>
 
-        <div className="mt-8 grid items-start gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+        <div className="mt-8">
+          <RecordFiltersBar
+            filters={recordFilters}
+            onChange={setRecordFilters}
+            owners={recordOwners}
+          />
+        </div>
+
+        <div className="mt-6 grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
           <div className="grid content-start gap-4">
-            {records.map((record) => (
+            {filteredRecords.map((record) => (
               <ClientRecordCard
                 isSelected={record.id === selectedRecord?.id}
                 key={record.id}
@@ -406,6 +427,11 @@ export default function Home() {
                 record={record}
               />
             ))}
+            {filteredRecords.length === 0 ? (
+              <p className="rounded-lg border border-[#D9DED8] bg-white p-5 text-[#5F6862]">
+                No records match the current filters.
+              </p>
+            ) : null}
           </div>
 
           {selectedRecord ? (
