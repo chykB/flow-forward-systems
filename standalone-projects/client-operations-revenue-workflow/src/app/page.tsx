@@ -187,8 +187,8 @@ export default function Home() {
       {
         id: `log-${Date.now()}`,
         clientWorkflowRecordId: task.clientWorkflowRecordId,
-        actionType: "Workflow task added",
-        note: `${task.title} was added as a ${task.type.toLowerCase()} task.`,
+        actionType: "Work item added",
+        note: `${task.title} was added as a ${task.type.toLowerCase()} work item.`,
         createdAt: now,
       },
       ...currentLogs,

@@ -72,7 +72,10 @@ export function ClientRecordDetail({
         <NextActionForm record={record} onUpdateRecord={onUpdateRecord} />
 
       <div className="mt-6">
-        <h3 className="font-bold">Workflow Tasks</h3>
+        <h3 className="font-bold">Work Items</h3>
+        <p className="mt-2 text-sm leading-6 text-[#5F6862]">
+        Supporting tasks for follow-up, onboarding, delivery, approvals, payments, or handoff.
+        </p>
         <div className="mt-3 grid gap-3">
           {recordTasks.length > 0 ? (
             recordTasks.map((task) => (
@@ -95,7 +98,7 @@ export function ClientRecordDetail({
             ))
           ) : (
             <p className="rounded-md bg-[#EDF3EF] p-4 text-[#5F6862]">
-              No tasks added for this record yet.
+              No work items added yet.
             </p>
           )}
         </div>

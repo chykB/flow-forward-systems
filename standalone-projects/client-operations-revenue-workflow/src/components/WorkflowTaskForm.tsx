@@ -140,10 +140,10 @@ export function WorkflowTaskForm({
       className="mt-4 rounded-md border border-[#D9DED8] bg-[#F7F8F6] p-4"
       onSubmit={submitForm}
     >
-      <h4 className="font-bold">Add Workflow Task</h4>
+      <h4 className="font-bold">Add Work Item</h4>
       <p className="mt-2 text-sm leading-6 text-[#5F6862]">
-        Add the next follow-up, onboarding, delivery, approval, payment, or
-        handoff task for this record.
+        Add a supporting task for follow-up, onboarding, delivery, approval,
+payment, or handoff.
       </p>
 
       <div className="mt-4 grid gap-3">
@@ -258,7 +258,7 @@ export function WorkflowTaskForm({
         className="mt-4 rounded-md bg-[#174F42] px-5 py-3 font-bold text-white hover:bg-[#1F6F5B]"
         type="submit"
       >
-        Add Workflow Task
+        Add Work Item
       </button>
     </form>
   );
