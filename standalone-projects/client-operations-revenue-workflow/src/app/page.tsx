@@ -9,6 +9,7 @@ import { PrioritySummaryRow } from "@/components/PrioritySummaryRow";
 import type {
   ActivityLog,
   ClientWorkflowRecord,
+  HandoffNote,
 } from "@/lib/client-workflow-types";
 import {
   demoActivityLogs,
@@ -63,6 +64,7 @@ function buildPrioritySections(records: ClientWorkflowRecord[]) {
 export default function Home() {
   const [records, setRecords] = useState(demoClientWorkflowRecords);
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>(demoActivityLogs);
+  const [handoffNotes, setHandoffNotes] = useState<HandoffNote[]>(demoHandoffNotes);
   const [selectedRecordId, setSelectedRecordId] = useState(records[0]?.id);
 
   const prioritySections = useMemo(() => buildPrioritySections(records), [records]);
@@ -85,6 +87,22 @@ export default function Home() {
       ...currentLogs,
     ]);
     setSelectedRecordId(record.id);
+  }
+
+  function addHandoffNote(note: HandoffNote) {
+    const now = new Date().toISOString();
+
+    setHandoffNotes((currentNotes) => [note, ...currentNotes]);
+    setActivityLogs((currentLogs) => [
+      {
+        id: `log-${Date.now()}`,
+        clientWorkflowRecordId: note.clientWorkflowRecordId,
+        actionType: "Handoff note added",
+        note: `${note.title} was added for delegation context.`,
+        createdAt: now,
+      },
+      ...currentLogs,
+    ]);
   }
 
   return (
@@ -199,13 +217,14 @@ export default function Home() {
           {selectedRecord ? (
             <ClientRecordDetail
               activityLogs={activityLogs}
-              handoffNotes={demoHandoffNotes}
+              handoffNotes={handoffNotes}
+              onAddHandoffNote={addHandoffNote}
               record={selectedRecord}
               tasks={demoWorkflowTasks}
             />
           ) : null}
         </div>
-      </section>
+      </section> 
     </main>
   );
 }
