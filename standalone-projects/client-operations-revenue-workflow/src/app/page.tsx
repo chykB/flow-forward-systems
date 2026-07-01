@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ClientRecordCard } from "@/components/ClientRecordCard";
 import { ClientRecordDetail } from "@/components/ClientRecordDetail";
+import { ClientRecordForm } from "@/components/ClientRecordForm";
 import { PriorityCard } from "@/components/PriorityCard";
 import { PrioritySummaryRow } from "@/components/PrioritySummaryRow";
+import type { ClientWorkflowRecord } from "@/lib/client-workflow-types";
 import {
   demoActivityLogs,
   demoClientWorkflowRecords,
@@ -20,47 +22,54 @@ import {
   getWaitingApprovals,
 } from "@/lib/dashboard";
 
-const prioritySections = [
-  {
-    title: "Overdue Follow-Ups",
-    description: "Leads or clients that should have been followed up already.",
-    count: getOverdueFollowUps(demoClientWorkflowRecords).length,
-  },
-  {
-    title: "Follow-Ups Due Soon",
-    description: "Upcoming follow-ups that need a clear next action.",
-    count: getFollowUpsDueSoon(demoClientWorkflowRecords).length,
-  },
-  {
-    title: "Approvals Waiting",
-    description: "Client approvals that may block delivery progress.",
-    count: getWaitingApprovals(demoClientWorkflowRecords).length,
-  },
-  {
-    title: "Payment Follow-Up Needed",
-    description: "Payment-related workflow items that need attention.",
-    count: getPaymentFollowUps(demoClientWorkflowRecords).length,
-  },
-  {
-    title: "Blocked Delivery",
-    description: "Delivery tasks that cannot move forward yet.",
-    count: getBlockedDeliveryTasks(demoWorkflowTasks).length,
-  },
-  {
-    title: "At-Risk Clients",
-    description: "Clients or leads with higher workflow risk.",
-    count: getAtRiskClients(demoClientWorkflowRecords).length,
-  },
-];
+function buildPrioritySections(records: ClientWorkflowRecord[]) {
+  return [
+    {
+      title: "Overdue Follow-Ups",
+      description: "Leads or clients that should have been followed up already.",
+      count: getOverdueFollowUps(records).length,
+    },
+    {
+      title: "Follow-Ups Due Soon",
+      description: "Upcoming follow-ups that need a clear next action.",
+      count: getFollowUpsDueSoon(records).length,
+    },
+    {
+      title: "Approvals Waiting",
+      description: "Client approvals that may block delivery progress.",
+      count: getWaitingApprovals(records).length,
+    },
+    {
+      title: "Payment Follow-Up Needed",
+      description: "Payment-related workflow items that need attention.",
+      count: getPaymentFollowUps(records).length,
+    },
+    {
+      title: "Blocked Delivery",
+      description: "Delivery tasks that cannot move forward yet.",
+      count: getBlockedDeliveryTasks(demoWorkflowTasks).length,
+    },
+    {
+      title: "At-Risk Clients",
+      description: "Clients or leads with higher workflow risk.",
+      count: getAtRiskClients(records).length,
+    },
+  ];
+}
 
 export default function Home() {
-  const [selectedRecordId, setSelectedRecordId] = useState(
-    demoClientWorkflowRecords[0]?.id,
-  );
+  const [records, setRecords] = useState(demoClientWorkflowRecords);
+  const [selectedRecordId, setSelectedRecordId] = useState(records[0]?.id);
+
+  const prioritySections = useMemo(() => buildPrioritySections(records), [records]);
 
   const selectedRecord =
-    demoClientWorkflowRecords.find((record) => record.id === selectedRecordId) ||
-    demoClientWorkflowRecords[0];
+    records.find((record) => record.id === selectedRecordId) || records[0];
+
+  function addRecord(record: ClientWorkflowRecord) {
+    setRecords((currentRecords) => [record, ...currentRecords]);
+    setSelectedRecordId(record.id);
+  }
 
   return (
     <main className="min-h-screen bg-[#F7F8F6] text-[#17201C]">
@@ -87,9 +96,9 @@ export default function Home() {
             </a>
             <a
               className="rounded-md border border-[#174F42] px-5 py-3 text-center font-bold text-[#174F42] hover:bg-white"
-              href="#records"
+              href="#add-record"
             >
-              View Client Records
+              Add Lead Or Client
             </a>
           </div>
         </div>
@@ -141,6 +150,10 @@ export default function Home() {
         </div>
       </section>
 
+      <section className="mx-auto max-w-6xl px-6 py-16" id="add-record">
+        <ClientRecordForm onAddRecord={addRecord} />
+      </section>
+
       <section className="mx-auto max-w-6xl px-6 py-16" id="records">
         <div className="max-w-3xl">
           <p className="text-sm font-bold uppercase tracking-[0.18em] text-[#5F6862]">
@@ -157,7 +170,7 @@ export default function Home() {
 
         <div className="mt-8 grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
           <div className="grid gap-4">
-            {demoClientWorkflowRecords.map((record) => (
+            {records.map((record) => (
               <ClientRecordCard
                 isSelected={record.id === selectedRecord?.id}
                 key={record.id}
