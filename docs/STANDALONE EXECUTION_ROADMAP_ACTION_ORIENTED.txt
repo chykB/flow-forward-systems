@@ -105,3 +105,91 @@ The UI restructure is complete when:
 - Local persistence still works.
 - Mobile layout remains usable.
 - No horizontal scroll.
+
+
+
+# V1 Functional Baseline Test Notes
+
+## Date
+
+2026-07-01
+
+## Product
+
+Client Operations & Revenue Workflow System
+
+## Scope Tested
+
+This test confirms the current V1 local-demo product baseline.
+
+The product currently supports:
+
+- Demo client workflow records.
+- Today's Work Queue.
+- Compact record list.
+- Selected record detail panel.
+- Detail tabs.
+- Add lead/client form.
+- Next action updates.
+- Work item creation.
+- Handoff note creation.
+- Activity history.
+- Local browser persistence.
+- Demo data reset.
+- Search and filters.
+
+## Test Results
+
+- Hydration error is gone: pass.
+- Add Lead Or Client button opens form: pass.
+- Close Form button hides form: pass.
+- Valid new record submits and closes form: pass.
+
+Detail tabs:
+
+- Overview: pass.
+- Next Action: pass.
+- Work Items: pass.
+- Handoff Notes: pass.
+- Activity: pass.
+
+Workflow actions:
+
+- Next Action tab updates next action, follow-up date, and owner: pass.
+- Work Items tab adds a work item: pass.
+- Handoff Notes tab adds a note: pass.
+- Activity tab shows updates: pass.
+
+Record filtering:
+
+- Search records works: pass.
+- Stage filter works: pass.
+- Risk filter works: pass.
+- Owner filter works: pass.
+- No matching filters shows empty state: pass.
+
+Persistence:
+
+- Refresh keeps changes: pass.
+- Reset Demo Data restores original records: pass.
+
+Responsive and browser checks:
+
+- Mobile layout works: pass.
+- No horizontal scroll: pass.
+- Browser console has no critical errors: pass.
+
+## Notes
+
+The product is still a local-demo V1. It does not use authentication, backend storage, database persistence, or real client data.
+
+The current UI is now organized as an app-style workspace instead of one long stacked page.
+
+## Next Recommended Step
+
+Add V1 polish and product-readiness improvements before deployment:
+
+- Improve empty states and helper copy where needed.
+- Add basic product README updates.
+- Add screenshot/walkthrough notes.
+- Confirm deployment strategy for the standalone app.
