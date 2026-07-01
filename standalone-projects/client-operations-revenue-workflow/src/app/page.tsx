@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import { ClientRecordCard } from "@/components/ClientRecordCard";
 import { ClientRecordDetail } from "@/components/ClientRecordDetail";
 import { ClientRecordForm } from "@/components/ClientRecordForm";
@@ -98,46 +98,75 @@ function writeStoredValue<T>(key: string, value: T) {
   window.localStorage.setItem(key, JSON.stringify(value));
 }
 
+function subscribeToStoredState(onStoreChange: () => void) {
+  if (typeof window === "undefined") {
+    return () => {};
+  }
+
+  window.addEventListener("storage", onStoreChange);
+  window.addEventListener("client-ops-storage", onStoreChange);
+
+  return () => {
+    window.removeEventListener("storage", onStoreChange);
+    window.removeEventListener("client-ops-storage", onStoreChange);
+  };
+}
+
+function notifyStoredStateChanged() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.dispatchEvent(new Event("client-ops-storage"));
+}
+
+function getStoredSnapshot<T>(key: string, fallback: T) {
+  return JSON.stringify(readStoredValue(key, fallback));
+}
+
+function useStoredState<T>(key: string, fallback: T) {
+  const snapshot = useSyncExternalStore(
+    subscribeToStoredState,
+    () => getStoredSnapshot(key, fallback),
+    () => JSON.stringify(fallback),
+  );
+
+  const value = useMemo(() => JSON.parse(snapshot) as T, [snapshot]);
+
+  function setStoredValue(valueOrUpdater: T | ((currentValue: T) => T)) {
+    const currentValue = readStoredValue(key, fallback);
+    const nextValue =
+      typeof valueOrUpdater === "function"
+        ? (valueOrUpdater as (currentValue: T) => T)(currentValue)
+        : valueOrUpdater;
+
+    writeStoredValue(key, nextValue);
+    notifyStoredStateChanged();
+  }
+
+  return [value, setStoredValue] as const;
+}
+
 export default function Home() {
-    const [records, setRecords] = useState<ClientWorkflowRecord[]>(() =>
-      readStoredValue(storageKeys.records, demoClientWorkflowRecords),
+    const [records, setRecords] = useStoredState<ClientWorkflowRecord[]>(
+      storageKeys.records,
+      demoClientWorkflowRecords,
     );
-    const [activityLogs, setActivityLogs] = useState<ActivityLog[]>(() =>
-      readStoredValue(storageKeys.activityLogs, demoActivityLogs),
+    const [activityLogs, setActivityLogs] = useStoredState<ActivityLog[]>(
+      storageKeys.activityLogs,
+      demoActivityLogs,
     );
-    const [handoffNotes, setHandoffNotes] = useState<HandoffNote[]>(() =>
-      readStoredValue(storageKeys.handoffNotes, demoHandoffNotes),
+    const [handoffNotes, setHandoffNotes] = useStoredState<HandoffNote[]>(
+      storageKeys.handoffNotes,
+      demoHandoffNotes,
     );
-    const [workflowTasks, setWorkflowTasks] = useState<WorkflowTask[]>(() =>
-      readStoredValue(storageKeys.tasks, demoWorkflowTasks),
+    const [workflowTasks, setWorkflowTasks] = useStoredState<WorkflowTask[]>(
+      storageKeys.tasks,
+      demoWorkflowTasks,
     );
-    const [selectedRecordId, setSelectedRecordId] = useState(() => {
-      const storedRecords = readStoredValue(
-        storageKeys.records,
-        demoClientWorkflowRecords,
-      );
-
-      return storedRecords[0]?.id;
-    });
-  
-
-    
-
-    useEffect(() => {
-      writeStoredValue(storageKeys.records, records);
-    }, [records]);
-
-    useEffect(() => {
-      writeStoredValue(storageKeys.activityLogs, activityLogs);
-    }, [activityLogs]);
-
-    useEffect(() => {
-      writeStoredValue(storageKeys.handoffNotes, handoffNotes);
-    }, [handoffNotes]);
-
-    useEffect(() => {
-      writeStoredValue(storageKeys.tasks, workflowTasks);
-    }, [workflowTasks]);
+    const [isAddRecordOpen, setIsAddRecordOpen] = useState(false);
+    const [selectedRecordId, setSelectedRecordId] = useState(records[0]?.id);
+        
   const prioritySections = useMemo(
     () => buildPrioritySections(records, workflowTasks),
     [records, workflowTasks],
@@ -161,6 +190,7 @@ export default function Home() {
       ...currentLogs,
     ]);
     setSelectedRecordId(record.id);
+    setIsAddRecordOpen(false);
   }
 
   function addHandoffNote(note: HandoffNote) {
@@ -262,9 +292,9 @@ export default function Home() {
             </a>
             <a
               className="rounded-md border border-[#174F42] px-5 py-3 text-center font-bold text-[#174F42] hover:bg-white"
-              href="#add-record"
+              href="#workspace"
             >
-              Add Lead Or Client
+              Open Workspace
             </a>
           </div>
         </div>
@@ -324,11 +354,35 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-6 py-16" id="add-record">
-        <ClientRecordForm onAddRecord={addRecord} />
+      <section className="mx-auto max-w-6xl px-6 py-16" id="workspace">
+        <div className="flex flex-col gap-4 rounded-lg border border-[#D9DED8] bg-white p-5 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-sm font-bold uppercase tracking-[0.18em] text-[#5F6862]">
+              Workspace
+            </p>
+            <h2 className="mt-3 text-2xl font-bold">Manage client workflow records</h2>
+            <p className="mt-2 leading-7 text-[#5F6862]">
+              Review current records, add a new lead or client, and update the work that needs attention.
+            </p>
+          </div>
+
+          <button
+            className="rounded-md bg-[#174F42] px-5 py-3 font-bold text-white hover:bg-[#1F6F5B]"
+            type="button"
+            onClick={() => setIsAddRecordOpen((isOpen) => !isOpen)}
+          >
+            {isAddRecordOpen ? "Close Form" : "Add Lead Or Client"}
+          </button>
+        </div>
+
+        {isAddRecordOpen ? (
+          <div className="mt-5">
+            <ClientRecordForm onAddRecord={addRecord} />
+          </div>
+        ) : null}
       </section>
 
-      <section className="mx-auto max-w-6xl px-6 py-16" id="records">
+      <section className="mx-auto max-w-6xl px-6 pb-16" id="records">
         <div className="max-w-3xl">
           <p className="text-sm font-bold uppercase tracking-[0.18em] text-[#5F6862]">
             Client Workflow Records
