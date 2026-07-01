@@ -1,8 +1,14 @@
+"use client";
+
+import { useState } from "react";
 import { ClientRecordCard } from "@/components/ClientRecordCard";
+import { ClientRecordDetail } from "@/components/ClientRecordDetail";
 import { PriorityCard } from "@/components/PriorityCard";
 import { PrioritySummaryRow } from "@/components/PrioritySummaryRow";
 import {
+  demoActivityLogs,
   demoClientWorkflowRecords,
+  demoHandoffNotes,
   demoWorkflowTasks,
 } from "@/lib/demo-data";
 import {
@@ -48,6 +54,14 @@ const prioritySections = [
 ];
 
 export default function Home() {
+  const [selectedRecordId, setSelectedRecordId] = useState(
+    demoClientWorkflowRecords[0]?.id,
+  );
+
+  const selectedRecord =
+    demoClientWorkflowRecords.find((record) => record.id === selectedRecordId) ||
+    demoClientWorkflowRecords[0];
+
   return (
     <main className="min-h-screen bg-[#F7F8F6] text-[#17201C]">
       <section className="mx-auto grid min-h-screen max-w-6xl content-center gap-10 px-6 py-12 lg:grid-cols-[1fr_0.85fr] lg:items-center">
@@ -136,15 +150,31 @@ export default function Home() {
             Leads and clients in progress
           </h2>
           <p className="mt-4 leading-8 text-[#5F6862]">
-            Each record shows the current stage, next action, owner, follow-up
-            date, and risk level.
+            Select a record to review the workflow status, tasks, handoff notes,
+            and activity history.
           </p>
         </div>
 
-        <div className="mt-8 grid gap-4">
-          {demoClientWorkflowRecords.map((record) => (
-            <ClientRecordCard key={record.id} record={record} />
-          ))}
+        <div className="mt-8 grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+          <div className="grid gap-4">
+            {demoClientWorkflowRecords.map((record) => (
+              <ClientRecordCard
+                isSelected={record.id === selectedRecord?.id}
+                key={record.id}
+                onSelect={() => setSelectedRecordId(record.id)}
+                record={record}
+              />
+            ))}
+          </div>
+
+          {selectedRecord ? (
+            <ClientRecordDetail
+              activityLogs={demoActivityLogs}
+              handoffNotes={demoHandoffNotes}
+              record={selectedRecord}
+              tasks={demoWorkflowTasks}
+            />
+          ) : null}
         </div>
       </section>
     </main>

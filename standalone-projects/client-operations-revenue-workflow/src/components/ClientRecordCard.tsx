@@ -1,12 +1,24 @@
 import type { ClientWorkflowRecord } from "@/lib/client-workflow-types";
 
 type ClientRecordCardProps = {
+  isSelected: boolean;
+  onSelect: () => void;
   record: ClientWorkflowRecord;
 };
 
-export function ClientRecordCard({ record }: ClientRecordCardProps) {
+export function ClientRecordCard({
+  isSelected,
+  onSelect,
+  record,
+}: ClientRecordCardProps) {
   return (
-    <article className="rounded-lg border border-[#D9DED8] bg-white p-5">
+    <button
+      className={`w-full rounded-lg border bg-white p-5 text-left transition hover:border-[#174F42] ${
+        isSelected ? "border-[#174F42] ring-2 ring-[#174F42]/20" : "border-[#D9DED8]"
+      }`}
+      type="button"
+      onClick={onSelect}
+    >
       <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr] lg:items-start">
         <div>
           <h3 className="text-xl font-bold">{record.name}</h3>
@@ -34,6 +46,6 @@ export function ClientRecordCard({ record }: ClientRecordCardProps) {
           </p>
         </div>
       </div>
-    </article>
+    </button>
   );
 }
