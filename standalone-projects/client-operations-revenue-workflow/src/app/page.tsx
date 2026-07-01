@@ -6,7 +6,10 @@ import { ClientRecordDetail } from "@/components/ClientRecordDetail";
 import { ClientRecordForm } from "@/components/ClientRecordForm";
 import { PriorityCard } from "@/components/PriorityCard";
 import { PrioritySummaryRow } from "@/components/PrioritySummaryRow";
-import type { ClientWorkflowRecord } from "@/lib/client-workflow-types";
+import type {
+  ActivityLog,
+  ClientWorkflowRecord,
+} from "@/lib/client-workflow-types";
 import {
   demoActivityLogs,
   demoClientWorkflowRecords,
@@ -59,6 +62,7 @@ function buildPrioritySections(records: ClientWorkflowRecord[]) {
 
 export default function Home() {
   const [records, setRecords] = useState(demoClientWorkflowRecords);
+  const [activityLogs, setActivityLogs] = useState<ActivityLog[]>(demoActivityLogs);
   const [selectedRecordId, setSelectedRecordId] = useState(records[0]?.id);
 
   const prioritySections = useMemo(() => buildPrioritySections(records), [records]);
@@ -67,7 +71,19 @@ export default function Home() {
     records.find((record) => record.id === selectedRecordId) || records[0];
 
   function addRecord(record: ClientWorkflowRecord) {
+    const now = new Date().toISOString();
+
     setRecords((currentRecords) => [record, ...currentRecords]);
+    setActivityLogs((currentLogs) => [
+      {
+        id: `log-${Date.now()}`,
+        clientWorkflowRecordId: record.id,
+        actionType: "Record created",
+        note: `${record.name} was added to the workflow with next action: ${record.nextAction}.`,
+        createdAt: now,
+      },
+      ...currentLogs,
+    ]);
     setSelectedRecordId(record.id);
   }
 
@@ -182,7 +198,7 @@ export default function Home() {
 
           {selectedRecord ? (
             <ClientRecordDetail
-              activityLogs={demoActivityLogs}
+              activityLogs={activityLogs}
               handoffNotes={demoHandoffNotes}
               record={selectedRecord}
               tasks={demoWorkflowTasks}
