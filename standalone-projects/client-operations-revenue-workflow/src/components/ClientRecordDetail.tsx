@@ -1,4 +1,5 @@
 import { HandoffNoteForm } from "@/components/HandoffNoteForm";
+import { WorkflowTaskForm } from "@/components/WorkflowTaskForm";
 import type {
   ActivityLog,
   ClientWorkflowRecord,
@@ -10,6 +11,7 @@ type ClientRecordDetailProps = {
   activityLogs: ActivityLog[];
   handoffNotes: HandoffNote[];
   onAddHandoffNote: (note: HandoffNote) => void;
+  onAddTask: (task: WorkflowTask) => void;
   record: ClientWorkflowRecord;
   tasks: WorkflowTask[];
 };
@@ -27,6 +29,7 @@ export function ClientRecordDetail({
   activityLogs,
   handoffNotes,
   onAddHandoffNote,
+  onAddTask,
   record,
   tasks,
 }: ClientRecordDetailProps) {
@@ -89,6 +92,11 @@ export function ClientRecordDetail({
             </p>
           )}
         </div>
+
+        <WorkflowTaskForm
+          clientWorkflowRecordId={record.id}
+          onAddTask={onAddTask}
+        />
       </div>
 
       <div className="mt-6">

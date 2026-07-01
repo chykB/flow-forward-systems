@@ -10,6 +10,7 @@ import type {
   ActivityLog,
   ClientWorkflowRecord,
   HandoffNote,
+  WorkflowTask,
 } from "@/lib/client-workflow-types";
 import {
   demoActivityLogs,
@@ -26,7 +27,7 @@ import {
   getWaitingApprovals,
 } from "@/lib/dashboard";
 
-function buildPrioritySections(records: ClientWorkflowRecord[]) {
+function buildPrioritySections(records: ClientWorkflowRecord[], tasks: WorkflowTask[],) {
   return [
     {
       title: "Overdue Follow-Ups",
@@ -51,7 +52,7 @@ function buildPrioritySections(records: ClientWorkflowRecord[]) {
     {
       title: "Blocked Delivery",
       description: "Delivery tasks that cannot move forward yet.",
-      count: getBlockedDeliveryTasks(demoWorkflowTasks).length,
+      count: getBlockedDeliveryTasks(tasks).length,
     },
     {
       title: "At-Risk Clients",
@@ -65,9 +66,13 @@ export default function Home() {
   const [records, setRecords] = useState(demoClientWorkflowRecords);
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>(demoActivityLogs);
   const [handoffNotes, setHandoffNotes] = useState<HandoffNote[]>(demoHandoffNotes);
+  const [workflowTasks, setWorkflowTasks] = useState<WorkflowTask[]>(demoWorkflowTasks);
   const [selectedRecordId, setSelectedRecordId] = useState(records[0]?.id);
 
-  const prioritySections = useMemo(() => buildPrioritySections(records), [records]);
+  const prioritySections = useMemo(
+    () => buildPrioritySections(records, workflowTasks),
+    [records, workflowTasks],
+  );
 
   const selectedRecord =
     records.find((record) => record.id === selectedRecordId) || records[0];
@@ -99,6 +104,22 @@ export default function Home() {
         clientWorkflowRecordId: note.clientWorkflowRecordId,
         actionType: "Handoff note added",
         note: `${note.title} was added for delegation context.`,
+        createdAt: now,
+      },
+      ...currentLogs,
+    ]);
+  }
+
+  function addWorkflowTask(task: WorkflowTask) {
+    const now = new Date().toISOString();
+
+    setWorkflowTasks((currentTasks) => [task, ...currentTasks]);
+    setActivityLogs((currentLogs) => [
+      {
+        id: `log-${Date.now()}`,
+        clientWorkflowRecordId: task.clientWorkflowRecordId,
+        actionType: "Workflow task added",
+        note: `${task.title} was added as a ${task.type.toLowerCase()} task.`,
         createdAt: now,
       },
       ...currentLogs,
@@ -219,8 +240,9 @@ export default function Home() {
               activityLogs={activityLogs}
               handoffNotes={handoffNotes}
               onAddHandoffNote={addHandoffNote}
+              onAddTask={addWorkflowTask}
               record={selectedRecord}
-              tasks={demoWorkflowTasks}
+              tasks={workflowTasks}
             />
           ) : null}
         </div>
