@@ -1,0 +1,174 @@
+import type {
+  ActivityLog,
+  ClientWorkflowRecord,
+  HandoffNote,
+  MessageTemplate,
+  WorkflowTask,
+} from "./client-workflow-types";
+
+export const demoClientWorkflowRecords: ClientWorkflowRecord[] = [
+  {
+    id: "record-001",
+    name: "Amara Okafor",
+    email: "amara@example.com",
+    phone: "+234 800 000 1001",
+    businessName: "Amara Studio",
+    source: "Instagram DM",
+    interest: "Brand refresh and launch support",
+    message:
+      "Interested in a brand refresh before launching a new coaching offer next month.",
+    lifecycleStage: "Follow-up needed",
+    priority: "High",
+    riskLevel: "Medium",
+    nextAction: "Send follow-up and book discovery call",
+    nextFollowUpAt: "2026-07-02",
+    assignedTo: "Founder",
+    onboardingStatus: "Not started",
+    deliveryStatus: "Not needed",
+    approvalStatus: "Not needed",
+    paymentStatus: "Not needed",
+    createdAt: "2026-06-29T09:00:00.000Z",
+    updatedAt: "2026-07-01T10:00:00.000Z",
+  },
+  {
+    id: "record-002",
+    name: "Jason Reed",
+    email: "jason@example.com",
+    phone: "+1 555 010 2040",
+    businessName: "Reed Advisory",
+    source: "Website form",
+    interest: "Client onboarding workflow",
+    message:
+      "Needs a clearer onboarding process for new consulting clients and approval tracking.",
+    lifecycleStage: "Onboarding",
+    priority: "Medium",
+    riskLevel: "Low",
+    nextAction: "Confirm onboarding checklist and kickoff date",
+    nextFollowUpAt: "2026-07-04",
+    assignedTo: "Operations assistant",
+    onboardingStatus: "In progress",
+    deliveryStatus: "Not started",
+    approvalStatus: "Waiting",
+    paymentStatus: "Complete",
+    createdAt: "2026-06-25T14:30:00.000Z",
+    updatedAt: "2026-07-01T08:30:00.000Z",
+  },
+  {
+    id: "record-003",
+    name: "Nadia Bello",
+    email: "nadia@example.com",
+    phone: "+44 7700 900123",
+    businessName: "Bello Interiors",
+    source: "Referral",
+    interest: "Monthly operations support",
+    message:
+      "Current client waiting on revised delivery timeline and approval for next milestone.",
+    lifecycleStage: "Waiting for approval",
+    priority: "High",
+    riskLevel: "High",
+    nextAction: "Follow up on pending approval and update delivery timeline",
+    nextFollowUpAt: "2026-06-30",
+    assignedTo: "Founder",
+    onboardingStatus: "Complete",
+    deliveryStatus: "Blocked",
+    approvalStatus: "Waiting",
+    paymentStatus: "In progress",
+    createdAt: "2026-06-12T11:15:00.000Z",
+    updatedAt: "2026-06-30T17:00:00.000Z",
+  },
+];
+
+export const demoWorkflowTasks: WorkflowTask[] = [
+  {
+    id: "task-001",
+    clientWorkflowRecordId: "record-001",
+    title: "Send first serious follow-up",
+    type: "Follow-up",
+    owner: "Founder",
+    dueDate: "2026-07-02",
+    status: "In progress",
+    criticality: "Critical",
+    createdAt: "2026-06-29T09:10:00.000Z",
+    updatedAt: "2026-07-01T10:00:00.000Z",
+  },
+  {
+    id: "task-002",
+    clientWorkflowRecordId: "record-002",
+    title: "Prepare onboarding checklist",
+    type: "Onboarding",
+    owner: "Operations assistant",
+    dueDate: "2026-07-04",
+    status: "In progress",
+    criticality: "High",
+    createdAt: "2026-06-25T15:00:00.000Z",
+    updatedAt: "2026-07-01T08:30:00.000Z",
+  },
+  {
+    id: "task-003",
+    clientWorkflowRecordId: "record-003",
+    title: "Resolve blocked delivery milestone",
+    type: "Delivery",
+    owner: "Founder",
+    dueDate: "2026-06-30",
+    status: "Blocked",
+    criticality: "Critical",
+    createdAt: "2026-06-27T12:00:00.000Z",
+    updatedAt: "2026-06-30T17:00:00.000Z",
+  },
+];
+
+export const demoActivityLogs: ActivityLog[] = [
+  {
+    id: "log-001",
+    clientWorkflowRecordId: "record-001",
+    actionType: "Lead captured",
+    note: "Lead added from Instagram DM.",
+    createdAt: "2026-06-29T09:00:00.000Z",
+  },
+  {
+    id: "log-002",
+    clientWorkflowRecordId: "record-002",
+    actionType: "Onboarding started",
+    note: "Client moved to onboarding after payment confirmation.",
+    createdAt: "2026-06-26T10:00:00.000Z",
+  },
+  {
+    id: "log-003",
+    clientWorkflowRecordId: "record-003",
+    actionType: "Risk flagged",
+    note: "Approval delay is blocking delivery timeline.",
+    createdAt: "2026-06-30T17:00:00.000Z",
+  },
+];
+
+export const demoHandoffNotes: HandoffNote[] = [
+  {
+    id: "handoff-001",
+    clientWorkflowRecordId: "record-002",
+    title: "Onboarding context",
+    note: "Client prefers weekly Monday updates and wants all approvals summarized by email.",
+    owner: "Operations assistant",
+    createdAt: "2026-06-26T10:30:00.000Z",
+  },
+];
+
+export const demoMessageTemplates: MessageTemplate[] = [
+  {
+    id: "template-001",
+    name: "Lead follow-up",
+    lifecycleStage: "Follow-up needed",
+    useCase: "Follow up with a warm lead",
+    tone: "Professional and helpful",
+    body:
+      "Thanks for reaching out. I wanted to follow up and learn a little more about what you need so we can decide the best next step.",
+  },
+  {
+    id: "template-002",
+    name: "Approval reminder",
+    lifecycleStage: "Waiting for approval",
+    useCase: "Remind a client about a pending approval",
+    tone: "Clear and respectful",
+    body:
+      "Just checking in on the pending approval. Once this is confirmed, the next delivery step can move forward.",
+  },
+];
