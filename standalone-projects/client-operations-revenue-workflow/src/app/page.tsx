@@ -126,6 +126,41 @@ export default function Home() {
     ]);
   }
 
+  function updateSelectedRecord(
+    updates: Partial<ClientWorkflowRecord>,
+    note: string,
+  ) {
+    if (!selectedRecord) {
+      return;
+    }
+
+    const now = new Date().toISOString();
+
+    setRecords((currentRecords) =>
+      currentRecords.map((record) =>
+        record.id === selectedRecord.id
+          ? {
+              ...record,
+              ...updates,
+              updatedAt: now,
+            }
+          : record,
+      ),
+    );
+
+    setActivityLogs((currentLogs) => [
+      {
+        id: `log-${Date.now()}`,
+        clientWorkflowRecordId: selectedRecord.id,
+        actionType: "Workflow status updated",
+        note,
+        createdAt: now,
+      },
+      ...currentLogs,
+    ]);
+  }
+
+
   return (
     <main className="min-h-screen bg-[#F7F8F6] text-[#17201C]">
       <section className="mx-auto grid min-h-screen max-w-6xl content-center gap-10 px-6 py-12 lg:grid-cols-[1fr_0.85fr] lg:items-center">
@@ -241,6 +276,7 @@ export default function Home() {
               handoffNotes={handoffNotes}
               onAddHandoffNote={addHandoffNote}
               onAddTask={addWorkflowTask}
+              onUpdateRecord={updateSelectedRecord}
               record={selectedRecord}
               tasks={workflowTasks}
             />

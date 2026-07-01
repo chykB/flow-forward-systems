@@ -6,6 +6,8 @@ import type {
   HandoffNote,
   WorkflowTask,
 } from "@/lib/client-workflow-types";
+import { RecordStatusControls } from "@/components/RecordStatusControls";
+
 
 type ClientRecordDetailProps = {
   activityLogs: ActivityLog[];
@@ -14,6 +16,7 @@ type ClientRecordDetailProps = {
   onAddTask: (task: WorkflowTask) => void;
   record: ClientWorkflowRecord;
   tasks: WorkflowTask[];
+  onUpdateRecord: (updates: Partial<ClientWorkflowRecord>, note: string) => void;
 };
 
 function DetailRow({ label, value }: { label: string; value: string }) {
@@ -32,6 +35,7 @@ export function ClientRecordDetail({
   onAddTask,
   record,
   tasks,
+  onUpdateRecord,
 }: ClientRecordDetailProps) {
   const recordTasks = tasks.filter(
     (task) => task.clientWorkflowRecordId === record.id,
@@ -63,6 +67,8 @@ export function ClientRecordDetail({
         <DetailRow label="Approval" value={record.approvalStatus} />
         <DetailRow label="Payment" value={record.paymentStatus} />
       </div>
+
+        <RecordStatusControls record={record} onUpdateRecord={onUpdateRecord} />
 
       <div className="mt-6">
         <h3 className="font-bold">Workflow Tasks</h3>
