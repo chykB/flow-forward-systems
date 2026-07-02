@@ -719,3 +719,66 @@ Before paid users, add:
 - production deployment checklist.
 - incident response notes.
 - stronger validation and error handling.
+
+# V2 Schema Review Checklist
+
+## Purpose
+
+Review the Supabase schema before creating tables for the Client Operations & Revenue Workflow System.
+
+This product is intended to become a real solution for service businesses, so the database should be designed carefully before private beta.
+
+## Current Schema Files
+
+- `docs/V2_BACKEND_AUTH_STORAGE_PLAN.md`
+- `docs/V2_SUPABASE_SCHEMA.sql`
+
+## Review Checklist
+
+### Product Fit
+
+- The schema supports one user owning one workspace: pending review.
+- The schema supports client workflow records: pending review.
+- The schema supports work items: pending review.
+- The schema supports handoff notes: pending review.
+- The schema supports activity logs: pending review.
+- The schema supports the current V1 UI behavior: pending review.
+
+### Security
+
+- Row Level Security is enabled on all app tables: pending review.
+- Users can only access their own profile: pending review.
+- Users can only access owned workspaces: pending review.
+- Users can only access data inside owned workspaces: pending review.
+- Service role key is not required in browser code: pending review.
+- No public unauthenticated access to private workspace data: pending review.
+
+### Data Model
+
+- `workspace_id` exists on product data tables: pending review.
+- `owner_id` exists on workspaces: pending review.
+- Records can be deleted when a workspace is deleted: pending review.
+- Work items are linked to records: pending review.
+- Handoff notes are linked to records: pending review.
+- Activity logs are linked to records: pending review.
+- Required fields match the current product forms: pending review.
+
+### Scaling
+
+- Index exists for workspace lookup: pending review.
+- Index exists for follow-up date lookup: pending review.
+- Index exists for work item record lookup: pending review.
+- Schema can later support team members: pending review.
+- Schema can later support reporting: pending review.
+
+### Product Risks
+
+- Real client data should not be collected before auth/storage is ready: pending review.
+- Sensitive notes warning is needed before private beta: pending review.
+- Data deletion/export plan is still needed: pending review.
+- Backup/restore plan is still needed: pending review.
+- Privacy policy is still needed before public user onboarding: pending review.
+
+## Decision
+
+Do not create production/private-beta tables until this checklist is reviewed and marked ready.
