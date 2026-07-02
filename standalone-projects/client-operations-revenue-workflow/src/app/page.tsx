@@ -5,20 +5,14 @@ import { ClientRecordCard } from "@/components/ClientRecordCard";
 import { ClientRecordDetail } from "@/components/ClientRecordDetail";
 import { ClientRecordForm } from "@/components/ClientRecordForm";
 import { PriorityCard } from "@/components/PriorityCard";
-import { PrioritySummaryRow } from "@/components/PrioritySummaryRow";
 import { RecordFiltersBar } from "@/components/RecordFiltersBar";
+import { WorkspaceGate } from "@/components/WorkspaceGate";
 import type {
   ActivityLog,
   ClientWorkflowRecord,
   HandoffNote,
   WorkflowTask,
 } from "@/lib/client-workflow-types";
-import {
-  demoActivityLogs,
-  demoClientWorkflowRecords,
-  demoHandoffNotes,
-  demoWorkflowTasks,
-} from "@/lib/demo-data";
 import {
   getAtRiskClients,
   getBlockedDeliveryTasks,
@@ -32,13 +26,6 @@ import {
   getRecordOwners,
   initialRecordFilters,
 } from "@/lib/record-filters";
-
-const storageKeys = {
-  activityLogs: "client-ops-activity-logs",
-  handoffNotes: "client-ops-handoff-notes",
-  records: "client-ops-records",
-  tasks: "client-ops-tasks",
-};
 
 function buildPrioritySections(
   records: ClientWorkflowRecord[],
@@ -153,40 +140,59 @@ function useStoredState<T>(key: string, fallback: T) {
   return [value, setStoredValue] as const;
 }
 
-export default function Home() {
-    const [records, setRecords] = useStoredState<ClientWorkflowRecord[]>(
-      storageKeys.records,
-      demoClientWorkflowRecords,
-    );
-    const [activityLogs, setActivityLogs] = useStoredState<ActivityLog[]>(
-      storageKeys.activityLogs,
-      demoActivityLogs,
-    );
-    const [handoffNotes, setHandoffNotes] = useStoredState<HandoffNote[]>(
-      storageKeys.handoffNotes,
-      demoHandoffNotes,
-    );
-    const [workflowTasks, setWorkflowTasks] = useStoredState<WorkflowTask[]>(
-      storageKeys.tasks,
-      demoWorkflowTasks,
-    );
-    const [recordFilters, setRecordFilters] = useState(initialRecordFilters);
-    const [isAddRecordOpen, setIsAddRecordOpen] = useState(false);
-    const [selectedRecordId, setSelectedRecordId] = useState(records[0]?.id);
-    const filteredRecords = useMemo(
-      () => filterRecords(records, recordFilters),
-      [recordFilters, records],
-    );
+type WorkspaceDashboardProps = {
+  workspaceId: string;
+};
 
-    const recordOwners = useMemo(() => getRecordOwners(records), [records]);
-    
+function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
+  const storageKeys = useMemo(
+    () => ({
+      activityLogs: `client-ops:${workspaceId}:activity-logs`,
+      handoffNotes: `client-ops:${workspaceId}:handoff-notes`,
+      records: `client-ops:${workspaceId}:records`,
+      tasks: `client-ops:${workspaceId}:tasks`,
+    }),
+    [workspaceId],
+  );
+
+  const [records, setRecords] = useStoredState<ClientWorkflowRecord[]>(
+    storageKeys.records,
+    [],
+  );
+  const [activityLogs, setActivityLogs] = useStoredState<ActivityLog[]>(
+    storageKeys.activityLogs,
+    [],
+  );
+  const [handoffNotes, setHandoffNotes] = useStoredState<HandoffNote[]>(
+    storageKeys.handoffNotes,
+    [],
+  );
+  const [workflowTasks, setWorkflowTasks] = useStoredState<WorkflowTask[]>(
+    storageKeys.tasks,
+    [],
+  );
+  const [recordFilters, setRecordFilters] = useState(initialRecordFilters);
+  const [isAddRecordOpen, setIsAddRecordOpen] = useState(false);
+  const [selectedRecordId, setSelectedRecordId] = useState<string | undefined>(
+    records[0]?.id,
+  );
+
+  const filteredRecords = useMemo(
+    () => filterRecords(records, recordFilters),
+    [recordFilters, records],
+  );
+
+  const recordOwners = useMemo(() => getRecordOwners(records), [records]);
+
   const prioritySections = useMemo(
     () => buildPrioritySections(records, workflowTasks),
     [records, workflowTasks],
   );
 
   const selectedRecord =
-    records.find((record) => record.id === selectedRecordId) || records[0];
+    filteredRecords.find((record) => record.id === selectedRecordId) ||
+    filteredRecords[0] ||
+    null;
 
   function addRecord(record: ClientWorkflowRecord) {
     const now = new Date().toISOString();
@@ -202,6 +208,7 @@ export default function Home() {
       },
       ...currentLogs,
     ]);
+    setRecordFilters(initialRecordFilters);
     setSelectedRecordId(record.id);
     setIsAddRecordOpen(false);
   }
@@ -272,90 +279,21 @@ export default function Home() {
     ]);
   }
 
-  function resetDemoData() {
-    setRecords(demoClientWorkflowRecords);
-    setActivityLogs(demoActivityLogs);
-    setHandoffNotes(demoHandoffNotes);
-    setWorkflowTasks(demoWorkflowTasks);
-    setSelectedRecordId(demoClientWorkflowRecords[0]?.id);
-  }
-
   return (
     <main className="min-h-screen bg-[#F7F8F6] text-[#17201C]">
-      <section className="mx-auto grid min-h-screen max-w-6xl content-center gap-10 px-6 py-12 lg:grid-cols-[1fr_0.85fr] lg:items-center">
-        <div>
-          <p className="text-sm font-bold uppercase tracking-[0.18em] text-[#5F6862]">
-            Client Operations & Revenue Workflow
-          </p>
-          <h1 className="mt-5 max-w-3xl text-4xl font-bold leading-tight md:text-6xl">
-            Know what needs attention before client work slips.
-          </h1>
-          <p className="mt-6 max-w-2xl text-lg leading-8 text-[#5F6862]">
-            Manage leads, clients, follow-ups, onboarding, delivery,
-            approvals, payment follow-up, client risk, and handoff notes in one
-            focused workflow system.
-          </p>
-
-          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-            <a
-              className="rounded-md bg-[#174F42] px-5 py-3 text-center font-bold text-white hover:bg-[#1F6F5B]"
-              href="#work-queue"
-            >
-              View Today&apos;s Work Queue
-            </a>
-            <a
-              className="rounded-md border border-[#174F42] px-5 py-3 text-center font-bold text-[#174F42] hover:bg-white"
-              href="#workspace"
-            >
-              Open Workspace
-            </a>
-          </div>
-        </div>
-
-        <div className="rounded-lg border border-[#D9DED8] bg-white p-6 shadow-sm">
-          <h2 className="text-2xl font-bold">Today&apos;s Priority View</h2>
-          <p className="mt-3 leading-7 text-[#5F6862]">
-            This workspace shows how client work can be organized before real
-            account storage is added. Changes are saved in this browser for testing.
-          </p>
-
-          <div className="mt-6 grid gap-3">
-            {prioritySections.slice(0, 3).map((section) => (
-              <PrioritySummaryRow
-                count={section.count}
-                description={section.description}
-                key={section.title}
-                title={section.title}
-              />
-            ))}
-          </div>
-
-          <button
-            className="mt-5 rounded-md border border-[#174F42] px-5 py-3 font-bold text-[#174F42] hover:bg-[#EDF3EF]"
-            type="button"
-            onClick={resetDemoData}
-          >
-            Reset Workspace
-          </button>
-        </div>
+      <section className="mx-auto max-w-6xl px-6 py-8">
+        <p className="text-sm font-bold uppercase tracking-[0.18em] text-[#5F6862]">
+          Today&apos;s Priority View
+        </p>
+        <h2 className="mt-3 text-3xl font-bold">What needs attention today</h2>
+        <p className="mt-3 max-w-3xl leading-7 text-[#5F6862]">
+          Review follow-ups, approvals, payments, delivery blockers, and client risks
+          before moving into individual records.
+        </p>
       </section>
 
-      <section className="mx-auto max-w-6xl px-6 py-16" id="work-queue">
-        <div className="max-w-3xl">
-          <p className="text-sm font-bold uppercase tracking-[0.18em] text-[#5F6862]">
-            Today&apos;s Work Queue
-          </p>
-          <h2 className="mt-4 text-3xl font-bold">
-            What needs attention today
-          </h2>
-          <p className="mt-4 leading-8 text-[#5F6862]">
-            The work queue groups leads and clients by follow-up, approval,
-            payment, delivery, and risk signals so the next action is easier to
-            see.
-          </p>
-        </div>
-
-        <div className="mt-8 grid gap-4 md:grid-cols-3">
+      <section className="mx-auto max-w-6xl px-6 pb-12" id="work-queue">
+        <div className="grid gap-4 md:grid-cols-3">
           {prioritySections.map((section) => (
             <PriorityCard
               count={section.count}
@@ -367,15 +305,18 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-6 py-16" id="workspace">
+      <section className="mx-auto max-w-6xl px-6 pb-10" id="workspace">
         <div className="flex flex-col gap-4 rounded-lg border border-[#D9DED8] bg-white p-5 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-sm font-bold uppercase tracking-[0.18em] text-[#5F6862]">
-              Workspace
+              Client Records
             </p>
-            <h2 className="mt-3 text-2xl font-bold">Manage client workflow records</h2>
+            <h2 className="mt-3 text-2xl font-bold">
+              Manage leads and client work
+            </h2>
             <p className="mt-2 leading-7 text-[#5F6862]">
-              Review current records, add a new lead or client, and update the work that needs attention.
+              Add leads or clients, then track next actions, work items,
+              handoff notes, and activity history.
             </p>
           </div>
 
@@ -404,49 +345,83 @@ export default function Home() {
             Leads and clients in progress
           </h2>
           <p className="mt-4 leading-8 text-[#5F6862]">
-            Select a record to review the workflow status, tasks, handoff notes,
-            and activity history.
+            Select a record to review workflow status, work items, handoff
+            notes, and activity history.
           </p>
         </div>
 
-        <div className="mt-8">
-          <RecordFiltersBar
-            filters={recordFilters}
-            onChange={setRecordFilters}
-            owners={recordOwners}
-          />
-        </div>
+        {records.length > 0 ? (
+          <div className="mt-8">
+            <RecordFiltersBar
+              filters={recordFilters}
+              onChange={setRecordFilters}
+              owners={recordOwners}
+            />
+          </div>
+        ) : null}
 
-        <div className="mt-6 grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-          <div className="grid content-start gap-4">
-            {filteredRecords.map((record) => (
-              <ClientRecordCard
-                isSelected={record.id === selectedRecord?.id}
-                key={record.id}
-                onSelect={() => setSelectedRecordId(record.id)}
-                record={record}
+        {records.length === 0 ? (
+          <div className="mt-8 rounded-lg border border-[#D9DED8] bg-white p-6">
+            <h3 className="text-2xl font-bold text-[#17201C]">
+              No client records yet
+            </h3>
+            <p className="mt-3 max-w-2xl leading-7 text-[#5F6862]">
+              Add your first lead or client to start tracking follow-ups, work
+              items, handoff notes, and activity history.
+            </p>
+            <button
+              className="mt-5 rounded-md bg-[#174F42] px-5 py-3 font-bold text-white hover:bg-[#1F6F5B]"
+              type="button"
+              onClick={() => setIsAddRecordOpen(true)}
+            >
+              Add First Lead Or Client
+            </button>
+          </div>
+        ) : (
+          <div className="mt-6 grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+            <div className="grid content-start gap-4">
+              {filteredRecords.map((record) => (
+                <ClientRecordCard
+                  isSelected={record.id === selectedRecord?.id}
+                  key={record.id}
+                  onSelect={() => setSelectedRecordId(record.id)}
+                  record={record}
+                />
+              ))}
+
+              {filteredRecords.length === 0 ? (
+                <p className="rounded-lg border border-[#D9DED8] bg-white p-5 text-[#5F6862]">
+                  No records match the current filters.
+                </p>
+              ) : null}
+            </div>
+
+            {selectedRecord ? (
+              <ClientRecordDetail
+                activityLogs={activityLogs}
+                handoffNotes={handoffNotes}
+                onAddHandoffNote={addHandoffNote}
+                onAddTask={addWorkflowTask}
+                onUpdateRecord={updateSelectedRecord}
+                record={selectedRecord}
+                tasks={workflowTasks}
               />
-            ))}
-            {filteredRecords.length === 0 ? (
-              <p className="rounded-lg border border-[#D9DED8] bg-white p-5 text-[#5F6862]">
-                No records match the current filters.
-              </p>
             ) : null}
           </div>
-
-          {selectedRecord ? (
-            <ClientRecordDetail
-              activityLogs={activityLogs}
-              handoffNotes={handoffNotes}
-              onAddHandoffNote={addHandoffNote}
-              onAddTask={addWorkflowTask}
-              onUpdateRecord={updateSelectedRecord}
-              record={selectedRecord}
-              tasks={workflowTasks}
-            />
-          ) : null}
-        </div>
+        )}
       </section>
     </main>
+  );
+}
+
+export default function Home() {
+  return (
+    <WorkspaceGate>
+      {({ workspace }) =>
+        workspace ? (
+          <WorkspaceDashboard key={workspace.id} workspaceId={workspace.id} />
+        ) : null
+      }
+    </WorkspaceGate>
   );
 }

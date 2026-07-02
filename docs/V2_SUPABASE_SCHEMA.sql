@@ -483,4 +483,27 @@ using (
   )
 );
 
-create policy "Users can read activity logs in owned
+create policy "Users can read activity logs in owned workspaces"
+on public.activity_logs
+for select
+to authenticated
+using (
+  exists (
+    select 1 from public.workspaces
+    where workspaces.id = activity_logs.workspace_id
+    and workspaces.owner_id = auth.uid()
+  )
+);
+
+create policy "Users can insert activity logs in owned workspaces"
+on public.activity_logs
+for insert
+to authenticated
+with check (
+  actor_id = auth.uid()
+  and exists (
+    select 1 from public.workspaces
+    where workspaces.id = activity_logs.workspace_id
+    and workspaces.owner_id = auth.uid()
+  )
+);
