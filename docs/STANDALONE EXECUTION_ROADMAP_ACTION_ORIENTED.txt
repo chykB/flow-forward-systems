@@ -312,3 +312,410 @@ It demonstrates:
 - V5 team operations and reporting.
 - V6 SaaS readiness.
 - V7 safe agentic client operations assistant.
+
+# V1 Deployment Readiness: Client Operations & Revenue Workflow System
+
+## Status
+
+V1 local-demo baseline is ready for deployment consideration.
+
+## Current Product State
+
+The standalone app currently supports:
+
+- Product shell and positioning.
+- Today's Work Queue.
+- Client workflow record list.
+- Selected record detail panel.
+- Overview, Next Action, Work Items, Handoff Notes, and Activity tabs.
+- Add lead/client form.
+- Next action updates.
+- Status updates.
+- Work item creation.
+- Handoff note creation.
+- Activity logging.
+- Search and filters.
+- Browser local storage persistence.
+- Demo data reset.
+- Responsive layout.
+
+## Test Status
+
+Latest local smoke tests passed:
+
+- Product shell loads.
+- Work Queue counts appear.
+- Record selection works.
+- Add record works.
+- Status updates work.
+- Next action updates work.
+- Work item creation works.
+- Handoff note creation works.
+- Activity logging works.
+- Search and filters work.
+- Refresh keeps local changes.
+- Reset demo data works.
+- Mobile layout works.
+- No horizontal scroll.
+- Browser console has no critical errors.
+
+## Data And Privacy
+
+This version uses:
+
+- Safe demo data.
+- Browser local storage.
+- No backend database.
+- No authentication.
+- No real client data storage.
+
+Users should not enter real private client data into this version.
+
+## Deployment Considerations
+
+This version can be deployed as a standalone public demo if it is clearly presented as a demo product.
+
+Before public sharing:
+
+- Confirm metadata title and description are correct.
+- Confirm no default Next.js starter copy remains.
+- Confirm demo data is safe.
+- Confirm README explains local/demo storage.
+- Capture screenshots or walkthrough notes.
+- Decide where the standalone demo should be linked from the main portfolio app.
+
+## Recommended Deployment Options
+
+Option A:
+Deploy as a separate Cloudflare Workers/Pages project.
+
+Option B:
+Deploy as a separate Vercel/Netlify project for quick public demo.
+
+Option C:
+Deploy later after adding backend/auth/storage.
+
+## Recommendation
+
+Deploy only when the main portfolio should start linking to this standalone product.
+
+If the goal is private build progress only, keep it local for now and continue V1 polish.
+
+
+# V2 Backend, Auth, And Storage Plan
+
+## Goal
+
+Move the Client Operations & Revenue Workflow System from local browser storage to real account-based storage for private beta users.
+
+V2 should support real users safely, but still avoid overbuilding.
+
+## Recommended V2 Stack
+
+- Frontend: Next.js + TypeScript.
+- Auth: Supabase Auth.
+- Database: Supabase Postgres.
+- Security: Row Level Security.
+- Server logic: Next.js API routes/server actions first.
+- Future backend: Python + FastAPI for AI, reminders, workers, webhooks, and integrations.
+
+## Why Supabase First
+
+Supabase is a good V2 choice because it provides:
+
+- user authentication.
+- Postgres database.
+- row-level security.
+- hosted backend quickly.
+- SQL access for clear data modeling.
+- easier private beta setup.
+
+FastAPI should come later when the product needs:
+
+- AI workflows.
+- scheduled reminders.
+- background jobs.
+- webhook endpoints.
+- integration orchestration.
+- audit/retry logic.
+
+## V2 Product Boundary
+
+V2 should add:
+
+- sign up / sign in.
+- workspace records saved to database.
+- user-owned records.
+- activity logs saved to database.
+- handoff notes saved to database.
+- work items saved to database.
+- safe loading/error states.
+- ability to reset sample workspace separately from real data.
+
+V2 should not add yet:
+
+- billing.
+- multi-user teams.
+- external integrations.
+- autonomous AI actions.
+- payment processing.
+- full CRM complexity.
+
+## Data Model
+
+### profiles
+
+Stores user profile data.
+
+Fields:
+
+- id uuid primary key references auth.users(id)
+- email text
+- full_name text
+- created_at timestamp
+- updated_at timestamp
+
+### workspaces
+
+Stores a user workspace.
+
+Fields:
+
+- id uuid primary key
+- owner_id uuid references auth.users(id)
+- name text
+- created_at timestamp
+- updated_at timestamp
+
+### client_workflow_records
+
+Stores leads and clients.
+
+Fields:
+
+- id uuid primary key
+- workspace_id uuid references workspaces(id)
+- name text
+- email text
+- phone text
+- business_name text
+- source text
+- interest text
+- message text
+- lifecycle_stage text
+- priority text
+- risk_level text
+- next_action text
+- next_follow_up_at date
+- assigned_to text
+- onboarding_status text
+- delivery_status text
+- approval_status text
+- payment_status text
+- created_at timestamp
+- updated_at timestamp
+
+### workflow_tasks
+
+Stores work items.
+
+Fields:
+
+- id uuid primary key
+- workspace_id uuid references workspaces(id)
+- client_workflow_record_id uuid references client_workflow_records(id)
+- title text
+- type text
+- owner text
+- due_date date
+- status text
+- criticality text
+- created_at timestamp
+- updated_at timestamp
+
+### handoff_notes
+
+Stores handoff context.
+
+Fields:
+
+- id uuid primary key
+- workspace_id uuid references workspaces(id)
+- client_workflow_record_id uuid references client_workflow_records(id)
+- title text
+- note text
+- owner text
+- created_at timestamp
+
+### activity_logs
+
+Stores activity history.
+
+Fields:
+
+- id uuid primary key
+- workspace_id uuid references workspaces(id)
+- client_workflow_record_id uuid references client_workflow_records(id)
+- action_type text
+- note text
+- created_at timestamp
+
+## Security Model
+
+Use Row Level Security.
+
+Every table with product data should include `workspace_id`.
+
+Users should only access rows where they own the workspace.
+
+V2 private beta can use a simple model:
+
+- one user owns one workspace.
+- no team members yet.
+- no role-based permissions yet.
+
+Later V5 can add:
+
+- team members.
+- roles.
+- assigned owners linked to users.
+- workspace invitations.
+
+## Auth Flow
+
+V2 should support:
+
+- sign up.
+- sign in.
+- sign out.
+- protected workspace.
+- loading state while auth is checked.
+
+User flow:
+
+1. User visits product.
+2. User can view sample workspace without signing in.
+3. User signs up to save real workspace data.
+4. App creates profile and workspace.
+5. User creates records, work items, notes, and updates.
+6. Data is saved to Supabase.
+
+## Sample Workspace vs Real Workspace
+
+Keep these separate.
+
+Sample workspace:
+
+- safe demo data.
+- no login required.
+- browser/local only or public static seed.
+- resettable.
+
+Real workspace:
+
+- requires auth.
+- saves to Supabase.
+- should warn users not to store unnecessary sensitive data.
+- belongs to the logged-in user.
+
+## API Strategy
+
+Start simple.
+
+Option A:
+Use Supabase client from the browser with RLS.
+
+Option B:
+Use Next.js API routes/server actions for mutations.
+
+Recommended:
+Use Supabase client with RLS for early V2 CRUD, but use API routes later for sensitive workflows, AI calls, reminders, and admin actions.
+
+## Environment Variables
+
+Local:
+
+- NEXT_PUBLIC_SUPABASE_URL
+- NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+Server-only later:
+
+- SUPABASE_SERVICE_ROLE_KEY
+
+Rules:
+
+- Never expose service role key in browser code.
+- Never commit `.env.local`.
+- Use Cloudflare/Vercel/Supabase environment settings for production.
+
+## Migration From Local Demo
+
+V2 should not remove the current local demo immediately.
+
+Recommended transition:
+
+1. Keep sample workspace mode.
+2. Add auth.
+3. Add database schema.
+4. Add real workspace mode.
+5. Add save/load from Supabase.
+6. Keep reset sample data for demo mode only.
+7. Add clear UI copy:
+   - "Sample workspace"
+   - "Saved workspace"
+
+## V2 Build Order
+
+1. Create Supabase project for this standalone app.
+2. Create database schema.
+3. Enable Row Level Security.
+4. Add policies for workspace-owned data.
+5. Install Supabase client.
+6. Add environment variables.
+7. Add auth UI.
+8. Add workspace creation after sign up.
+9. Load records from database for signed-in user.
+10. Save new records to database.
+11. Save status updates to database.
+12. Save work items to database.
+13. Save handoff notes to database.
+14. Save activity logs to database.
+15. Keep sample workspace mode for visitors.
+16. Add private beta warning and privacy copy.
+17. Test auth, CRUD, RLS, logout, reload, and mobile.
+
+## V2 Definition Of Done
+
+V2 is complete when:
+
+- user can sign up.
+- user can sign in.
+- user can sign out.
+- user gets a workspace.
+- user can add records to database.
+- user can update records.
+- user can add work items.
+- user can add handoff notes.
+- activity logs are saved.
+- refresh keeps database-backed data.
+- logged-out user cannot access private workspace data.
+- another user cannot access another workspace.
+- sample workspace still works without login.
+- no service role key is exposed.
+- mobile layout still works.
+- no horizontal scroll.
+- browser console has no critical errors.
+
+## Not Ready For Paid Use Until
+
+Before paid users, add:
+
+- privacy policy.
+- terms.
+- data deletion/export.
+- backups.
+- monitoring.
+- support path.
+- production deployment checklist.
+- incident response notes.
+- stronger validation and error handling.

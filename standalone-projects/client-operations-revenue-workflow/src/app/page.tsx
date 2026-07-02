@@ -315,8 +315,8 @@ export default function Home() {
         <div className="rounded-lg border border-[#D9DED8] bg-white p-6 shadow-sm">
           <h2 className="text-2xl font-bold">Today&apos;s Priority View</h2>
           <p className="mt-3 leading-7 text-[#5F6862]">
-            Demo mode uses safe sample information. Changes are saved in this
-            browser so you can refresh and keep testing the workflow.
+            This workspace shows how client work can be organized before real
+            account storage is added. Changes are saved in this browser for testing.
           </p>
 
           <div className="mt-6 grid gap-3">
@@ -335,7 +335,7 @@ export default function Home() {
             type="button"
             onClick={resetDemoData}
           >
-            Reset Demo Data
+            Reset Workspace
           </button>
         </div>
       </section>
