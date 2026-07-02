@@ -193,3 +193,122 @@ Add V1 polish and product-readiness improvements before deployment:
 - Add basic product README updates.
 - Add screenshot/walkthrough notes.
 - Confirm deployment strategy for the standalone app.
+
+# Client Operations & Revenue Workflow System
+
+Standalone product for helping service businesses manage leads, clients, follow-ups, onboarding, delivery, approvals, payment follow-up, client risk, and handoff notes in one place.
+
+## Project Status
+
+V1 local-demo baseline is working.
+
+The current version uses safe demo data and browser storage. It does not use authentication, backend storage, a database, or real client data yet.
+
+## Source Of Truth
+
+Product planning lives in:
+
+`AI Automation Career Client System/standalone-projects/sales-follow-up-automation-system/`
+
+The implementation lives here:
+
+`flow-forward-systems/standalone-projects/client-operations-revenue-workflow/`
+
+## V1 Goal
+
+Build a thin but complete public product that lets a user:
+
+- View demo data.
+- See what needs attention today.
+- Add and manage lead/client records.
+- Track follow-up, onboarding, delivery, approvals, payment follow-up, risk, and handoff notes.
+- Review activity history.
+
+## Current V1 Features
+
+- Product shell with user-facing positioning.
+- Today's Work Queue.
+- Compact client workflow record list.
+- Selected record detail panel.
+- Detail tabs:
+  - Overview.
+  - Next Action.
+  - Work Items.
+  - Handoff Notes.
+  - Activity.
+- Add lead/client form.
+- Next action update form.
+- Status update controls.
+- Work item creation.
+- Handoff note creation.
+- Activity logging.
+- Search and filters:
+  - search query.
+  - lifecycle stage.
+  - risk level.
+  - owner.
+- Browser local storage persistence.
+- Reset demo data action.
+- Responsive layout.
+
+## V1 Build Approach
+
+The current V1 uses:
+
+- Next.js.
+- TypeScript.
+- Tailwind CSS.
+- Local demo data.
+- Browser local storage.
+
+No real private client data should be entered into this version.
+
+## User-Facing Product Language
+
+The product uses user-facing terms:
+
+- Today's Work Queue.
+- Client Workflow Records.
+- Next Action.
+- Work Items.
+- Handoff Notes.
+- Activity History.
+- At-Risk Clients.
+- Payment Follow-Up Needed.
+
+## What This Product Shows
+
+This project shows how a service business can move from scattered lead/client tracking into a simple workflow system that makes the next action visible.
+
+It demonstrates:
+
+- client lifecycle workflow design.
+- local state and persistence.
+- dashboard logic.
+- workflow status tracking.
+- activity logging.
+- human-readable operations UI.
+- V1 product scoping.
+
+## What V1 Does Not Do Yet
+
+- No authentication.
+- No backend database.
+- No real user accounts.
+- No real client data storage.
+- No email sending.
+- No payment processing.
+- No integrations.
+- No autonomous AI actions.
+
+## Next Roadmap
+
+- V1 polish and deployment readiness.
+- V1 public deployment.
+- V2 backend/auth/storage planning.
+- V2 AI-assisted summaries, drafts, and next actions with human review.
+- V3 reminders, timeouts, and escalation.
+- V4 integrations and API patterns.
+- V5 team operations and reporting.
+- V6 SaaS readiness.
+- V7 safe agentic client operations assistant.
