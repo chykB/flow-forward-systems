@@ -283,12 +283,12 @@ export function ClientRecordForm({ onAddRecord }: ClientRecordFormProps) {
 
         <div className="grid gap-2">
           <label className="font-bold" htmlFor="record-owner">
-            Owner
+            Assigned to
           </label>
           <input
             className="rounded-md border border-[#D9DED8] px-4 py-3 outline-none focus:border-[#174F42]"
             id="record-owner"
-            placeholder="Example: Founder, VA, assistant"
+            placeholder="Example: Example: Founder, VA, assistant, sales rep"
             value={values.assignedTo}
             onChange={(event) => updateField("assignedTo", event.target.value)}
           />

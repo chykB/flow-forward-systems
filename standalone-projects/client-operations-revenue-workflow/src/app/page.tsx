@@ -1,12 +1,17 @@
 "use client";
 
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { ClientRecordCard } from "@/components/ClientRecordCard";
 import { ClientRecordDetail } from "@/components/ClientRecordDetail";
 import { ClientRecordForm } from "@/components/ClientRecordForm";
 import { PriorityCard } from "@/components/PriorityCard";
 import { RecordFiltersBar } from "@/components/RecordFiltersBar";
 import { WorkspaceGate } from "@/components/WorkspaceGate";
+import { createBrowserSupabaseClient } from "@/lib/supabase/browser-client";
+import {
+  createClientWorkflowRecord,
+  getClientWorkflowRecords,
+} from "@/lib/supabase/client-workflow-records";
 import type {
   ActivityLog,
   ClientWorkflowRecord,
@@ -154,11 +159,14 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
     }),
     [workspaceId],
   );
+  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
 
-  const [records, setRecords] = useStoredState<ClientWorkflowRecord[]>(
-    storageKeys.records,
-    [],
+  const [records, setRecords] = useState<ClientWorkflowRecord[]>([]);
+  const [recordsStatus, setRecordsStatus] = useState<"loading" | "ready" | "error">(
+    "loading",
   );
+  const [recordsMessage, setRecordsMessage] = useState("");
+
   const [activityLogs, setActivityLogs] = useStoredState<ActivityLog[]>(
     storageKeys.activityLogs,
     [],
@@ -194,23 +202,79 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
     filteredRecords[0] ||
     null;
 
-  function addRecord(record: ClientWorkflowRecord) {
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadRecords() {
+      setRecordsStatus("loading");
+      setRecordsMessage("");
+
+      try {
+        const workspaceRecords = await getClientWorkflowRecords(
+          supabase,
+          workspaceId,
+        );
+
+        if (!isMounted) {
+          return;
+        }
+
+        setRecords(workspaceRecords);
+        setSelectedRecordId(workspaceRecords[0]?.id);
+        setRecordsStatus("ready");
+      } catch {
+        if (!isMounted) {
+          return;
+        }
+
+        setRecordsStatus("error");
+        setRecordsMessage("Workspace records could not be loaded. Refresh and try again.");
+      }
+    }
+
+    void loadRecords();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [supabase, workspaceId]);
+  
+  async function addRecord(record: ClientWorkflowRecord) {
     const now = new Date().toISOString();
 
-    setRecords((currentRecords) => [record, ...currentRecords]);
-    setActivityLogs((currentLogs) => [
-      {
-        id: `log-${Date.now()}`,
-        clientWorkflowRecordId: record.id,
-        actionType: "Record created",
-        note: `${record.name} was added to the workflow with next action: ${record.nextAction}.`,
-        createdAt: now,
-      },
-      ...currentLogs,
-    ]);
-    setRecordFilters(initialRecordFilters);
-    setSelectedRecordId(record.id);
-    setIsAddRecordOpen(false);
+    try {
+      const savedRecord = await createClientWorkflowRecord(
+        supabase,
+        workspaceId,
+        record,
+      );
+
+      setRecords((currentRecords) => [savedRecord, ...currentRecords]);
+
+      setActivityLogs((currentLogs) => [
+        {
+          id: `log-${Date.now()}`,
+          clientWorkflowRecordId: savedRecord.id,
+          actionType: "Record created",
+          note: `${savedRecord.name} was added to the workflow with next action: ${savedRecord.nextAction}.`,
+          createdAt: now,
+        },
+        ...currentLogs,
+      ]);
+      
+      setRecordFilters(initialRecordFilters);
+      setSelectedRecordId(savedRecord.id);
+      setIsAddRecordOpen(false);
+      setRecordsMessage("");
+      } catch (error) {
+        console.error("Create client workflow record failed", error);
+
+        setRecordsMessage(
+          error instanceof Error
+            ? error.message
+            : "The record could not be saved. Please try again.",
+        );
+      }
   }
 
   function addHandoffNote(note: HandoffNote) {
@@ -359,8 +423,21 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
             />
           </div>
         ) : null}
-
-        {records.length === 0 ? (
+        {recordsMessage ? (
+          <p className="mt-5 rounded-md bg-white p-4 font-semibold text-red-700">
+            {recordsMessage}
+          </p>
+        ) : null}
+        {recordsStatus === "loading" ? (
+          <div className="mt-8 rounded-lg border border-[#D9DED8] bg-white p-6">
+            <h3 className="text-2xl font-bold text-[#17201C]">
+              Loading client records
+            </h3>
+            <p className="mt-3 leading-7 text-[#5F6862]">
+              Checking this workspace for saved leads and client workflow records.
+            </p>
+          </div>
+        ) : records.length === 0 ? (
           <div className="mt-8 rounded-lg border border-[#D9DED8] bg-white p-6">
             <h3 className="text-2xl font-bold text-[#17201C]">
               No client records yet
