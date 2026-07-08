@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDateTime } from "@/lib/format-date";
 import { useState } from "react";
 import { HandoffNoteForm } from "@/components/HandoffNoteForm";
 import { NextActionForm } from "@/components/NextActionForm";
@@ -210,7 +211,7 @@ export function ClientRecordDetail({
                 <div className="rounded-md border border-[#D9DED8] p-4" key={log.id}>
                   <p className="font-bold">{log.actionType}</p>
                   <p className="mt-2 leading-7 text-[#5F6862]">{log.note}</p>
-                  <p className="mt-2 text-sm text-[#5F6862]">{log.createdAt}</p>
+                  <p className="mt-2 text-sm text-[#5F6862]">{formatDateTime(log.createdAt)}</p>
                 </div>
               ))
             ) : (

@@ -104,3 +104,101 @@ export async function createClientWorkflowRecord(
 
   return mapRecordRow(data as ClientWorkflowRecordRow);
 }
+
+function buildRecordUpdatePayload(updates: Partial<ClientWorkflowRecord>) {
+  const payload: Record<string, string | null> = {};
+
+  if (updates.name !== undefined) {
+    payload.name = updates.name;
+  }
+
+  if (updates.email !== undefined) {
+    payload.email = updates.email || null;
+  }
+
+  if (updates.phone !== undefined) {
+    payload.phone = updates.phone || null;
+  }
+
+  if (updates.businessName !== undefined) {
+    payload.business_name = updates.businessName || null;
+  }
+
+  if (updates.source !== undefined) {
+    payload.source = updates.source || null;
+  }
+
+  if (updates.interest !== undefined) {
+    payload.interest = updates.interest || null;
+  }
+
+  if (updates.message !== undefined) {
+    payload.message = updates.message || null;
+  }
+
+  if (updates.lifecycleStage !== undefined) {
+    payload.lifecycle_stage = updates.lifecycleStage;
+  }
+
+  if (updates.priority !== undefined) {
+    payload.priority = updates.priority;
+  }
+
+  if (updates.riskLevel !== undefined) {
+    payload.risk_level = updates.riskLevel;
+  }
+
+  if (updates.nextAction !== undefined) {
+    payload.next_action = updates.nextAction;
+  }
+
+  if (updates.nextFollowUpAt !== undefined) {
+    payload.next_follow_up_at = updates.nextFollowUpAt || null;
+  }
+
+  if (updates.assignedTo !== undefined) {
+    payload.assigned_to = updates.assignedTo || null;
+  }
+
+  if (updates.onboardingStatus !== undefined) {
+    payload.onboarding_status = updates.onboardingStatus;
+  }
+
+  if (updates.deliveryStatus !== undefined) {
+    payload.delivery_status = updates.deliveryStatus;
+  }
+
+  if (updates.approvalStatus !== undefined) {
+    payload.approval_status = updates.approvalStatus;
+  }
+
+  if (updates.paymentStatus !== undefined) {
+    payload.payment_status = updates.paymentStatus;
+  }
+
+  return payload;
+}
+
+export async function updateClientWorkflowRecord(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  recordId: string,
+  updates: Partial<ClientWorkflowRecord>,
+) {
+  const payload = buildRecordUpdatePayload(updates);
+
+  const { data, error } = await supabase
+    .from("client_workflow_records")
+    .update(payload)
+    .eq("workspace_id", workspaceId)
+    .eq("id", recordId)
+    .select("*")
+    .single();
+
+  if (error) {
+    console.error("Supabase record update failed", error);
+    throw new Error(error.message);
+  }
+
+  return mapRecordRow(data as ClientWorkflowRecordRow);
+}

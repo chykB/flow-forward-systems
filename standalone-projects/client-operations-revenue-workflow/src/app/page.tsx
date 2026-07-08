@@ -11,6 +11,7 @@ import { createBrowserSupabaseClient } from "@/lib/supabase/browser-client";
 import {
   createClientWorkflowRecord,
   getClientWorkflowRecords,
+  updateClientWorkflowRecord,
 } from "@/lib/supabase/client-workflow-records";
 import type {
   ActivityLog,
@@ -313,11 +314,19 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
     updates: Partial<ClientWorkflowRecord>,
     note: string,
   ) {
+    void saveSelectedRecordUpdates(updates, note);
+  }
+
+  async function saveSelectedRecordUpdates(
+    updates: Partial<ClientWorkflowRecord>,
+    note: string,
+  ) {
     if (!selectedRecord) {
       return;
     }
 
     const now = new Date().toISOString();
+    const previousRecord = selectedRecord;
 
     setRecords((currentRecords) =>
       currentRecords.map((record) =>
@@ -331,16 +340,47 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
       ),
     );
 
-    setActivityLogs((currentLogs) => [
-      {
-        id: `log-${Date.now()}`,
-        clientWorkflowRecordId: selectedRecord.id,
-        actionType: "Workflow status updated",
-        note,
-        createdAt: now,
-      },
-      ...currentLogs,
-    ]);
+    try {
+      const savedRecord = await updateClientWorkflowRecord(
+        supabase,
+        workspaceId,
+        selectedRecord.id,
+        updates,
+      );
+
+      setRecords((currentRecords) =>
+        currentRecords.map((record) =>
+          record.id === savedRecord.id ? savedRecord : record,
+        ),
+      );
+
+      setActivityLogs((currentLogs) => [
+        {
+          id: `log-${Date.now()}`,
+          clientWorkflowRecordId: savedRecord.id,
+          actionType: "Workflow status updated",
+          note,
+          createdAt: now,
+        },
+        ...currentLogs,
+      ]);
+
+      setRecordsMessage("");
+    } catch (error) {
+      console.error("Client workflow record update failed", error);
+
+      setRecords((currentRecords) =>
+        currentRecords.map((record) =>
+          record.id === previousRecord.id ? previousRecord : record,
+        ),
+      );
+
+      setRecordsMessage(
+        error instanceof Error
+          ? error.message
+          : "The record could not be updated. Please try again.",
+      );
+    }
   }
 
   return (
