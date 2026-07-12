@@ -1,12 +1,18 @@
 "use client";
 
 import { useState } from "react";
+import { ProposalForm } from "@/components/ProposalForm";
 import type { ProposalRecord } from "@/lib/client-workflow-types";
+import {
+  getProposalStatusLabel,
+  getTodayDateInputValue,
+  proposalStatusOptions,
+  toDateInputValue,
+} from "@/lib/proposal-options";
 import type {
   NewProposalRecord,
   ProposalRecordUpdates,
 } from "@/lib/supabase/proposal-records";
-import { ProposalForm } from "@/components/ProposalForm";
 
 type ProposalPanelProps = {
   clientWorkflowRecordId: string;
@@ -21,17 +27,11 @@ type ProposalPanelProps = {
   ) => Promise<void>;
 };
 
-const proposalStatusOptions: ProposalRecord["status"][] = [
-  "Not needed",
-  "Draft needed",
-  "Sent",
-  "Revision requested",
-  "Accepted",
-  "Rejected",
-  "Expired",
-];
-
 function formatAmount(amount: number, currency: string) {
+  if (amount <= 0) {
+    return "Amount not set";
+  }
+
   try {
     return new Intl.NumberFormat("en-US", {
       style: "currency",
@@ -44,7 +44,7 @@ function formatAmount(amount: number, currency: string) {
 
 function formatProposalDate(value: string) {
   if (!value) {
-    return "Not recorded";
+    return "";
   }
 
   return new Intl.DateTimeFormat("en-GB", {
@@ -53,6 +53,43 @@ function formatProposalDate(value: string) {
     year: "numeric",
     timeZone: "UTC",
   }).format(new Date(value));
+}
+
+function ProposalDateField({
+  id,
+  label,
+  value,
+  error,
+  disabled,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  error?: string;
+  disabled: boolean;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="grid gap-2">
+      <label className="font-bold text-[#17201C]" htmlFor={id}>
+        {label}
+      </label>
+      <input
+        id={id}
+        className="rounded-md border border-[#D9DED8] px-4 py-3 text-[#17201C]"
+        disabled={disabled}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        type="date"
+      />
+      {error ? (
+        <p className="text-sm font-semibold text-red-700">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
 }
 
 function ProposalEditor({
@@ -66,38 +103,127 @@ function ProposalEditor({
 }) {
   const [status, setStatus] = useState(proposal.status);
   const [notes, setNotes] = useState(proposal.notes);
+  const [sentAt, setSentAt] = useState(
+    toDateInputValue(proposal.sentAt),
+  );
+  const [expiresAt, setExpiresAt] = useState(
+    toDateInputValue(proposal.expiresAt),
+  );
+  const [acceptedAt, setAcceptedAt] = useState(
+    toDateInputValue(proposal.acceptedAt),
+  );
+  const [rejectedAt, setRejectedAt] = useState(
+    toDateInputValue(proposal.rejectedAt),
+  );
+  const [revisionRequestedAt, setRevisionRequestedAt] =
+    useState(
+      toDateInputValue(proposal.revisionRequestedAt),
+    );
+  const [fieldErrors, setFieldErrors] = useState<
+    Record<string, string>
+  >({});
   const [message, setMessage] = useState("");
 
+  function updateStatus(nextStatus: ProposalRecord["status"]) {
+    const today = getTodayDateInputValue();
+
+    setStatus(nextStatus);
+    setFieldErrors({});
+    setMessage("");
+
+    if (nextStatus === "Sent" && !sentAt) {
+      setSentAt(today);
+    }
+
+    if (
+      nextStatus === "Revision requested" &&
+      !revisionRequestedAt
+    ) {
+      setRevisionRequestedAt(today);
+    }
+
+    if (nextStatus === "Accepted" && !acceptedAt) {
+      setAcceptedAt(today);
+    }
+
+    if (nextStatus === "Rejected" && !rejectedAt) {
+      setRejectedAt(today);
+    }
+
+    if (nextStatus === "Expired" && !expiresAt) {
+      setExpiresAt(today);
+    }
+  }
+
   async function saveChanges() {
+    const errors: Record<string, string> = {};
+
+    if (status === "Sent" && !sentAt) {
+      errors.sentAt = "Enter the date the proposal was sent.";
+    }
+
+    if (
+      status === "Revision requested" &&
+      !revisionRequestedAt
+    ) {
+      errors.revisionRequestedAt =
+        "Enter the revision request date.";
+    }
+
+    if (status === "Accepted" && !acceptedAt) {
+      errors.acceptedAt = "Enter the acceptance date.";
+    }
+
+    if (status === "Rejected" && !rejectedAt) {
+      errors.rejectedAt = "Enter the rejection date.";
+    }
+
+    if (status === "Expired" && !expiresAt) {
+      errors.expiresAt = "Enter the expiry date.";
+    }
+
     if (
       ["Revision requested", "Rejected"].includes(status) &&
       notes.trim().length < 5
     ) {
-      setMessage("Add a short note explaining this decision.");
-      return;
+      errors.notes = "Add a short note explaining this decision.";
     }
 
-    const now = new Date().toISOString();
+    if (notes.trim().length > 1000) {
+      errors.notes = "Notes must be 1,000 characters or less.";
+    }
+
+    setFieldErrors(errors);
+
+    if (Object.keys(errors).length > 0) {
+      setMessage("Please fix the highlighted fields.");
+      return;
+    }
 
     const updates: ProposalRecordUpdates = {
       status,
       notes: notes.trim(),
-      acceptedAt:
-        status === "Accepted" ? proposal.acceptedAt || now : "",
-      rejectedAt:
-        status === "Rejected" ? proposal.rejectedAt || now : "",
-      revisionRequestedAt:
-        status === "Revision requested"
-          ? proposal.revisionRequestedAt || now
-          : "",
     };
 
-    if (status === "Sent" && !proposal.sentAt) {
-      updates.sentAt = now;
+    if (status === "Sent") {
+      updates.sentAt = sentAt;
+      updates.expiresAt = expiresAt;
     }
 
-    if (status === "Expired" && !proposal.expiresAt) {
-      updates.expiresAt = now;
+    if (status === "Revision requested") {
+      updates.revisionRequestedAt = revisionRequestedAt;
+    }
+
+    if (status === "Accepted") {
+      updates.acceptedAt = acceptedAt;
+    }
+
+    if (status === "Rejected") {
+      updates.rejectedAt = rejectedAt;
+    }
+
+    if (status === "Expired") {
+      updates.expiresAt = expiresAt;
     }
 
     setMessage("");
@@ -106,9 +232,27 @@ function ProposalEditor({
       await onUpdate(proposal.id, updates);
       setMessage("Proposal updated.");
     } catch {
-      setMessage("The proposal could not be updated. Please try again.");
+      setMessage(
+        "The proposal could not be updated. Please try again.",
+      );
     }
   }
+
+  const recordedDates = [
+    { label: "Sent", value: proposal.sentAt },
+    { label: "Valid until", value: proposal.expiresAt },
+    {
+      label: "Revision requested",
+      value: proposal.revisionRequestedAt,
+    },
+    { label: "Accepted", value: proposal.acceptedAt },
+    { label: "Rejected", value: proposal.rejectedAt },
+  ].filter((item) => item.value);
+
+  const decisionNoteRequired = [
+    "Revision requested",
+    "Rejected",
+  ].includes(status);
 
   return (
     <article className="border-t border-[#D9DED8] py-5 first:border-t-0 first:pt-0">
@@ -123,25 +267,24 @@ function ProposalEditor({
         </div>
 
         <span className="w-fit rounded-md bg-[#EDF3EF] px-3 py-2 text-sm font-bold text-[#174F42]">
-          {proposal.status}
+          {getProposalStatusLabel(proposal.status)}
         </span>
       </div>
 
-      <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-        <div>
-          <dt className="font-bold text-[#17201C]">Sent date</dt>
-          <dd className="mt-1 text-[#5F6862]">
-            {formatProposalDate(proposal.sentAt)}
-          </dd>
-        </div>
-
-        <div>
-          <dt className="font-bold text-[#17201C]">Expiry date</dt>
-          <dd className="mt-1 text-[#5F6862]">
-            {formatProposalDate(proposal.expiresAt)}
-          </dd>
-        </div>
-      </dl>
+      {recordedDates.length > 0 ? (
+        <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+          {recordedDates.map((item) => (
+            <div key={item.label}>
+              <dt className="font-bold text-[#17201C]">
+                {item.label}
+              </dt>
+              <dd className="mt-1 text-[#5F6862]">
+                {formatProposalDate(item.value)}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
 
       <div className="mt-5 grid gap-4">
         <div className="grid gap-2">
@@ -156,27 +299,117 @@ function ProposalEditor({
             className="rounded-md border border-[#D9DED8] bg-white px-4 py-3 text-[#17201C]"
             disabled={isSaving}
             value={status}
-            onChange={(event) => {
-              setStatus(
+            onChange={(event) =>
+              updateStatus(
                 event.target.value as ProposalRecord["status"],
-              );
-              setMessage("");
-            }}
+              )
+            }
           >
             {proposalStatusOptions.map((option) => (
-              <option key={option} value={option}>
-                {option}
+              <option key={option.value} value={option.value}>
+                {option.label}
               </option>
             ))}
           </select>
         </div>
+
+        {status === "Sent" ? (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <ProposalDateField
+              disabled={isSaving}
+              error={fieldErrors.sentAt}
+              id={`proposal-sent-at-${proposal.id}`}
+              label="Sent date"
+              onChange={(value) => {
+                setSentAt(value);
+                setFieldErrors({});
+                setMessage("");
+              }}
+              value={sentAt}
+            />
+            <ProposalDateField
+              disabled={isSaving}
+              error={fieldErrors.expiresAt}
+              id={`proposal-valid-until-${proposal.id}`}
+              label="Valid until (optional)"
+              onChange={(value) => {
+                setExpiresAt(value);
+                setFieldErrors({});
+                setMessage("");
+              }}
+              value={expiresAt}
+            />
+          </div>
+        ) : null}
+
+        {status === "Revision requested" ? (
+          <ProposalDateField
+            disabled={isSaving}
+            error={fieldErrors.revisionRequestedAt}
+            id={`proposal-revision-date-${proposal.id}`}
+            label="Revision request date"
+            onChange={(value) => {
+              setRevisionRequestedAt(value);
+              setFieldErrors({});
+              setMessage("");
+            }}
+            value={revisionRequestedAt}
+          />
+        ) : null}
+
+        {status === "Accepted" ? (
+          <ProposalDateField
+            disabled={isSaving}
+            error={fieldErrors.acceptedAt}
+            id={`proposal-accepted-date-${proposal.id}`}
+            label="Acceptance date"
+            onChange={(value) => {
+              setAcceptedAt(value);
+              setFieldErrors({});
+              setMessage("");
+            }}
+            value={acceptedAt}
+          />
+        ) : null}
+
+        {status === "Rejected" ? (
+          <ProposalDateField
+            disabled={isSaving}
+            error={fieldErrors.rejectedAt}
+            id={`proposal-rejected-date-${proposal.id}`}
+            label="Rejection date"
+            onChange={(value) => {
+              setRejectedAt(value);
+              setFieldErrors({});
+              setMessage("");
+            }}
+            value={rejectedAt}
+          />
+        ) : null}
+
+        {status === "Expired" ? (
+          <ProposalDateField
+            disabled={isSaving}
+            error={fieldErrors.expiresAt}
+            id={`proposal-expiry-date-${proposal.id}`}
+            label="Expiry date"
+            onChange={(value) => {
+              setExpiresAt(value);
+              setFieldErrors({});
+              setMessage("");
+            }}
+            value={expiresAt}
+          />
+        ) : null}
 
         <div className="grid gap-2">
           <label
             className="font-bold text-[#17201C]"
             htmlFor={`proposal-notes-${proposal.id}`}
           >
-            Decision note
+            {decisionNoteRequired
+              ? "Decision note"
+              : "Notes (optional)"}
           </label>
           <textarea
             id={`proposal-notes-${proposal.id}`}
@@ -185,10 +418,20 @@ function ProposalEditor({
             value={notes}
             onChange={(event) => {
               setNotes(event.target.value);
+              setFieldErrors({});
               setMessage("");
             }}
-            placeholder="Record revision details, client feedback, or the reason for the decision."
+            placeholder={
+              decisionNoteRequired
+                ? "Explain the requested revision or reason for rejection."
+                : "Add useful proposal or decision context."
+            }
           />
+          {fieldErrors.notes ? (
+            <p className="text-sm font-semibold text-red-700">
+              {fieldErrors.notes}
+            </p>
+          ) : null}
         </div>
 
         {message ? (
@@ -240,8 +483,8 @@ export function ProposalPanel({
             Proposals &amp; Quotes
           </h4>
           <p className="mt-2 leading-7 text-[#5F6862]">
-            Track proposed work, value, follow-up dates, revisions, and
-            client decisions.
+            Track proposed work, value, important dates, revisions,
+            and client decisions.
           </p>
         </div>
 
@@ -279,7 +522,7 @@ export function ProposalPanel({
           proposals.map((proposal) => (
             <ProposalEditor
               isSaving={isSaving}
-              key={`${proposal.id}-${proposal.updatedAt}`}
+              key={proposal.id}
               onUpdate={onUpdate}
               proposal={proposal}
             />

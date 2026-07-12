@@ -2,6 +2,10 @@
 
 import { useState } from "react";
 import type { ProposalRecord } from "@/lib/client-workflow-types";
+import {
+  getTodayDateInputValue,
+  newProposalStatusOptions,
+} from "@/lib/proposal-options";
 import type { NewProposalRecord } from "@/lib/supabase/proposal-records";
 
 type ProposalFormProps = {
@@ -17,6 +21,9 @@ type ProposalFormValues = {
   status: ProposalRecord["status"];
   sentAt: string;
   expiresAt: string;
+  acceptedAt: string;
+  rejectedAt: string;
+  revisionRequestedAt: string;
   notes: string;
 };
 
@@ -31,21 +38,17 @@ const initialValues: ProposalFormValues = {
   status: "Draft needed",
   sentAt: "",
   expiresAt: "",
+  acceptedAt: "",
+  rejectedAt: "",
+  revisionRequestedAt: "",
   notes: "",
 };
 
-const proposalStatusOptions: ProposalRecord["status"][] = [
-  "Draft needed",
-  "Sent",
-  "Revision requested",
-  "Accepted",
-  "Rejected",
-  "Expired",
-];
-
 function validateProposal(values: ProposalFormValues) {
   const errors: ProposalFormErrors = {};
-  const amount = Number(values.amount);
+  const amount = values.amount.trim()
+    ? Number(values.amount)
+    : 0;
 
   if (values.title.trim().length < 2) {
     errors.title = "Enter a proposal or quote title.";
@@ -54,9 +57,8 @@ function validateProposal(values: ProposalFormValues) {
   }
 
   if (
-    values.amount.trim() === "" ||
-    Number.isNaN(amount) ||
-    amount < 0
+    values.amount.trim() &&
+    (Number.isNaN(amount) || amount < 0)
   ) {
     errors.amount = "Enter a valid amount.";
   }
@@ -76,8 +78,24 @@ function validateProposal(values: ProposalFormValues) {
     errors.sentAt = "Enter the date the proposal was sent.";
   }
 
+  if (
+    values.status === "Revision requested" &&
+    !values.revisionRequestedAt
+  ) {
+    errors.revisionRequestedAt =
+      "Enter the revision request date.";
+  }
+
+  if (values.status === "Accepted" && !values.acceptedAt) {
+    errors.acceptedAt = "Enter the acceptance date.";
+  }
+
+  if (values.status === "Rejected" && !values.rejectedAt) {
+    errors.rejectedAt = "Enter the rejection date.";
+  }
+
   if (values.status === "Expired" && !values.expiresAt) {
-    errors.expiresAt = "Enter the proposal expiry date.";
+    errors.expiresAt = "Enter the expiry date.";
   }
 
   if (
@@ -101,7 +119,8 @@ export function ProposalForm({
 }: ProposalFormProps) {
   const [values, setValues] =
     useState<ProposalFormValues>(initialValues);
-  const [errors, setErrors] = useState<ProposalFormErrors>({});
+  const [errors, setErrors] =
+    useState<ProposalFormErrors>({});
   const [formMessage, setFormMessage] = useState("");
 
   function updateField<K extends keyof ProposalFormValues>(
@@ -121,48 +140,89 @@ export function ProposalForm({
     setFormMessage("");
   }
 
+  function updateStatus(status: ProposalRecord["status"]) {
+    const today = getTodayDateInputValue();
+
+    setValues((currentValues) => ({
+      ...currentValues,
+      status,
+      sentAt:
+        status === "Draft needed"
+          ? ""
+          : status === "Sent"
+            ? currentValues.sentAt || today
+            : currentValues.sentAt,
+      expiresAt:
+        status === "Draft needed"
+          ? ""
+          : status === "Expired"
+            ? currentValues.expiresAt || today
+            : currentValues.expiresAt,
+      acceptedAt:
+        status === "Accepted"
+          ? currentValues.acceptedAt || today
+          : "",
+      rejectedAt:
+        status === "Rejected"
+          ? currentValues.rejectedAt || today
+          : "",
+      revisionRequestedAt:
+        status === "Revision requested"
+          ? currentValues.revisionRequestedAt || today
+          : "",
+    }));
+
+    setErrors({});
+    setFormMessage("");
+  }
+
+  async function submitProposal() {
+    const validationErrors = validateProposal(values);
+    setErrors(validationErrors);
+
+    if (Object.keys(validationErrors).length > 0) {
+      setFormMessage("Please fix the highlighted fields.");
+      return;
+    }
+
+    try {
+      await onCreate({
+        clientWorkflowRecordId,
+        title: values.title.trim(),
+        amount: values.amount.trim()
+          ? Number(values.amount)
+          : 0,
+        currency: values.currency.trim().toUpperCase(),
+        status: values.status,
+        sentAt: values.sentAt,
+        expiresAt: values.expiresAt,
+        acceptedAt: values.acceptedAt,
+        rejectedAt: values.rejectedAt,
+        revisionRequestedAt: values.revisionRequestedAt,
+        notes: values.notes.trim(),
+      });
+
+      setValues(initialValues);
+      setErrors({});
+      setFormMessage("");
+    } catch {
+      setFormMessage(
+        "The proposal could not be saved. Please try again.",
+      );
+    }
+  }
+
+  const decisionNoteRequired = [
+    "Revision requested",
+    "Rejected",
+  ].includes(values.status);
+
   return (
     <form
       className="grid gap-5 rounded-lg border border-[#D9DED8] bg-white p-5"
-      onSubmit={async (event) => {
+      onSubmit={(event) => {
         event.preventDefault();
-
-        const validationErrors = validateProposal(values);
-        setErrors(validationErrors);
-
-        if (Object.keys(validationErrors).length > 0) {
-          setFormMessage("Please fix the highlighted fields.");
-          return;
-        }
-
-        const now = new Date().toISOString();
-
-        try {
-          await onCreate({
-            clientWorkflowRecordId,
-            title: values.title.trim(),
-            amount: Number(values.amount),
-            currency: values.currency.trim().toUpperCase(),
-            status: values.status,
-            sentAt: values.sentAt,
-            expiresAt: values.expiresAt,
-            acceptedAt:
-              values.status === "Accepted" ? now : "",
-            rejectedAt:
-              values.status === "Rejected" ? now : "",
-            revisionRequestedAt:
-              values.status === "Revision requested" ? now : "",
-            notes: values.notes.trim(),
-          });
-
-          setValues(initialValues);
-          setErrors({});
-          setFormMessage("");
-        } catch {
-          setFormMessage(
-            "The proposal could not be saved. Please try again.",
-          );
-        }
+        void submitProposal();
       }}
     >
       <div>
@@ -170,8 +230,8 @@ export function ProposalForm({
           Add A Proposal Or Quote
         </h4>
         <p className="mt-2 leading-7 text-[#5F6862]">
-          Record the proposed work, value, important dates, and current
-          decision status.
+          Record the proposed work, value, important dates, and
+          current decision status.
         </p>
       </div>
 
@@ -216,7 +276,11 @@ export function ProposalForm({
             }
             min="0"
             step="0.01"
-            placeholder="0.00"
+            placeholder={
+              values.status === "Draft needed"
+                ? "Optional while preparing"
+                : "0.00"
+            }
             type="number"
           />
           {errors.amount ? (
@@ -235,7 +299,7 @@ export function ProposalForm({
           </label>
           <input
             id="proposal-currency"
-            className="uppercase rounded-md border border-[#D9DED8] px-4 py-3 text-[#17201C]"
+            className="rounded-md border border-[#D9DED8] px-4 py-3 uppercase text-[#17201C]"
             value={values.currency}
             onChange={(event) =>
               updateField("currency", event.target.value)
@@ -264,74 +328,88 @@ export function ProposalForm({
           className="rounded-md border border-[#D9DED8] bg-white px-4 py-3 text-[#17201C]"
           value={values.status}
           onChange={(event) =>
-            updateField(
-              "status",
+            updateStatus(
               event.target.value as ProposalRecord["status"],
             )
           }
         >
-          {proposalStatusOptions.map((status) => (
-            <option key={status} value={status}>
-              {status}
+          {newProposalStatusOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
             </option>
           ))}
         </select>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="grid gap-2">
-          <label
-            className="font-bold text-[#17201C]"
-            htmlFor="proposal-sent-at"
-          >
-            Sent date
-          </label>
-          <input
+      {values.status === "Sent" ? (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <DateField
+            error={errors.sentAt}
             id="proposal-sent-at"
-            className="rounded-md border border-[#D9DED8] px-4 py-3 text-[#17201C]"
+            label="Sent date"
+            onChange={(value) => updateField("sentAt", value)}
             value={values.sentAt}
-            onChange={(event) =>
-              updateField("sentAt", event.target.value)
-            }
-            type="date"
           />
-          {errors.sentAt ? (
-            <p className="text-sm font-semibold text-red-700">
-              {errors.sentAt}
-            </p>
-          ) : null}
-        </div>
-
-        <div className="grid gap-2">
-          <label
-            className="font-bold text-[#17201C]"
-            htmlFor="proposal-expires-at"
-          >
-            Expiry date
-          </label>
-          <input
-            id="proposal-expires-at"
-            className="rounded-md border border-[#D9DED8] px-4 py-3 text-[#17201C]"
+          <DateField
+            error={errors.expiresAt}
+            id="proposal-valid-until"
+            label="Valid until (optional)"
+            onChange={(value) => updateField("expiresAt", value)}
             value={values.expiresAt}
-            onChange={(event) =>
-              updateField("expiresAt", event.target.value)
-            }
-            type="date"
           />
-          {errors.expiresAt ? (
-            <p className="text-sm font-semibold text-red-700">
-              {errors.expiresAt}
-            </p>
-          ) : null}
         </div>
-      </div>
+      ) : null}
+
+      {values.status === "Revision requested" ? (
+        <DateField
+          error={errors.revisionRequestedAt}
+          id="proposal-revision-requested-at"
+          label="Revision request date"
+          onChange={(value) =>
+            updateField("revisionRequestedAt", value)
+          }
+          value={values.revisionRequestedAt}
+        />
+      ) : null}
+
+      {values.status === "Accepted" ? (
+        <DateField
+          error={errors.acceptedAt}
+          id="proposal-accepted-at"
+          label="Acceptance date"
+          onChange={(value) => updateField("acceptedAt", value)}
+          value={values.acceptedAt}
+        />
+      ) : null}
+
+      {values.status === "Rejected" ? (
+        <DateField
+          error={errors.rejectedAt}
+          id="proposal-rejected-at"
+          label="Rejection date"
+          onChange={(value) => updateField("rejectedAt", value)}
+          value={values.rejectedAt}
+        />
+      ) : null}
+
+      {values.status === "Expired" ? (
+        <DateField
+          error={errors.expiresAt}
+          id="proposal-expired-at"
+          label="Expiry date"
+          onChange={(value) => updateField("expiresAt", value)}
+          value={values.expiresAt}
+        />
+      ) : null}
 
       <div className="grid gap-2">
         <label
           className="font-bold text-[#17201C]"
           htmlFor="proposal-notes"
         >
-          Notes or decision context
+          {decisionNoteRequired
+            ? "Decision note"
+            : "Notes (optional)"}
         </label>
         <textarea
           id="proposal-notes"
@@ -340,7 +418,11 @@ export function ProposalForm({
           onChange={(event) =>
             updateField("notes", event.target.value)
           }
-          placeholder="Add scope context, revision details, or the reason for a decision."
+          placeholder={
+            decisionNoteRequired
+              ? "Explain the requested revision or reason for rejection."
+              : "Add useful scope or decision context."
+          }
         />
         {errors.notes ? (
           <p className="text-sm font-semibold text-red-700">
@@ -360,8 +442,44 @@ export function ProposalForm({
         disabled={isSubmitting}
         type="submit"
       >
-        {isSubmitting ? "Saving..." : "Add Proposal Or Quote"}
+        {isSubmitting
+          ? "Saving..."
+          : "Add Proposal Or Quote"}
       </button>
     </form>
+  );
+}
+
+function DateField({
+  error,
+  id,
+  label,
+  onChange,
+  value,
+}: {
+  error?: string;
+  id: string;
+  label: string;
+  onChange: (value: string) => void;
+  value: string;
+}) {
+  return (
+    <div className="grid gap-2">
+      <label className="font-bold text-[#17201C]" htmlFor={id}>
+        {label}
+      </label>
+      <input
+        id={id}
+        className="rounded-md border border-[#D9DED8] px-4 py-3 text-[#17201C]"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        type="date"
+      />
+      {error ? (
+        <p className="text-sm font-semibold text-red-700">
+          {error}
+        </p>
+      ) : null}
+    </div>
   );
 }

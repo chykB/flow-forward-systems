@@ -9,6 +9,15 @@ import { RecordFiltersBar } from "@/components/RecordFiltersBar";
 import { WorkspaceGate } from "@/components/WorkspaceGate";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser-client";
 import {
+  createProposalRecord,
+  getWorkspaceProposalRecords,
+  updateProposalRecord,
+} from "@/lib/supabase/proposal-records";
+import type {
+  NewProposalRecord,
+  ProposalRecordUpdates,
+} from "@/lib/supabase/proposal-records";
+import {
   createClientWorkflowRecord,
   getClientWorkflowRecords,
   updateClientWorkflowRecord,
@@ -17,6 +26,7 @@ import type {
   ActivityLog,
   ClientWorkflowRecord,
   HandoffNote,
+  ProposalRecord,
   WorkflowTask,
 } from "@/lib/client-workflow-types";
 import {
@@ -163,6 +173,14 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
 
   const [records, setRecords] = useState<ClientWorkflowRecord[]>([]);
+
+  const [proposals, setProposals] = useState<ProposalRecord[]>([]);
+  const [proposalsStatus, setProposalsStatus] = useState<
+    "loading" | "ready" | "error"
+  >("loading");
+  const [proposalsMessage, setProposalsMessage] = useState("");
+  const [isSavingProposal, setIsSavingProposal] = useState(false);
+
   const [recordsStatus, setRecordsStatus] = useState<"loading" | "ready" | "error">(
     "loading",
   );
@@ -186,6 +204,7 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
     records[0]?.id,
   );
 
+
   const filteredRecords = useMemo(
     () => filterRecords(records, recordFilters),
     [recordFilters, records],
@@ -202,6 +221,17 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
     filteredRecords.find((record) => record.id === selectedRecordId) ||
     filteredRecords[0] ||
     null;
+
+  const selectedRecordProposals = useMemo(
+    () =>
+      selectedRecord
+        ? proposals.filter(
+            (proposal) =>
+              proposal.clientWorkflowRecordId === selectedRecord.id,
+          )
+        : [],
+    [proposals, selectedRecord],
+  );
 
   useEffect(() => {
     let isMounted = true;
@@ -234,6 +264,46 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
     }
 
     void loadRecords();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [supabase, workspaceId]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadProposals() {
+      setProposalsStatus("loading");
+      setProposalsMessage("");
+
+      try {
+        const workspaceProposals = await getWorkspaceProposalRecords(
+          supabase,
+          workspaceId,
+        );
+
+        if (!isMounted) {
+          return;
+        }
+
+        setProposals(workspaceProposals);
+        setProposalsStatus("ready");
+      } catch (error) {
+        console.error("Workspace proposals load failed", error);
+
+        if (!isMounted) {
+          return;
+        }
+
+        setProposalsStatus("error");
+        setProposalsMessage(
+          "Proposals and quotes could not be loaded. Refresh and try again.",
+        );
+      }
+    }
+
+    void loadProposals();
 
     return () => {
       isMounted = false;
@@ -383,6 +453,104 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
     }
   }
 
+  async function addProposal(proposal: NewProposalRecord) {
+    setIsSavingProposal(true);
+    setProposalsMessage("");
+
+    try {
+      const savedProposal = await createProposalRecord(
+        supabase,
+        workspaceId,
+        proposal,
+      );
+
+      setProposals((currentProposals) => [
+        savedProposal,
+        ...currentProposals,
+      ]);
+
+      setActivityLogs((currentLogs) => [
+        {
+          id: `log-${Date.now()}`,
+          clientWorkflowRecordId:
+            savedProposal.clientWorkflowRecordId,
+          actionType: "Proposal or quote added",
+          note: `${savedProposal.title} was added with status: ${savedProposal.status}.`,
+          createdAt: new Date().toISOString(),
+        },
+        ...currentLogs,
+      ]);
+    } catch (error) {
+      const proposalError =
+        error instanceof Error
+          ? error
+          : new Error("The proposal could not be saved.");
+
+      setProposalsMessage(proposalError.message);
+      throw proposalError;
+    } finally {
+      setIsSavingProposal(false);
+    }
+  }
+
+  async function saveProposalUpdates(
+    proposalId: string,
+    updates: ProposalRecordUpdates,
+  ) {
+    const previousProposal = proposals.find(
+      (proposal) => proposal.id === proposalId,
+    );
+
+    setIsSavingProposal(true);
+    setProposalsMessage("");
+
+    try {
+      const savedProposal = await updateProposalRecord(
+        supabase,
+        workspaceId,
+        proposalId,
+        updates,
+      );
+
+      setProposals((currentProposals) =>
+        currentProposals.map((proposal) =>
+          proposal.id === savedProposal.id
+            ? savedProposal
+            : proposal,
+        ),
+      );
+
+      const statusChanged =
+        previousProposal?.status !== savedProposal.status;
+
+      setActivityLogs((currentLogs) => [
+        {
+          id: `log-${Date.now()}`,
+          clientWorkflowRecordId:
+            savedProposal.clientWorkflowRecordId,
+          actionType: statusChanged
+            ? "Proposal status updated"
+            : "Proposal updated",
+          note: statusChanged
+            ? `${savedProposal.title} changed from ${previousProposal?.status ?? "its previous status"} to ${savedProposal.status}.`
+            : `${savedProposal.title} details were updated.`,
+          createdAt: new Date().toISOString(),
+        },
+        ...currentLogs,
+      ]);
+    } catch (error) {
+      const proposalError =
+        error instanceof Error
+          ? error
+          : new Error("The proposal could not be updated.");
+
+      setProposalsMessage(proposalError.message);
+      throw proposalError;
+    } finally {
+      setIsSavingProposal(false);
+    }
+  }
+
   return (
     <main className="min-h-screen bg-[#F7F8F6] text-[#17201C]">
       <section className="mx-auto max-w-6xl px-6 py-8">
@@ -517,12 +685,18 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
               <ClientRecordDetail
                 activityLogs={activityLogs}
                 handoffNotes={handoffNotes}
+                isProposalLoading={proposalsStatus === "loading"}
+                isProposalSaving={isSavingProposal}
                 onAddHandoffNote={addHandoffNote}
+                onAddProposal={addProposal}
                 onAddTask={addWorkflowTask}
+                onUpdateProposal={saveProposalUpdates}
                 onUpdateRecord={updateSelectedRecord}
+                proposalMessage={proposalsMessage}
+                proposals={selectedRecordProposals}
                 record={selectedRecord}
                 tasks={workflowTasks}
-              />
+/>
             ) : null}
           </div>
         )}
