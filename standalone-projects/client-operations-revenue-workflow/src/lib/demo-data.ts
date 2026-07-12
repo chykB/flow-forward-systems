@@ -29,6 +29,11 @@ export const demoClientWorkflowRecords: ClientWorkflowRecord[] = [
     paymentStatus: "Not needed",
     createdAt: "2026-06-29T09:00:00.000Z",
     updatedAt: "2026-07-01T10:00:00.000Z",
+    clientType: "Lead",
+    returningClientStatus: "Not returning",
+    lastProjectDate: "",
+    estimatedValue: 0,
+    workflowHealthScore: 75,
   },
   {
     id: "record-002",
@@ -52,6 +57,11 @@ export const demoClientWorkflowRecords: ClientWorkflowRecord[] = [
     paymentStatus: "Complete",
     createdAt: "2026-06-25T14:30:00.000Z",
     updatedAt: "2026-07-01T08:30:00.000Z",
+    clientType: "Lead",
+    returningClientStatus: "Not returning",
+    lastProjectDate: "",
+    estimatedValue: 0,
+    workflowHealthScore: 75,
   },
   {
     id: "record-003",
@@ -75,6 +85,11 @@ export const demoClientWorkflowRecords: ClientWorkflowRecord[] = [
     paymentStatus: "In progress",
     createdAt: "2026-06-12T11:15:00.000Z",
     updatedAt: "2026-06-30T17:00:00.000Z",
+    clientType: "Lead",
+    returningClientStatus: "Not returning",
+    lastProjectDate: "",
+    estimatedValue: 0,
+    workflowHealthScore: 75,
   },
 ];
 

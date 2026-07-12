@@ -16,6 +16,41 @@ export type LifecycleStage =
 export type PriorityLevel = "High" | "Medium" | "Low";
 
 export type RiskLevel = "High" | "Medium" | "Low";
+export type ClientType =
+  | "Lead"
+  | "New client"
+  | "Active client"
+  | "Returning client"
+  | "Past client";
+
+export type ReturningClientStatus =
+  | "Not returning"
+  | "Potential reactivation"
+  | "Repeat project opportunity"
+  | "Reactivated"
+  | "Dormant";
+
+export type ProposalStatus =
+  | "Not needed"
+  | "Draft needed"
+  | "Sent"
+  | "Revision requested"
+  | "Accepted"
+  | "Rejected"
+  | "Expired";
+
+export type InvoiceStatus =
+  | "Not needed"
+  | "Draft needed"
+  | "Sent"
+  | "Due soon"
+  | "Overdue"
+  | "Paid"
+  | "Disputed";
+
+export type RiskSignalSeverity = "Low" | "Medium" | "High" | "Critical";
+
+export type RiskSignalStatus = "Open" | "Reviewed" | "Resolved" | "Dismissed";
 
 export type WorkflowStatus =
   | "Not started"
@@ -35,6 +70,50 @@ export type TaskType =
 
 export type TaskCriticality = "Critical" | "High" | "Medium" | "Low";
 
+export type ProposalRecord = {
+  id: string;
+  clientWorkflowRecordId: string;
+  title: string;
+  amount: number;
+  currency: string;
+  status: ProposalStatus;
+  sentAt: string;
+  expiresAt: string;
+  acceptedAt: string;
+  rejectedAt: string;
+  revisionRequestedAt: string;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type InvoiceRecord = {
+  id: string;
+  clientWorkflowRecordId: string;
+  invoiceNumber: string;
+  amount: number;
+  currency: string;
+  description: string;
+  status: InvoiceStatus;
+  paymentLink: string;
+  sentAt: string;
+  dueDate: string;
+  paidAt: string;
+  disputeReason: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type RiskSignal = {
+  id: string;
+  clientWorkflowRecordId: string;
+  riskType: string;
+  severity: RiskSignalSeverity;
+  reason: string;
+  status: RiskSignalStatus;
+  createdAt: string;
+};
+
 export type ClientWorkflowRecord = {
   id: string;
   name: string;
@@ -45,6 +124,11 @@ export type ClientWorkflowRecord = {
   interest: string;
   message: string;
   lifecycleStage: LifecycleStage;
+  clientType: ClientType;
+  returningClientStatus: ReturningClientStatus;
+  lastProjectDate: string;
+  estimatedValue: number;
+  workflowHealthScore: number;
   priority: PriorityLevel;
   riskLevel: RiskLevel;
   nextAction: string;

@@ -168,6 +168,11 @@ export function ClientRecordForm({ onAddRecord }: ClientRecordFormProps) {
       paymentStatus: "Not needed",
       createdAt: now,
       updatedAt: now,
+      clientType: "Lead",
+      returningClientStatus: "Not returning",
+      lastProjectDate: "",
+      estimatedValue: 0,
+      workflowHealthScore: 75,
     });
 
     setValues(initialValues);

@@ -23,6 +23,11 @@ type ClientWorkflowRecordRow = {
   payment_status: ClientWorkflowRecord["paymentStatus"];
   created_at: string;
   updated_at: string;
+  client_type: ClientWorkflowRecord["clientType"];
+  returning_client_status: ClientWorkflowRecord["returningClientStatus"];
+  last_project_date: string | null;
+  estimated_value: number;
+  workflow_health_score: number;
 };
 
 function mapRecordRow(row: ClientWorkflowRecordRow): ClientWorkflowRecord {
@@ -47,6 +52,12 @@ function mapRecordRow(row: ClientWorkflowRecordRow): ClientWorkflowRecord {
     paymentStatus: row.payment_status,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    clientType: row.client_type,
+    returningClientStatus: row.returning_client_status,
+    lastProjectDate: row.last_project_date ?? "",
+    estimatedValue: Number(row.estimated_value ?? 0),
+    workflowHealthScore: row.workflow_health_score ?? 75,
+        
   };
 }
 
@@ -93,6 +104,11 @@ export async function createClientWorkflowRecord(
       delivery_status: record.deliveryStatus,
       approval_status: record.approvalStatus,
       payment_status: record.paymentStatus,
+      client_type: record.clientType,
+      returning_client_status: record.returningClientStatus,
+      last_project_date: record.lastProjectDate || null,
+      estimated_value: record.estimatedValue,
+      workflow_health_score: record.workflowHealthScore,
     })
     .select("*")
     .single();
@@ -106,7 +122,7 @@ export async function createClientWorkflowRecord(
 }
 
 function buildRecordUpdatePayload(updates: Partial<ClientWorkflowRecord>) {
-  const payload: Record<string, string | null> = {};
+  const payload: Record<string, string | number | null> = {};
 
   if (updates.name !== undefined) {
     payload.name = updates.name;
@@ -174,6 +190,26 @@ function buildRecordUpdatePayload(updates: Partial<ClientWorkflowRecord>) {
 
   if (updates.paymentStatus !== undefined) {
     payload.payment_status = updates.paymentStatus;
+  }
+
+  if (updates.clientType !== undefined) {
+    payload.client_type = updates.clientType;
+  }
+
+  if (updates.returningClientStatus !== undefined) {
+    payload.returning_client_status = updates.returningClientStatus;
+  }
+
+  if (updates.lastProjectDate !== undefined) {
+    payload.last_project_date = updates.lastProjectDate || null;
+  }
+
+  if (updates.estimatedValue !== undefined) {
+    payload.estimated_value = updates.estimatedValue;
+  }
+
+  if (updates.workflowHealthScore !== undefined) {
+    payload.workflow_health_score = updates.workflowHealthScore;
   }
 
   return payload;
