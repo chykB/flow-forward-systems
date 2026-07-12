@@ -8,6 +8,7 @@ import { PriorityCard } from "@/components/PriorityCard";
 import { RecordFiltersBar } from "@/components/RecordFiltersBar";
 import { WorkspaceGate } from "@/components/WorkspaceGate";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser-client";
+import { getProposalsNeedingAction } from "@/lib/proposal-dashboard";
 import {
   createProposalRecord,
   getWorkspaceProposalRecords,
@@ -46,6 +47,7 @@ import {
 function buildPrioritySections(
   records: ClientWorkflowRecord[],
   tasks: WorkflowTask[],
+  proposals: ProposalRecord[],
 ) {
   return [
     {
@@ -58,6 +60,14 @@ function buildPrioritySections(
       description: "Upcoming follow-ups that need a clear next action.",
       count: getFollowUpsDueSoon(records).length,
     },
+    
+    {
+      title: "Proposals Needing Action",
+      description:
+        "Proposals to prepare, revise, renew, or follow up.",
+      count: getProposalsNeedingAction(proposals).length,
+    },
+
     {
       title: "Approvals Waiting",
       description: "Client approvals that may block delivery progress.",
@@ -213,8 +223,13 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
   const recordOwners = useMemo(() => getRecordOwners(records), [records]);
 
   const prioritySections = useMemo(
-    () => buildPrioritySections(records, workflowTasks),
-    [records, workflowTasks],
+    () =>
+      buildPrioritySections(
+        records,
+        workflowTasks,
+        proposals,
+      ),
+    [proposals, records, workflowTasks],
   );
 
   const selectedRecord =
