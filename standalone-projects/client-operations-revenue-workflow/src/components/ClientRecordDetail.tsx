@@ -7,6 +7,8 @@ import { ProposalPanel } from "@/components/ProposalPanel";
 import { RecordStatusControls } from "@/components/RecordStatusControls";
 import { WorkflowTaskForm } from "@/components/WorkflowTaskForm";
 import { formatDateTime } from "@/lib/format-date";
+import { InvoicePanel } from "@/components/InvoicePanel";
+import type { NewInvoiceRecord } from "@/lib/supabase/invoice-records";
 import type {
   ProposalWorkflowRecommendation as ProposalWorkflowRecommendationData,
 } from "@/lib/proposal-workflow";
@@ -14,6 +16,7 @@ import type {
   ActivityLog,
   ClientWorkflowRecord,
   HandoffNote,
+  InvoiceRecord,
   ProposalRecord,
   WorkflowTask,
 } from "@/lib/client-workflow-types";
@@ -28,7 +31,9 @@ type DetailTab =
   | "proposals"
   | "work-items"
   | "handoff"
-  | "activity";
+  | "activity"
+  | "invoices"
+  ;
 
 type ClientRecordDetailProps = {
   activityLogs: ActivityLog[];
@@ -51,6 +56,11 @@ type ClientRecordDetailProps = {
   record: ClientWorkflowRecord;
   tasks: WorkflowTask[];
   isApplyingProposalRecommendation: boolean;
+  invoices: InvoiceRecord[];
+  invoiceMessage: string;
+  isInvoiceLoading: boolean;
+  isInvoiceSaving: boolean;
+  onAddInvoice: (invoice: NewInvoiceRecord) => Promise<void>;
   onApplyProposalRecommendation: (
     proposal: ProposalRecord,
     recommendation: ProposalWorkflowRecommendationData,
@@ -61,9 +71,11 @@ const detailTabs: { key: DetailTab; label: string }[] = [
   { key: "overview", label: "Overview" },
   { key: "next-action", label: "Next Action" },
   { key: "proposals", label: "Proposals & Quotes" },
+  { key: "invoices", label: "Invoices" },
   { key: "work-items", label: "Work Items" },
   { key: "handoff", label: "Handoff Notes" },
   { key: "activity", label: "Activity" },
+  
 ];
 
 function DetailRow({
@@ -86,10 +98,14 @@ function DetailRow({
 export function ClientRecordDetail({
   activityLogs,
   handoffNotes,
-  isApplyingProposalRecommendation,
+  invoiceMessage,
+  invoices,
+  isInvoiceLoading,
+  isInvoiceSaving,
   isProposalLoading,
   isProposalSaving,
   onAddHandoffNote,
+  onAddInvoice,
   onAddProposal,
   onAddTask,
   onApplyProposalRecommendation,
@@ -99,6 +115,7 @@ export function ClientRecordDetail({
   proposals,
   record,
   tasks,
+  isApplyingProposalRecommendation,
 }: ClientRecordDetailProps) {
   const [activeTab, setActiveTab] =
     useState<DetailTab>("overview");
@@ -114,6 +131,8 @@ export function ClientRecordDetail({
   const recordHandoffNotes = handoffNotes.filter(
     (note) => note.clientWorkflowRecordId === record.id,
   );
+
+  
 
   return (
     <section className="rounded-lg border border-[#D9DED8] bg-white p-5">
@@ -230,6 +249,19 @@ export function ClientRecordDetail({
           />
         </div>
       ) : null}
+
+      {activeTab === "invoices" ? (
+      <div className="mt-5">
+        <InvoicePanel
+          clientWorkflowRecordId={record.id}
+          errorMessage={invoiceMessage}
+          invoices={invoices}
+          isLoading={isInvoiceLoading}
+          isSaving={isInvoiceSaving}
+          onCreate={onAddInvoice}
+        />
+      </div>
+    ) : null}
 
       {activeTab === "work-items" ? (
         <div className="mt-5">

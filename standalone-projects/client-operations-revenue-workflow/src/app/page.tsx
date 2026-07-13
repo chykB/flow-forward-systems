@@ -9,6 +9,11 @@ import { RecordFiltersBar } from "@/components/RecordFiltersBar";
 import { WorkspaceGate } from "@/components/WorkspaceGate";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser-client";
 import { getProposalsNeedingAction } from "@/lib/proposal-dashboard";
+import {
+  createInvoiceRecord,
+  getWorkspaceInvoiceRecords,
+  type NewInvoiceRecord,
+} from "@/lib/supabase/invoice-records";
 import type {
   ProposalWorkflowRecommendation as ProposalWorkflowRecommendationData,
 } from "@/lib/proposal-workflow";
@@ -33,6 +38,7 @@ import type {
   HandoffNote,
   ProposalRecord,
   WorkflowTask,
+  InvoiceRecord,
 } from "@/lib/client-workflow-types";
 import {
   getAtRiskClients,
@@ -189,11 +195,19 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
   const [records, setRecords] = useState<ClientWorkflowRecord[]>([]);
 
   const [proposals, setProposals] = useState<ProposalRecord[]>([]);
+  
   const [proposalsStatus, setProposalsStatus] = useState<
     "loading" | "ready" | "error"
   >("loading");
   const [proposalsMessage, setProposalsMessage] = useState("");
   const [isSavingProposal, setIsSavingProposal] = useState(false);
+
+  const [invoices, setInvoices] = useState<InvoiceRecord[]>([]);
+  const [invoicesStatus, setInvoicesStatus] = useState<
+    "loading" | "ready" | "error"
+  >("loading");
+  const [invoicesMessage, setInvoicesMessage] = useState("");
+  const [isSavingInvoice, setIsSavingInvoice] = useState(false);
 
   const [
     isApplyingProposalRecommendation,
@@ -255,6 +269,16 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
           )
         : [],
     [proposals, selectedRecord],
+  );
+  const selectedRecordInvoices = useMemo(
+    () =>
+      selectedRecord
+        ? invoices.filter(
+            (invoice) =>
+              invoice.clientWorkflowRecordId === selectedRecord.id,
+          )
+        : [],
+    [invoices, selectedRecord],
   );
 
   useEffect(() => {
@@ -328,6 +352,47 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
     }
 
     void loadProposals();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [supabase, workspaceId]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadInvoices() {
+      setInvoicesStatus("loading");
+      setInvoicesMessage("");
+
+      try {
+        const workspaceInvoices =
+          await getWorkspaceInvoiceRecords(
+            supabase,
+            workspaceId,
+          );
+
+        if (!isMounted) {
+          return;
+        }
+
+        setInvoices(workspaceInvoices);
+        setInvoicesStatus("ready");
+      } catch (error) {
+        console.error("Workspace invoices load failed", error);
+
+        if (!isMounted) {
+          return;
+        }
+
+        setInvoicesStatus("error");
+        setInvoicesMessage(
+          "Invoices and payment details could not be loaded. Refresh and try again.",
+        );
+      }
+    }
+
+    void loadInvoices();
 
     return () => {
       isMounted = false;
@@ -516,6 +581,51 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
       throw proposalError;
     } finally {
       setIsSavingProposal(false);
+    }
+  }
+
+  async function addInvoice(invoice: NewInvoiceRecord) {
+    setIsSavingInvoice(true);
+    setInvoicesMessage("");
+
+    try {
+      const savedInvoice = await createInvoiceRecord(
+        supabase,
+        workspaceId,
+        invoice,
+      );
+
+      setInvoices((currentInvoices) => [
+        savedInvoice,
+        ...currentInvoices,
+      ]);
+
+      const invoiceLabel =
+        savedInvoice.status === "Not needed"
+          ? "Invoice not needed"
+          : `Invoice ${savedInvoice.invoiceNumber}`;
+
+      setActivityLogs((currentLogs) => [
+        {
+          id: `log-${Date.now()}`,
+          clientWorkflowRecordId:
+            savedInvoice.clientWorkflowRecordId,
+          actionType: "Invoice added",
+          note: `${invoiceLabel} was added with status: ${savedInvoice.status}.`,
+          createdAt: new Date().toISOString(),
+        },
+        ...currentLogs,
+      ]);
+    } catch (error) {
+      const invoiceError =
+        error instanceof Error
+          ? error
+          : new Error("The invoice could not be saved.");
+
+      setInvoicesMessage(invoiceError.message);
+      throw invoiceError;
+    } finally {
+      setIsSavingInvoice(false);
     }
   }
 
@@ -804,6 +914,11 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
                 onApplyProposalRecommendation={
                   applyProposalRecommendation
                 }
+                invoiceMessage={invoicesMessage}
+                invoices={selectedRecordInvoices}
+                isInvoiceLoading={invoicesStatus === "loading"}
+                isInvoiceSaving={isSavingInvoice}
+                onAddInvoice={addInvoice}
               />
             ) : null}
           </div>
