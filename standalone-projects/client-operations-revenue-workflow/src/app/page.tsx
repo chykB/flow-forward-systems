@@ -41,11 +41,16 @@ import type {
   InvoiceRecord,
 } from "@/lib/client-workflow-types";
 import {
+  getDisputedInvoices,
+  getInvoicesDueSoon,
+  getInvoicesToPrepare,
+  getOverdueInvoices,
+} from "@/lib/invoice-dashboard";
+import {
   getAtRiskClients,
   getBlockedDeliveryTasks,
   getFollowUpsDueSoon,
   getOverdueFollowUps,
-  getPaymentFollowUps,
   getWaitingApprovals,
 } from "@/lib/dashboard";
 import {
@@ -58,6 +63,7 @@ function buildPrioritySections(
   records: ClientWorkflowRecord[],
   tasks: WorkflowTask[],
   proposals: ProposalRecord[],
+  invoices: InvoiceRecord[],
 ) {
   return [
     {
@@ -84,9 +90,28 @@ function buildPrioritySections(
       count: getWaitingApprovals(records).length,
     },
     {
-      title: "Payment Follow-Up Needed",
-      description: "Payment-related workflow items that need attention.",
-      count: getPaymentFollowUps(records).length,
+      title: "Invoices To Prepare",
+      description:
+        "Draft invoices that still need to be prepared and sent.",
+      count: getInvoicesToPrepare(invoices).length,
+    },
+    {
+      title: "Payments Due Soon",
+      description:
+        "Outstanding invoices due within the next seven days.",
+      count: getInvoicesDueSoon(invoices).length,
+    },
+    {
+      title: "Overdue Invoices",
+      description:
+        "Unpaid invoices that have passed their due date.",
+      count: getOverdueInvoices(invoices).length,
+    },
+    {
+      title: "Payment Disputes",
+      description:
+        "Disputed payments that need human review before reminders continue.",
+      count: getDisputedInvoices(invoices).length,
     },
     {
       title: "Blocked Delivery",
@@ -251,8 +276,9 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
         records,
         workflowTasks,
         proposals,
+        invoices,
       ),
-    [proposals, records, workflowTasks],
+    [invoices, proposals, records, workflowTasks],
   );
 
   const selectedRecord =
