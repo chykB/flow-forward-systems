@@ -1,5 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { ProposalRecord } from "@/lib/client-workflow-types";
+import type {
+  ClientWorkflowRecord,
+  ProposalRecord,
+} from "@/lib/client-workflow-types";
+
+import {
+  mapClientWorkflowRecordRow,
+  type ClientWorkflowRecordRow,
+} from "@/lib/supabase/client-workflow-records";
 
 type ProposalRecordRow = {
   id: string;
@@ -212,4 +220,69 @@ export async function updateProposalRecord(
   }
 
   return mapProposalRow(data as ProposalRecordRow);
+
+}
+type ProposalWorkflowClientUpdates = Partial<
+  Pick<
+    ClientWorkflowRecord,
+    | "lifecycleStage"
+    | "clientType"
+    | "returningClientStatus"
+    | "nextAction"
+    | "nextFollowUpAt"
+    | "onboardingStatus"
+    | "priority"
+    | "riskLevel"
+    | "estimatedValue"
+  >
+>;
+
+type ProposalWorkflowRpcResult = {
+  clientRecord: ClientWorkflowRecordRow;
+  proposal: ProposalRecordRow;
+  alreadyApplied: boolean;
+};
+
+export async function applyProposalWorkflowRecommendationTransaction(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  proposal: ProposalRecord,
+  updates: ProposalWorkflowClientUpdates,
+) {
+  const { data, error } = await supabase.rpc(
+    "apply_proposal_workflow_recommendation",
+    {
+      p_workspace_id: workspaceId,
+      p_proposal_id: proposal.id,
+      p_client_workflow_record_id:
+        proposal.clientWorkflowRecordId,
+      p_expected_proposal_status: proposal.status,
+      p_updates: updates,
+    },
+  );
+
+  if (error) {
+    console.error(
+      "Supabase proposal workflow transaction failed",
+      error,
+    );
+
+    throw new Error(error.message);
+  }
+
+  const result = data as ProposalWorkflowRpcResult | null;
+
+  if (!result?.clientRecord || !result.proposal) {
+    throw new Error(
+      "The proposal workflow update returned an invalid response.",
+    );
+  }
+
+  return {
+    clientRecord: mapClientWorkflowRecordRow(
+      result.clientRecord,
+    ),
+    proposal: mapProposalRow(result.proposal),
+    alreadyApplied: result.alreadyApplied,
+  };
 }

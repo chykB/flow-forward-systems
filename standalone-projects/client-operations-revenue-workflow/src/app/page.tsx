@@ -13,6 +13,7 @@ import type {
   ProposalWorkflowRecommendation as ProposalWorkflowRecommendationData,
 } from "@/lib/proposal-workflow";
 import {
+  applyProposalWorkflowRecommendationTransaction,
   createProposalRecord,
   getWorkspaceProposalRecords,
   updateProposalRecord,
@@ -595,36 +596,48 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
 
     setIsApplyingProposalRecommendation(true);
     setProposalsMessage("");
+    setRecordsMessage("");
 
     try {
-      const wasSaved = await saveSelectedRecordUpdates(
-        recommendation.updates,
-        `Proposal next step applied: ${recommendation.title}.`,
-      );
-
-      if (!wasSaved) {
-        throw new Error(
-          "The recommended next step could not be saved.",
+      const result =
+        await applyProposalWorkflowRecommendationTransaction(
+          supabase,
+          workspaceId,
+          proposal,
+          recommendation.updates,
         );
-      }
 
-      const savedProposal = await updateProposalRecord(
-        supabase,
-        workspaceId,
-        proposal.id,
-        {
-          workflowActionAppliedStatus: proposal.status,
-          workflowActionAppliedAt: new Date().toISOString(),
-        },
+      setRecords((currentRecords) =>
+        currentRecords.map((record) =>
+          record.id === result.clientRecord.id
+            ? result.clientRecord
+            : record,
+        ),
       );
 
       setProposals((currentProposals) =>
         currentProposals.map((currentProposal) =>
-          currentProposal.id === savedProposal.id
-            ? savedProposal
+          currentProposal.id === result.proposal.id
+            ? result.proposal
             : currentProposal,
         ),
       );
+
+      if (!result.alreadyApplied) {
+        setActivityLogs((currentLogs) => [
+          {
+            id: `log-${Date.now()}`,
+            clientWorkflowRecordId:
+              result.clientRecord.id,
+            actionType: "Proposal next step applied",
+            note: `${recommendation.title} was applied to the client workflow.`,
+            createdAt:
+              result.proposal.workflowActionAppliedAt ||
+              new Date().toISOString(),
+          },
+          ...currentLogs,
+        ]);
+      }
     } catch (error) {
       const applicationError =
         error instanceof Error

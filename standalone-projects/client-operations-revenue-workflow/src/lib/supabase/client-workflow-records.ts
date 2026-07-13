@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ClientWorkflowRecord } from "@/lib/client-workflow-types";
 
-type ClientWorkflowRecordRow = {
+export type ClientWorkflowRecordRow = {
   id: string;
   workspace_id: string;
   name: string;
@@ -30,7 +30,9 @@ type ClientWorkflowRecordRow = {
   workflow_health_score: number;
 };
 
-function mapRecordRow(row: ClientWorkflowRecordRow): ClientWorkflowRecord {
+export function mapClientWorkflowRecordRow(
+  row: ClientWorkflowRecordRow,
+): ClientWorkflowRecord {
   return {
     id: row.id,
     name: row.name,
@@ -75,7 +77,7 @@ export async function getClientWorkflowRecords(
     throw error;
   }
 
-  return (data as ClientWorkflowRecordRow[]).map(mapRecordRow);
+  return (data as ClientWorkflowRecordRow[]).map(mapClientWorkflowRecordRow);
 }
 
 export async function createClientWorkflowRecord(
@@ -118,7 +120,9 @@ export async function createClientWorkflowRecord(
         throw new Error(error.message);
     }
 
-  return mapRecordRow(data as ClientWorkflowRecordRow);
+  return mapClientWorkflowRecordRow(
+    data as ClientWorkflowRecordRow,
+  );
 }
 
 function buildRecordUpdatePayload(updates: Partial<ClientWorkflowRecord>) {
@@ -236,5 +240,7 @@ export async function updateClientWorkflowRecord(
     throw new Error(error.message);
   }
 
-  return mapRecordRow(data as ClientWorkflowRecordRow);
+  return mapClientWorkflowRecordRow(
+    data as ClientWorkflowRecordRow,
+  );
 }
