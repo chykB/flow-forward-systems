@@ -9,6 +9,9 @@ import { RecordFiltersBar } from "@/components/RecordFiltersBar";
 import { WorkspaceGate } from "@/components/WorkspaceGate";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser-client";
 import { getProposalsNeedingAction } from "@/lib/proposal-dashboard";
+import type {
+  ProposalWorkflowRecommendation as ProposalWorkflowRecommendationData,
+} from "@/lib/proposal-workflow";
 import {
   createProposalRecord,
   getWorkspaceProposalRecords,
@@ -190,6 +193,11 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
   >("loading");
   const [proposalsMessage, setProposalsMessage] = useState("");
   const [isSavingProposal, setIsSavingProposal] = useState(false);
+
+  const [
+    isApplyingProposalRecommendation,
+    setIsApplyingProposalRecommendation,
+  ] = useState(false);
 
   const [recordsStatus, setRecordsStatus] = useState<"loading" | "ready" | "error">(
     "loading",
@@ -451,6 +459,7 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
       ]);
 
       setRecordsMessage("");
+      return true;
     } catch (error) {
       console.error("Client workflow record update failed", error);
 
@@ -466,6 +475,7 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
           : "The record could not be updated. Please try again.",
       );
     }
+    return false;
   }
 
   async function addProposal(proposal: NewProposalRecord) {
@@ -563,6 +573,70 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
       throw proposalError;
     } finally {
       setIsSavingProposal(false);
+    }
+  }
+
+  async function applyProposalRecommendation(
+    proposal: ProposalRecord,
+    recommendation: ProposalWorkflowRecommendationData,
+  ) {
+    if (
+      !selectedRecord ||
+      proposal.clientWorkflowRecordId !== selectedRecord.id
+    ) {
+      throw new Error(
+        "The proposal is not linked to the selected client.",
+      );
+    }
+
+    if (proposal.workflowActionAppliedStatus === proposal.status) {
+      return;
+    }
+
+    setIsApplyingProposalRecommendation(true);
+    setProposalsMessage("");
+
+    try {
+      const wasSaved = await saveSelectedRecordUpdates(
+        recommendation.updates,
+        `Proposal next step applied: ${recommendation.title}.`,
+      );
+
+      if (!wasSaved) {
+        throw new Error(
+          "The recommended next step could not be saved.",
+        );
+      }
+
+      const savedProposal = await updateProposalRecord(
+        supabase,
+        workspaceId,
+        proposal.id,
+        {
+          workflowActionAppliedStatus: proposal.status,
+          workflowActionAppliedAt: new Date().toISOString(),
+        },
+      );
+
+      setProposals((currentProposals) =>
+        currentProposals.map((currentProposal) =>
+          currentProposal.id === savedProposal.id
+            ? savedProposal
+            : currentProposal,
+        ),
+      );
+    } catch (error) {
+      const applicationError =
+        error instanceof Error
+          ? error
+          : new Error(
+              "The recommended next step could not be applied.",
+            );
+
+      setProposalsMessage(applicationError.message);
+      throw applicationError;
+    } finally {
+      setIsApplyingProposalRecommendation(false);
     }
   }
 
@@ -711,7 +785,13 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
                 proposals={selectedRecordProposals}
                 record={selectedRecord}
                 tasks={workflowTasks}
-/>
+                isApplyingProposalRecommendation={
+                  isApplyingProposalRecommendation
+                }
+                onApplyProposalRecommendation={
+                  applyProposalRecommendation
+                }
+              />
             ) : null}
           </div>
         )}

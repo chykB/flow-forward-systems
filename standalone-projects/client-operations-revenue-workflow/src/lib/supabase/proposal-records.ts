@@ -15,13 +15,19 @@ type ProposalRecordRow = {
   rejected_at: string | null;
   revision_requested_at: string | null;
   notes: string;
+  workflow_action_applied_status: ProposalRecord["status"] | null;
+  workflow_action_applied_at: string | null;
   created_at: string;
   updated_at: string;
 };
 
 export type NewProposalRecord = Omit<
   ProposalRecord,
-  "id" | "createdAt" | "updatedAt"
+  | "id"
+  | "createdAt"
+  | "updatedAt"
+  | "workflowActionAppliedStatus"
+  | "workflowActionAppliedAt"
 >;
 
 export type ProposalRecordUpdates = Partial<
@@ -45,6 +51,10 @@ function mapProposalRow(row: ProposalRecordRow): ProposalRecord {
     rejectedAt: row.rejected_at ?? "",
     revisionRequestedAt: row.revision_requested_at ?? "",
     notes: row.notes ?? "",
+    workflowActionAppliedStatus:
+      row.workflow_action_applied_status ?? "",
+    workflowActionAppliedAt:
+      row.workflow_action_applied_at ?? "",
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -162,6 +172,15 @@ function buildProposalUpdatePayload(updates: ProposalRecordUpdates) {
 
   if (updates.notes !== undefined) {
     payload.notes = updates.notes;
+  }
+  if (updates.workflowActionAppliedStatus !== undefined) {
+    payload.workflow_action_applied_status =
+      updates.workflowActionAppliedStatus || null;
+  }
+
+  if (updates.workflowActionAppliedAt !== undefined) {
+    payload.workflow_action_applied_at =
+      updates.workflowActionAppliedAt || null;
   }
 
   return payload;

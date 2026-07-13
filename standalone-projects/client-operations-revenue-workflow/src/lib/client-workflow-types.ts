@@ -83,6 +83,8 @@ export type ProposalRecord = {
   rejectedAt: string;
   revisionRequestedAt: string;
   notes: string;
+  workflowActionAppliedStatus: ProposalStatus | "";
+  workflowActionAppliedAt: string;
   createdAt: string;
   updatedAt: string;
 };

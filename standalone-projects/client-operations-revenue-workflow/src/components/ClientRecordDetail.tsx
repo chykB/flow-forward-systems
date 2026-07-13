@@ -8,6 +8,9 @@ import { RecordStatusControls } from "@/components/RecordStatusControls";
 import { WorkflowTaskForm } from "@/components/WorkflowTaskForm";
 import { formatDateTime } from "@/lib/format-date";
 import type {
+  ProposalWorkflowRecommendation as ProposalWorkflowRecommendationData,
+} from "@/lib/proposal-workflow";
+import type {
   ActivityLog,
   ClientWorkflowRecord,
   HandoffNote,
@@ -47,6 +50,11 @@ type ClientRecordDetailProps = {
   proposals: ProposalRecord[];
   record: ClientWorkflowRecord;
   tasks: WorkflowTask[];
+  isApplyingProposalRecommendation: boolean;
+  onApplyProposalRecommendation: (
+    proposal: ProposalRecord,
+    recommendation: ProposalWorkflowRecommendationData,
+  ) => Promise<void>;
 };
 
 const detailTabs: { key: DetailTab; label: string }[] = [
@@ -78,11 +86,13 @@ function DetailRow({
 export function ClientRecordDetail({
   activityLogs,
   handoffNotes,
+  isApplyingProposalRecommendation,
   isProposalLoading,
   isProposalSaving,
   onAddHandoffNote,
   onAddProposal,
   onAddTask,
+  onApplyProposalRecommendation,
   onUpdateProposal,
   onUpdateRecord,
   proposalMessage,
@@ -205,11 +215,18 @@ export function ClientRecordDetail({
           <ProposalPanel
             clientWorkflowRecordId={record.id}
             errorMessage={proposalMessage}
+            isApplyingRecommendation={
+              isApplyingProposalRecommendation
+            }
             isLoading={isProposalLoading}
             isSaving={isProposalSaving}
+            onApplyRecommendation={
+              onApplyProposalRecommendation
+            }
             onCreate={onAddProposal}
             onUpdate={onUpdateProposal}
             proposals={proposals}
+            record={record}
           />
         </div>
       ) : null}

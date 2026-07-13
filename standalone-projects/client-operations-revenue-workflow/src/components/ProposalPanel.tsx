@@ -2,7 +2,16 @@
 
 import { useState } from "react";
 import { ProposalForm } from "@/components/ProposalForm";
-import type { ProposalRecord } from "@/lib/client-workflow-types";
+import {
+  ProposalWorkflowRecommendation as ProposalRecommendationCard,
+} from "@/components/ProposalWorkflowRecommendation";
+import type {
+  ClientWorkflowRecord,
+  ProposalRecord,
+} from "@/lib/client-workflow-types";
+import type {
+  ProposalWorkflowRecommendation as ProposalWorkflowRecommendationData,
+} from "@/lib/proposal-workflow";
 import {
   getProposalStatusLabel,
   getTodayDateInputValue,
@@ -20,6 +29,12 @@ type ProposalPanelProps = {
   isLoading: boolean;
   isSaving: boolean;
   errorMessage?: string;
+  isApplyingRecommendation: boolean;
+  record: ClientWorkflowRecord;
+  onApplyRecommendation: (
+    proposal: ProposalRecord,
+    recommendation: ProposalWorkflowRecommendationData,
+  ) => Promise<void>;
   onCreate: (proposal: NewProposalRecord) => Promise<void>;
   onUpdate: (
     proposalId: string,
@@ -94,12 +109,21 @@ function ProposalDateField({
 
 function ProposalEditor({
   proposal,
+  record,
   isSaving,
+  isApplyingRecommendation,
+  showRecommendation,
   onUpdate,
+  onApplyRecommendation,
 }: {
   proposal: ProposalRecord;
+  record: ClientWorkflowRecord;
   isSaving: boolean;
+  isApplyingRecommendation: boolean;
+  showRecommendation: boolean;
   onUpdate: ProposalPanelProps["onUpdate"];
+  onApplyRecommendation:
+    ProposalPanelProps["onApplyRecommendation"];
 }) {
   const [status, setStatus] = useState(proposal.status);
   const [notes, setNotes] = useState(proposal.notes);
@@ -454,6 +478,15 @@ function ProposalEditor({
         >
           {isSaving ? "Saving..." : "Save Proposal Update"}
         </button>
+
+        {showRecommendation ? (
+          <ProposalRecommendationCard
+            isApplying={isApplyingRecommendation}
+            onApply={onApplyRecommendation}
+            proposal={proposal}
+            record={record}
+          />
+        ) : null}
       </div>
     </article>
   );
@@ -462,9 +495,12 @@ function ProposalEditor({
 export function ProposalPanel({
   clientWorkflowRecordId,
   proposals,
+  isApplyingRecommendation,
   isLoading,
   isSaving,
   errorMessage,
+  record,
+  onApplyRecommendation,
   onCreate,
   onUpdate,
 }: ProposalPanelProps) {
@@ -519,12 +555,16 @@ export function ProposalPanel({
             Loading proposals and quotes...
           </p>
         ) : proposals.length > 0 ? (
-          proposals.map((proposal) => (
+          proposals.map((proposal, index) => (
             <ProposalEditor
+              isApplyingRecommendation={isApplyingRecommendation}
               isSaving={isSaving}
               key={proposal.id}
+              onApplyRecommendation={onApplyRecommendation}
               onUpdate={onUpdate}
               proposal={proposal}
+              record={record}
+              showRecommendation={index === 0}
             />
           ))
         ) : (

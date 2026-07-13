@@ -2,9 +2,11 @@
 
 import { useState } from "react";
 import type {
+  ClientType,
   ClientWorkflowRecord,
   LifecycleStage,
   PriorityLevel,
+  ReturningClientStatus,
   RiskLevel,
 } from "@/lib/client-workflow-types";
 
@@ -18,6 +20,8 @@ type FormValues = {
   businessName: string;
   source: string;
   interest: string;
+  clientType: ClientType;
+  returningClientStatus: ReturningClientStatus;
   lifecycleStage: LifecycleStage;
   priority: PriorityLevel;
   riskLevel: RiskLevel;
@@ -35,6 +39,8 @@ const initialValues: FormValues = {
   businessName: "",
   source: "",
   interest: "",
+  clientType: "Lead",
+  returningClientStatus: "Not returning",
   lifecycleStage: "New lead",
   priority: "Medium",
   riskLevel: "Low",
@@ -44,6 +50,20 @@ const initialValues: FormValues = {
   message: "",
 };
 
+const clientTypes: ClientType[] = [
+  "Lead",
+  "New client",
+  "Active client",
+  "Returning client",
+  "Past client",
+];
+
+const returningClientStatuses: ReturningClientStatus[] = [
+  "Potential reactivation",
+  "Repeat project opportunity",
+  "Reactivated",
+  "Dormant",
+];
 const lifecycleStages: LifecycleStage[] = [
   "New lead",
   "Qualified lead",
@@ -135,6 +155,21 @@ export function ClientRecordForm({ onAddRecord }: ClientRecordFormProps) {
     }));
   }
 
+  function updateClientType(clientType: ClientType) {
+    const returningClientStatus: ReturningClientStatus =
+      clientType === "Returning client"
+        ? "Reactivated"
+        : clientType === "Past client"
+          ? "Dormant"
+          : "Not returning";
+
+    setValues((currentValues) => ({
+      ...currentValues,
+      clientType,
+      returningClientStatus,
+    }));
+  }
+
   function submitForm(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -168,8 +203,8 @@ export function ClientRecordForm({ onAddRecord }: ClientRecordFormProps) {
       paymentStatus: "Not needed",
       createdAt: now,
       updatedAt: now,
-      clientType: "Lead",
-      returningClientStatus: "Not returning",
+      clientType: values.clientType,
+      returningClientStatus: values.returningClientStatus,
       lastProjectDate: "",
       estimatedValue: 0,
       workflowHealthScore: 75,
@@ -267,20 +302,69 @@ export function ClientRecordForm({ onAddRecord }: ClientRecordFormProps) {
         </div>
 
         <div className="grid gap-2">
+          <label className="font-bold" htmlFor="record-client-type">
+            Lead or client status
+          </label>
+          <select
+            className="rounded-md border border-[#D9DED8] bg-white px-4 py-3 outline-none focus:border-[#174F42]"
+            id="record-client-type"
+            value={values.clientType}
+            onChange={(event) =>
+              updateClientType(event.target.value as ClientType)
+            }
+          >
+            {clientTypes.map((clientType) => (
+              <option key={clientType} value={clientType}>
+                {clientType}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {values.clientType === "Returning client" ||
+        values.clientType === "Past client" ? (
+          <div className="grid gap-2">
+            <label className="font-bold" htmlFor="record-returning-status">
+              Returning client status
+            </label>
+            <select
+              className="rounded-md border border-[#D9DED8] bg-white px-4 py-3 outline-none focus:border-[#174F42]"
+              id="record-returning-status"
+              value={values.returningClientStatus}
+              onChange={(event) =>
+                updateField(
+                  "returningClientStatus",
+                  event.target.value as ReturningClientStatus,
+                )
+              }
+            >
+              {returningClientStatuses.map((status) => (
+                <option key={status} value={status}>
+                  {status}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
+
+        <div className="grid gap-2">
           <label className="font-bold" htmlFor="record-stage">
-            Stage
+            Workflow stage
           </label>
           <select
             className="rounded-md border border-[#D9DED8] bg-white px-4 py-3 outline-none focus:border-[#174F42]"
             id="record-stage"
             value={values.lifecycleStage}
             onChange={(event) =>
-              updateField("lifecycleStage", event.target.value as LifecycleStage)
+              updateField(
+                "lifecycleStage",
+                event.target.value as LifecycleStage,
+              )
             }
           >
             {lifecycleStages.map((stage) => (
               <option key={stage} value={stage}>
-                {stage}
+                {stage === "Won client" ? "Engagement confirmed" : stage}
               </option>
             ))}
           </select>
@@ -293,7 +377,7 @@ export function ClientRecordForm({ onAddRecord }: ClientRecordFormProps) {
           <input
             className="rounded-md border border-[#D9DED8] px-4 py-3 outline-none focus:border-[#174F42]"
             id="record-owner"
-            placeholder="Example: Example: Founder, VA, assistant, sales rep"
+            placeholder="Example: Founder, VA, assistant, sales rep"
             value={values.assignedTo}
             onChange={(event) => updateField("assignedTo", event.target.value)}
           />

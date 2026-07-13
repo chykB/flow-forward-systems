@@ -1,8 +1,10 @@
 "use client";
 
 import type {
+  ClientType,
   ClientWorkflowRecord,
   LifecycleStage,
+  ReturningClientStatus,
   RiskLevel,
   WorkflowStatus,
 } from "@/lib/client-workflow-types";
@@ -11,6 +13,27 @@ type RecordStatusControlsProps = {
   onUpdateRecord: (updates: Partial<ClientWorkflowRecord>, note: string) => void;
   record: ClientWorkflowRecord;
 };
+
+const clientTypes: ClientType[] = [
+  "Lead",
+  "New client",
+  "Active client",
+  "Returning client",
+  "Past client",
+];
+
+const returningClientStatuses: ReturningClientStatus[] = [
+  "Potential reactivation",
+  "Repeat project opportunity",
+  "Reactivated",
+  "Dormant",
+];
+
+function getLifecycleStageLabel(stage: LifecycleStage) {
+  return stage === "Won client"
+    ? "Engagement confirmed"
+    : stage;
+}
 
 const lifecycleStages: LifecycleStage[] = [
   "New lead",
@@ -53,27 +76,96 @@ export function RecordStatusControls({
 
       <div className="mt-4 grid gap-3 md:grid-cols-2">
         <div className="grid gap-2">
+          <label className="font-bold" htmlFor="status-client-type">
+            Lead or client status
+          </label>
+          <select
+            className="rounded-md border border-[#D9DED8] bg-white px-4 py-3 outline-none focus:border-[#174F42]"
+            id="status-client-type"
+            value={record.clientType}
+            onChange={(event) => {
+              const clientType = event.target.value as ClientType;
+
+              const returningClientStatus: ReturningClientStatus =
+                clientType === "Returning client"
+                  ? "Reactivated"
+                  : clientType === "Past client"
+                    ? "Dormant"
+                    : "Not returning";
+
+              onUpdateRecord(
+                {
+                  clientType,
+                  returningClientStatus,
+                },
+                `Lead or client status changed to ${clientType}.`,
+              );
+            }}
+          >
+            {clientTypes.map((clientType) => (
+              <option key={clientType} value={clientType}>
+                {clientType}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="grid gap-2">
           <label className="font-bold" htmlFor="status-stage">
-            Lifecycle stage
+            Workflow stage
           </label>
           <select
             className="rounded-md border border-[#D9DED8] bg-white px-4 py-3 outline-none focus:border-[#174F42]"
             id="status-stage"
             value={record.lifecycleStage}
-            onChange={(event) =>
+            onChange={(event) => {
+              const lifecycleStage =
+                event.target.value as LifecycleStage;
+
               onUpdateRecord(
-                { lifecycleStage: event.target.value as LifecycleStage },
-                `Lifecycle stage changed to ${event.target.value}.`,
-              )
-            }
+                { lifecycleStage },
+                `Workflow stage changed to ${getLifecycleStageLabel(
+                  lifecycleStage,
+                )}.`,
+              );
+            }}
           >
             {lifecycleStages.map((stage) => (
               <option key={stage} value={stage}>
-                {stage}
+                {getLifecycleStageLabel(stage)}
               </option>
             ))}
           </select>
         </div>
+
+        {record.clientType === "Returning client" ||
+        record.clientType === "Past client" ? (
+          <div className="grid gap-2">
+            <label className="font-bold" htmlFor="status-returning-client">
+              Returning client status
+            </label>
+            <select
+              className="rounded-md border border-[#D9DED8] bg-white px-4 py-3 outline-none focus:border-[#174F42]"
+              id="status-returning-client"
+              value={record.returningClientStatus}
+              onChange={(event) => {
+                const returningClientStatus =
+                  event.target.value as ReturningClientStatus;
+
+                onUpdateRecord(
+                  { returningClientStatus },
+                  `Returning client status changed to ${returningClientStatus}.`,
+                );
+              }}
+            >
+              {returningClientStatuses.map((status) => (
+                <option key={status} value={status}>
+                  {status}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
 
         <div className="grid gap-2">
           <label className="font-bold" htmlFor="status-risk">
