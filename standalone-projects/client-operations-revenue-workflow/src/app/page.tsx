@@ -12,7 +12,7 @@ import { getProposalsNeedingAction } from "@/lib/proposal-dashboard";
 import {
   createInvoiceRecord,
   getWorkspaceInvoiceRecords,
-  type NewInvoiceRecord,
+  type NewInvoiceRecord, updateInvoiceRecord, InvoiceRecordUpdates
 } from "@/lib/supabase/invoice-records";
 import type {
   ProposalWorkflowRecommendation as ProposalWorkflowRecommendationData,
@@ -629,6 +629,62 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
     }
   }
 
+  async function saveInvoiceUpdates(
+    invoiceId: string,
+    updates: InvoiceRecordUpdates,
+  ) {
+    const previousInvoice = invoices.find(
+      (invoice) => invoice.id === invoiceId,
+    );
+
+    setIsSavingInvoice(true);
+    setInvoicesMessage("");
+
+    try {
+      const savedInvoice = await updateInvoiceRecord(
+        supabase,
+        workspaceId,
+        invoiceId,
+        updates,
+      );
+
+      setInvoices((currentInvoices) =>
+        currentInvoices.map((invoice) =>
+          invoice.id === savedInvoice.id ? savedInvoice : invoice,
+        ),
+      );
+
+      const statusChanged =
+        previousInvoice?.status !== savedInvoice.status;
+
+      setActivityLogs((currentLogs) => [
+        {
+          id: `log-${Date.now()}`,
+          clientWorkflowRecordId:
+            savedInvoice.clientWorkflowRecordId,
+          actionType: statusChanged
+            ? "Invoice status updated"
+            : "Invoice payment details updated",
+          note: statusChanged
+            ? `Invoice ${savedInvoice.invoiceNumber} changed from ${previousInvoice?.status ?? "its previous status"} to ${savedInvoice.status}.`
+            : `Invoice ${savedInvoice.invoiceNumber} payment details were updated.`,
+          createdAt: new Date().toISOString(),
+        },
+        ...currentLogs,
+      ]);
+    } catch (error) {
+      const invoiceError =
+        error instanceof Error
+          ? error
+          : new Error("The invoice could not be updated.");
+
+      setInvoicesMessage(invoiceError.message);
+      throw invoiceError;
+    } finally {
+      setIsSavingInvoice(false);
+    }
+  }
+
   async function saveProposalUpdates(
     proposalId: string,
     updates: ProposalRecordUpdates,
@@ -919,6 +975,7 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
                 isInvoiceLoading={invoicesStatus === "loading"}
                 isInvoiceSaving={isSavingInvoice}
                 onAddInvoice={addInvoice}
+                onUpdateInvoice={saveInvoiceUpdates}
               />
             ) : null}
           </div>

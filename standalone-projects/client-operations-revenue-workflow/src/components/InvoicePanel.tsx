@@ -2,15 +2,17 @@
 
 import { useState } from "react";
 import { InvoiceForm } from "@/components/InvoiceForm";
+import { InvoiceStatusEditor } from "@/components/InvoiceStatusEditor";
+import type {
+  InvoiceRecordUpdates,
+  NewInvoiceRecord,
+} from "@/lib/supabase/invoice-records";
 import type {
   InvoiceRecord,
 } from "@/lib/client-workflow-types";
 import {
   getInvoiceStatusLabel,
 } from "@/lib/invoice-options";
-import type {
-  NewInvoiceRecord,
-} from "@/lib/supabase/invoice-records";
 
 type InvoicePanelProps = {
   clientWorkflowRecordId: string;
@@ -19,6 +21,10 @@ type InvoicePanelProps = {
   isLoading: boolean;
   isSaving: boolean;
   onCreate: (invoice: NewInvoiceRecord) => Promise<void>;
+  onUpdate: (
+    invoiceId: string,
+    updates: InvoiceRecordUpdates,
+    ) => Promise<void>;
 };
 
 function formatAmount(amount: number, currency: string) {
@@ -57,9 +63,17 @@ function formatDate(value: string) {
 
 function InvoiceHistoryItem({
   invoice,
+  isSaving,
+  onUpdate,
 }: {
   invoice: InvoiceRecord;
+  isSaving: boolean;
+  onUpdate: (
+    invoiceId: string,
+    updates: InvoiceRecordUpdates,
+  ) => Promise<void>;
 }) {
+  const [isEditing, setIsEditing] = useState(false);
   const needsAttention =
     invoice.status === "Overdue" ||
     invoice.status === "Disputed";
@@ -110,7 +124,7 @@ function InvoiceHistoryItem({
         </div>
       ) : null}
 
-      {invoice.disputeReason ? (
+      {invoice.status === "Disputed" && invoice.disputeReason ? (
         <div className="mt-4 rounded-md bg-red-50 p-4">
           <p className="font-bold text-red-700">
             Dispute requires review
@@ -131,6 +145,23 @@ function InvoiceHistoryItem({
           Open payment link
         </a>
       ) : null}
+      <div className="mt-4">
+        <button
+            className="rounded-md border border-[#174F42] px-4 py-2 font-bold text-[#174F42] hover:bg-[#EDF3EF]"
+            type="button"
+            onClick={() => setIsEditing((current) => !current)}
+        >
+            {isEditing ? "Close Status Update" : "Update Payment Status"}
+        </button>
+
+        {isEditing ? (
+            <InvoiceStatusEditor
+            invoice={invoice}
+            isSaving={isSaving}
+            onUpdate={onUpdate}
+            />
+        ) : null}
+        </div>
     </article>
   );
 }
@@ -142,6 +173,7 @@ export function InvoicePanel({
   isLoading,
   isSaving,
   onCreate,
+  onUpdate,
 }: InvoicePanelProps) {
   const [isFormOpen, setIsFormOpen] = useState(false);
 
@@ -200,8 +232,10 @@ export function InvoicePanel({
         <div className="mt-6">
           {invoices.map((invoice) => (
             <InvoiceHistoryItem
-              invoice={invoice}
-              key={invoice.id}
+                invoice={invoice}
+                isSaving={isSaving}
+                key={invoice.id}
+                onUpdate={onUpdate}
             />
           ))}
         </div>

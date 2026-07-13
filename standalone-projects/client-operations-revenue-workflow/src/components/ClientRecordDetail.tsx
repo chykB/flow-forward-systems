@@ -8,7 +8,7 @@ import { RecordStatusControls } from "@/components/RecordStatusControls";
 import { WorkflowTaskForm } from "@/components/WorkflowTaskForm";
 import { formatDateTime } from "@/lib/format-date";
 import { InvoicePanel } from "@/components/InvoicePanel";
-import type { NewInvoiceRecord } from "@/lib/supabase/invoice-records";
+import type { NewInvoiceRecord, InvoiceRecordUpdates } from "@/lib/supabase/invoice-records";
 import type {
   ProposalWorkflowRecommendation as ProposalWorkflowRecommendationData,
 } from "@/lib/proposal-workflow";
@@ -65,7 +65,11 @@ type ClientRecordDetailProps = {
     proposal: ProposalRecord,
     recommendation: ProposalWorkflowRecommendationData,
   ) => Promise<void>;
-};
+  onUpdateInvoice: (
+    invoiceId: string,
+    updates: InvoiceRecordUpdates,
+  ) => Promise<void>;
+  };
 
 const detailTabs: { key: DetailTab; label: string }[] = [
   { key: "overview", label: "Overview" },
@@ -106,6 +110,7 @@ export function ClientRecordDetail({
   isProposalSaving,
   onAddHandoffNote,
   onAddInvoice,
+  onUpdateInvoice,
   onAddProposal,
   onAddTask,
   onApplyProposalRecommendation,
@@ -116,6 +121,7 @@ export function ClientRecordDetail({
   record,
   tasks,
   isApplyingProposalRecommendation,
+  
 }: ClientRecordDetailProps) {
   const [activeTab, setActiveTab] =
     useState<DetailTab>("overview");
@@ -259,6 +265,7 @@ export function ClientRecordDetail({
           isLoading={isInvoiceLoading}
           isSaving={isInvoiceSaving}
           onCreate={onAddInvoice}
+          onUpdate={onUpdateInvoice}
         />
       </div>
     ) : null}
