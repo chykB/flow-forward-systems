@@ -57,6 +57,11 @@ export type InvoiceDisputeResolutionOutcome =
 export type RiskSignalSeverity = "Low" | "Medium" | "High" | "Critical";
 
 export type RiskSignalStatus = "Open" | "Reviewed" | "Resolved" | "Dismissed";
+export type RiskSignalSourceType =
+  | "client_record"
+  | "proposal"
+  | "invoice"
+  | "workflow_task";
 
 export type WorkflowStatus =
   | "Not started"
@@ -123,11 +128,19 @@ export type InvoiceRecord = {
 export type RiskSignal = {
   id: string;
   clientWorkflowRecordId: string;
+  signalKey: string;
+  sourceType: RiskSignalSourceType;
+  sourceRecordId: string;
   riskType: string;
   severity: RiskSignalSeverity;
   reason: string;
+  recommendedAction: string;
   status: RiskSignalStatus;
+  lastDetectedAt: string;
+  resolvedAt: string;
+  resolutionNote: string;
   createdAt: string;
+  updatedAt: string;
 };
 
 export type ClientWorkflowRecord = {
