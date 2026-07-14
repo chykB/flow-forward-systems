@@ -1,40 +1,67 @@
-import type { ClientWorkflowRecord, WorkflowTask } from "./client-workflow-types";
+import type {
+  ClientWorkflowRecord,
+  WorkflowTask,
+} from "@/lib/client-workflow-types";
+import {
+  getFutureLocalDateKey,
+  getLocalDateKey,
+} from "@/lib/date-key";
 
-const today = "2026-07-01";
+const FOLLOW_UP_WINDOW_DAYS = 3;
 
-function isBeforeToday(date: string) {
-  return date < today;
-}
-
-function isTodayOrSoon(date: string) {
-  return date >= today && date <= "2026-07-04";
-}
-
-export function getOverdueFollowUps(records: ClientWorkflowRecord[]) {
-  return records.filter(
-    (record) =>
-      record.nextFollowUpAt &&
-      isBeforeToday(record.nextFollowUpAt) &&
-      record.lifecycleStage !== "Completed" &&
-      record.lifecycleStage !== "Lost or inactive",
+function recordCanRequireFollowUp(
+  record: ClientWorkflowRecord,
+) {
+  return (
+    record.lifecycleStage !== "Completed" &&
+    record.lifecycleStage !== "Lost or inactive"
   );
 }
 
-export function getFollowUpsDueSoon(records: ClientWorkflowRecord[]) {
+export function getOverdueFollowUps(
+  records: ClientWorkflowRecord[],
+  currentDate = new Date(),
+) {
+  const today = getLocalDateKey(currentDate);
+
   return records.filter(
     (record) =>
-      record.nextFollowUpAt &&
-      isTodayOrSoon(record.nextFollowUpAt) &&
-      record.lifecycleStage !== "Completed" &&
-      record.lifecycleStage !== "Lost or inactive",
+      Boolean(record.nextFollowUpAt) &&
+      record.nextFollowUpAt < today &&
+      recordCanRequireFollowUp(record),
   );
 }
 
-export function getWaitingApprovals(records: ClientWorkflowRecord[]) {
-  return records.filter((record) => record.approvalStatus === "Waiting");
+export function getFollowUpsDueSoon(
+  records: ClientWorkflowRecord[],
+  currentDate = new Date(),
+) {
+  const today = getLocalDateKey(currentDate);
+  const windowEnd = getFutureLocalDateKey(
+    currentDate,
+    FOLLOW_UP_WINDOW_DAYS,
+  );
+
+  return records.filter(
+    (record) =>
+      Boolean(record.nextFollowUpAt) &&
+      record.nextFollowUpAt >= today &&
+      record.nextFollowUpAt <= windowEnd &&
+      recordCanRequireFollowUp(record),
+  );
 }
 
-export function getPaymentFollowUps(records: ClientWorkflowRecord[]) {
+export function getWaitingApprovals(
+  records: ClientWorkflowRecord[],
+) {
+  return records.filter(
+    (record) => record.approvalStatus === "Waiting",
+  );
+}
+
+export function getPaymentFollowUps(
+  records: ClientWorkflowRecord[],
+) {
   return records.filter(
     (record) =>
       record.paymentStatus === "Waiting" ||
@@ -43,14 +70,22 @@ export function getPaymentFollowUps(records: ClientWorkflowRecord[]) {
   );
 }
 
-export function getAtRiskClients(records: ClientWorkflowRecord[]) {
+export function getAtRiskClients(
+  records: ClientWorkflowRecord[],
+) {
   return records.filter(
-    (record) => record.riskLevel === "High" || record.lifecycleStage === "At risk",
+    (record) =>
+      record.riskLevel === "High" ||
+      record.lifecycleStage === "At risk",
   );
 }
 
-export function getBlockedDeliveryTasks(tasks: WorkflowTask[]) {
+export function getBlockedDeliveryTasks(
+  tasks: WorkflowTask[],
+) {
   return tasks.filter(
-    (task) => task.type === "Delivery" && task.status === "Blocked",
+    (task) =>
+      task.type === "Delivery" &&
+      task.status === "Blocked",
   );
 }
