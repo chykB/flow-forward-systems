@@ -1,5 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { RiskSignal } from "@/lib/client-workflow-types";
+import { getLocalDateKey } from "@/lib/date-key";
+import {
+  mapClientWorkflowRecordRow,
+  type ClientWorkflowRecordRow,
+} from "@/lib/supabase/client-workflow-records";
 
 export type RiskSignalRow = {
   id: string;
@@ -103,4 +108,59 @@ export async function updateRiskSignalStatus(
   }
 
   return mapRiskSignalRow(data as RiskSignalRow);
+}
+
+type RiskSignalReconciliationRpcResult = {
+  clientRecord: ClientWorkflowRecordRow;
+  riskSignals: RiskSignalRow[];
+  workflowHealthScore: number;
+  changed: boolean;
+};
+
+export async function reconcileClientRiskSignals(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  clientWorkflowRecordId: string,
+  currentDate = new Date(),
+) {
+  const { data, error } = await supabase.rpc(
+    "reconcile_client_risk_signals",
+    {
+      p_workspace_id: workspaceId,
+      p_client_workflow_record_id:
+        clientWorkflowRecordId,
+      p_evaluation_date: getLocalDateKey(currentDate),
+    },
+  );
+
+  if (error) {
+    console.error(
+      "Supabase workflow risk reconciliation failed",
+      error,
+    );
+    throw new Error(error.message);
+  }
+
+  const result =
+    data as RiskSignalReconciliationRpcResult | null;
+
+  if (
+    !result?.clientRecord ||
+    !Array.isArray(result.riskSignals) ||
+    typeof result.workflowHealthScore !== "number" ||
+    typeof result.changed !== "boolean"
+  ) {
+    throw new Error(
+      "The workflow risk review returned an invalid response.",
+    );
+  }
+
+  return {
+    clientRecord: mapClientWorkflowRecordRow(
+      result.clientRecord,
+    ),
+    riskSignals: result.riskSignals.map(mapRiskSignalRow),
+    workflowHealthScore: result.workflowHealthScore,
+    changed: result.changed,
+  };
 }
