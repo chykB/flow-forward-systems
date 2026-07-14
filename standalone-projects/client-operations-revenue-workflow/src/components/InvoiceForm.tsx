@@ -8,6 +8,7 @@ import {
   invoiceStatusRequiresDueDate,
   invoiceStatusRequiresPaidDate,
   invoiceStatusRequiresSentDate,
+  invoiceStatusRequiresIssuedDetails,
 } from "@/lib/invoice-options";
 import type { NewInvoiceRecord } from "@/lib/supabase/invoice-records";
 
@@ -69,26 +70,33 @@ function isValidPaymentLink(value: string) {
 function validateInvoice(values: InvoiceFormValues) {
   const errors: InvoiceFormErrors = {};
   const invoiceNeeded = values.status !== "Not needed";
+  const invoiceIssued =
+    invoiceStatusRequiresIssuedDetails(values.status);
   const amount = values.amount.trim()
     ? Number(values.amount)
     : 0;
 
   if (
-    invoiceNeeded &&
+    invoiceIssued &&
     values.invoiceNumber.trim().length < 2
-  ) {
-    errors.invoiceNumber = "Enter an invoice number.";
-  } else if (values.invoiceNumber.trim().length > 80) {
+    ) {
     errors.invoiceNumber =
-      "Invoice number must be 80 characters or less.";
-  }
+        "Enter the invoice number before issuing it.";
+    } else if (values.invoiceNumber.trim().length > 80) {
+    errors.invoiceNumber =
+        "Invoice number must be 80 characters or less.";
+    }
 
-  if (
+    if (
     invoiceNeeded &&
-    (Number.isNaN(amount) || amount <= 0)
-  ) {
-    errors.amount = "Enter an invoice amount greater than zero.";
-  }
+    values.amount.trim() &&
+    (Number.isNaN(amount) || amount < 0)
+    ) {
+    errors.amount = "Enter a valid invoice amount.";
+    } else if (invoiceIssued && amount <= 0) {
+    errors.amount =
+        "Enter an amount greater than zero before issuing the invoice.";
+    }
 
   if (
     invoiceNeeded &&
@@ -236,14 +244,19 @@ export function InvoiceForm({
     }
 
     const invoiceNeeded = values.status !== "Not needed";
+    // const invoiceIssued =
+    //     invoiceStatusRequiresIssuedDetails(values.status);
 
     try {
       await onCreate({
         clientWorkflowRecordId,
         invoiceNumber: invoiceNeeded
-          ? values.invoiceNumber.trim()
-          : "Not required",
-        amount: invoiceNeeded ? Number(values.amount) : 0,
+        ? values.invoiceNumber.trim()
+        : "",
+        amount:
+        invoiceNeeded && values.amount.trim()
+            ? Number(values.amount)
+            : 0,
         currency: values.currency.trim().toUpperCase(),
         description: values.description.trim(),
         status: values.status,
@@ -267,6 +280,8 @@ export function InvoiceForm({
   }
 
   const invoiceNeeded = values.status !== "Not needed";
+  const invoiceIssued =
+    invoiceStatusRequiresIssuedDetails(values.status);
   const showSentAndDueDates =
     invoiceStatusRequiresSentDate(values.status) ||
     invoiceStatusRequiresDueDate(values.status);
@@ -315,7 +330,9 @@ export function InvoiceForm({
         <>
           <div className="grid gap-2">
             <label className="font-bold" htmlFor="invoice-number">
-              Invoice number
+            {invoiceIssued
+                ? "Invoice number"
+                : "Invoice number (optional until issued)"}
             </label>
             <input
               id="invoice-number"
@@ -324,7 +341,11 @@ export function InvoiceForm({
               onChange={(event) =>
                 updateField("invoiceNumber", event.target.value)
               }
-              placeholder="Example: INV-2026-001"
+              placeholder={
+                invoiceIssued
+                    ? "Example: INV-2026-001"
+                    : "Add when the invoice is prepared"
+                }
             />
             <FieldError message={errors.invoiceNumber} />
           </div>
@@ -332,7 +353,9 @@ export function InvoiceForm({
           <div className="grid gap-4 sm:grid-cols-[1fr_0.6fr]">
             <div className="grid gap-2">
               <label className="font-bold" htmlFor="invoice-amount">
-                Invoice amount
+                {invoiceIssued
+                    ? "Invoice amount"
+                    : "Invoice amount (optional until issued)"}
               </label>
               <input
                 id="invoice-amount"

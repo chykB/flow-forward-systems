@@ -1,11 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type SubmitEvent } from "react";
+import {
+  InvoiceDisputeResolutionEditor,
+} from "@/components/InvoiceDisputeResolutionEditor";
 import type {
   InvoiceRecord,
   InvoiceStatus,
 } from "@/lib/client-workflow-types";
-import { invoiceStatusOptions } from "@/lib/invoice-options";
+import {
+  invoiceStatusOptions,
+  invoiceStatusRequiresIssuedDetails,
+} from "@/lib/invoice-options";
+
 import type { InvoiceRecordUpdates } from "@/lib/supabase/invoice-records";
 
 type Props = {
@@ -30,11 +37,37 @@ function getToday() {
   return date.toISOString().slice(0, 10);
 }
 
-export function InvoiceStatusEditor({
+export function InvoiceStatusEditor(props: Props) {
+  if (props.invoice.status === "Disputed") {
+    return (
+      <InvoiceDisputeResolutionEditor
+        invoice={props.invoice}
+        isSaving={props.isSaving}
+        onUpdate={props.onUpdate}
+      />
+    );
+  }
+
+  return (
+    <StandardInvoiceStatusEditor
+      key={props.invoice.updatedAt}
+      {...props}
+    />
+  );
+}
+
+function StandardInvoiceStatusEditor({
   invoice,
   isSaving,
   onUpdate,
 }: Props) {
+  const [invoiceNumber, setInvoiceNumber] = useState(
+    invoice.invoiceNumber,
+  );
+  const [amount, setAmount] = useState(
+    invoice.amount > 0 ? String(invoice.amount) : "",
+  );
+  const [currency, setCurrency] = useState(invoice.currency);
   const [status, setStatus] = useState(invoice.status);
   const [sentAt, setSentAt] = useState(invoice.sentAt);
   const [dueDate, setDueDate] = useState(invoice.dueDate);
@@ -46,10 +79,56 @@ export function InvoiceStatusEditor({
 
   const needsSchedule = scheduleStatuses.includes(status);
   const showSchedule = needsSchedule || status === "Paid";
+  const invoiceNeeded = status !== "Not needed";
+  const invoiceIssued =
+    invoiceStatusRequiresIssuedDetails(status);
+  const fieldPrefix = `invoice-status-${invoice.id}`;
 
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
+  async function submit(
+    event: SubmitEvent<HTMLFormElement>,
+  ) {
     event.preventDefault();
     setMessage("");
+
+    const parsedAmount = amount.trim() ? Number(amount) : 0;
+
+    if (
+      invoiceIssued &&
+      invoiceNumber.trim().length < 2
+    ) {
+      setMessage(
+        "Enter the invoice number before issuing it.",
+      );
+      return;
+    }
+
+    if (invoiceNumber.trim().length > 80) {
+      setMessage("Invoice number must be 80 characters or less.");
+      return;
+    }
+
+    if (
+      amount.trim() &&
+      (Number.isNaN(parsedAmount) || parsedAmount < 0)
+    ) {
+      setMessage("Enter a valid invoice amount.");
+      return;
+    }
+
+    if (invoiceIssued && parsedAmount <= 0) {
+      setMessage(
+        "Enter an amount greater than zero before issuing the invoice.",
+      );
+      return;
+    }
+
+    if (
+      invoiceNeeded &&
+      !/^[A-Za-z]{3}$/.test(currency.trim())
+    ) {
+      setMessage("Use a three-letter currency code.");
+      return;
+    }
 
     if (needsSchedule && (!sentAt || !dueDate)) {
       setMessage("Enter both the sent date and due date.");
@@ -73,6 +152,15 @@ export function InvoiceStatusEditor({
 
     const updates: InvoiceRecordUpdates = {
       status,
+      invoiceNumber: invoiceNeeded
+        ? invoiceNumber.trim()
+        : invoice.invoiceNumber,
+      amount: invoiceNeeded
+        ? parsedAmount
+        : invoice.amount,
+      currency: invoiceNeeded
+        ? currency.trim().toUpperCase()
+        : invoice.currency,
       sentAt,
       dueDate,
       paidAt,
@@ -85,15 +173,15 @@ export function InvoiceStatusEditor({
     );
 
     if (!hasChanges) {
-      setMessage("No invoice status changes to save.");
+      setMessage("No invoice changes to save.");
       return;
     }
 
     try {
       await onUpdate(invoice.id, updates);
-      setMessage("Invoice status updated.");
+      setMessage("Invoice changes saved.");
     } catch {
-      setMessage("The invoice status could not be updated.");
+      setMessage("The invoice could not be updated.");
     }
   }
 
@@ -103,7 +191,7 @@ export function InvoiceStatusEditor({
       onSubmit={submit}
     >
       <label className="grid gap-2 font-bold">
-        Payment status
+        Invoice status
         <select
           className="rounded-md border border-[#D9DED8] bg-white px-4 py-3"
           value={status}
@@ -130,10 +218,88 @@ export function InvoiceStatusEditor({
         </select>
       </label>
 
+      {invoiceNeeded ? (
+        <div className="grid gap-4">
+          <label
+            className="grid gap-2 font-bold"
+            htmlFor={`${fieldPrefix}-number`}
+          >
+            {invoiceIssued
+              ? "Invoice number"
+              : "Invoice number (optional until issued)"}
+            <input
+              id={`${fieldPrefix}-number`}
+              className="rounded-md border border-[#D9DED8] bg-white px-4 py-3"
+              value={invoiceNumber}
+              onChange={(event) =>
+                setInvoiceNumber(event.target.value)
+              }
+              placeholder={
+                invoiceIssued
+                  ? "Example: INV-2026-001"
+                  : "Add when the invoice is prepared"
+              }
+            />
+          </label>
+
+          <div className="grid gap-4 sm:grid-cols-[1fr_0.6fr]">
+            <label
+              className="grid gap-2 font-bold"
+              htmlFor={`${fieldPrefix}-amount`}
+            >
+              {invoiceIssued
+                ? "Invoice amount"
+                : "Invoice amount (optional until issued)"}
+              <input
+                id={`${fieldPrefix}-amount`}
+                className="rounded-md border border-[#D9DED8] bg-white px-4 py-3"
+                min="0"
+                step="0.01"
+                type="number"
+                value={amount}
+                onChange={(event) => setAmount(event.target.value)}
+              />
+            </label>
+
+            <label
+              className="grid gap-2 font-bold"
+              htmlFor={`${fieldPrefix}-currency`}
+            >
+              Currency
+              <input
+                id={`${fieldPrefix}-currency`}
+                className="rounded-md border border-[#D9DED8] bg-white px-4 py-3 uppercase"
+                maxLength={3}
+                value={currency}
+                onChange={(event) =>
+                  setCurrency(event.target.value)
+                }
+              />
+            </label>
+          </div>
+        </div>
+      ) : null}
+
       {showSchedule ? (
         <div className="grid gap-4 sm:grid-cols-2">
-          <DateField label="Sent date" value={sentAt} onChange={setSentAt} />
-          <DateField label="Due date" value={dueDate} onChange={setDueDate} />
+          <DateField
+            label={
+              status === "Paid"
+                ? "Sent date (optional)"
+                : "Sent date"
+            }
+            value={sentAt}
+            onChange={setSentAt}
+          />
+          <DateField
+            label={
+              status === "Paid"
+                ? "Due date (optional)"
+                : "Due date"
+            }
+            value={dueDate}
+            onChange={setDueDate}
+          />
         </div>
       ) : null}
 
@@ -161,11 +327,12 @@ export function InvoiceStatusEditor({
         disabled={isSaving}
         type="submit"
       >
-        {isSaving ? "Saving..." : "Save Payment Status"}
+        {isSaving ? "Saving..." : "Save Invoice Changes"}
       </button>
     </form>
   );
 }
+
 
 function DateField({
   label,

@@ -3,13 +3,23 @@
 import { useState } from "react";
 import { InvoiceForm } from "@/components/InvoiceForm";
 import { InvoiceStatusEditor } from "@/components/InvoiceStatusEditor";
+import { InvoiceWorkflowRecommendation } from "@/components/InvoiceWorkflowRecommendation";
+import { formatDateTime } from "@/lib/format-date";
+import {
+  getPrimaryInvoiceWorkflowTarget,
+  type InvoiceWorkflowRecommendation as RecommendationData,
+} from "@/lib/invoice-workflow";
+import type {
+  ClientWorkflowRecord,
+  InvoiceRecord,
+} from "@/lib/client-workflow-types";
 import type {
   InvoiceRecordUpdates,
   NewInvoiceRecord,
 } from "@/lib/supabase/invoice-records";
-import type {
-  InvoiceRecord,
-} from "@/lib/client-workflow-types";
+// import type {
+//   InvoiceRecord,
+// } from "@/lib/client-workflow-types";
 import {
   getInvoiceStatusLabel,
 } from "@/lib/invoice-options";
@@ -20,11 +30,17 @@ type InvoicePanelProps = {
   invoices: InvoiceRecord[];
   isLoading: boolean;
   isSaving: boolean;
+  record: ClientWorkflowRecord;
+  isApplyingRecommendation: boolean;
+  onApplyRecommendation: (
+    invoice: InvoiceRecord,
+    recommendation: RecommendationData,
+    ) => Promise<void>;
   onCreate: (invoice: NewInvoiceRecord) => Promise<void>;
   onUpdate: (
     invoiceId: string,
     updates: InvoiceRecordUpdates,
-    ) => Promise<void>;
+  ) => Promise<void>;
 };
 
 function formatAmount(amount: number, currency: string) {
@@ -63,15 +79,26 @@ function formatDate(value: string) {
 
 function InvoiceHistoryItem({
   invoice,
+  isApplyingRecommendation,
+  isPrimaryRecommendation,
   isSaving,
+  onApplyRecommendation,
   onUpdate,
+  record,
 }: {
   invoice: InvoiceRecord;
+  isApplyingRecommendation: boolean;
+  isPrimaryRecommendation: boolean;
   isSaving: boolean;
+  onApplyRecommendation: (
+    invoice: InvoiceRecord,
+    recommendation: RecommendationData,
+  ) => Promise<void>;
   onUpdate: (
     invoiceId: string,
     updates: InvoiceRecordUpdates,
   ) => Promise<void>;
+  record: ClientWorkflowRecord;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const needsAttention =
@@ -135,6 +162,41 @@ function InvoiceHistoryItem({
         </div>
       ) : null}
 
+      {invoice.disputeResolvedAt ? (
+        <div className="mt-4 rounded-md bg-[#EDF3EF] p-4">
+          <p className="font-bold text-[#174F42]">
+            Payment dispute resolved
+          </p>
+
+          <div className="mt-3 grid gap-2 text-sm text-[#5F6862]">
+            <p>
+              <span className="font-bold text-[#17201C]">
+                Original dispute:
+              </span>{" "}
+              {invoice.disputeReason || "Not provided"}
+            </p>
+            <p>
+              <span className="font-bold text-[#17201C]">
+                Resolution:
+              </span>{" "}
+              {invoice.disputeResolutionOutcome}
+            </p>
+            <p>
+              <span className="font-bold text-[#17201C]">
+                Resolution note:
+              </span>{" "}
+              {invoice.disputeResolutionNote}
+            </p>
+            <p>
+              <span className="font-bold text-[#17201C]">
+                Resolved:
+              </span>{" "}
+              {formatDateTime(invoice.disputeResolvedAt)}
+            </p>
+          </div>
+        </div>
+      ) : null}
+
       {invoice.paymentLink ? (
         <a
           className="mt-4 inline-block font-bold text-[#174F42] underline"
@@ -145,19 +207,34 @@ function InvoiceHistoryItem({
           Open payment link
         </a>
       ) : null}
+      {isPrimaryRecommendation ? (
+    <InvoiceWorkflowRecommendation
+        invoice={invoice}
+        isApplying={isApplyingRecommendation}
+        onApply={onApplyRecommendation}
+        record={record}
+    />
+    ) : null}
+
       <div className="mt-4">
         <button
             className="rounded-md border border-[#174F42] px-4 py-2 font-bold text-[#174F42] hover:bg-[#EDF3EF]"
             type="button"
             onClick={() => setIsEditing((current) => !current)}
         >
-            {isEditing ? "Close Status Update" : "Update Payment Status"}
+            {isEditing
+              ? invoice.status === "Disputed"
+                ? "Close Resolution"
+                : "Close Invoice Update"
+              : invoice.status === "Disputed"
+                ? "Resolve Dispute"
+                : "Update Invoice"}
         </button>
 
         {isEditing ? (
             <InvoiceStatusEditor
             invoice={invoice}
-            isSaving={isSaving}
+            isSaving={isSaving || isApplyingRecommendation}
             onUpdate={onUpdate}
             />
         ) : null}
@@ -174,9 +251,13 @@ export function InvoicePanel({
   isSaving,
   onCreate,
   onUpdate,
+  isApplyingRecommendation,
+  onApplyRecommendation,
+  record,
 }: InvoicePanelProps) {
   const [isFormOpen, setIsFormOpen] = useState(false);
-
+  const primaryInvoice =
+    getPrimaryInvoiceWorkflowTarget(invoices);
   async function createInvoice(invoice: NewInvoiceRecord) {
     await onCreate(invoice);
     setIsFormOpen(false);
@@ -233,10 +314,16 @@ export function InvoicePanel({
           {invoices.map((invoice) => (
             <InvoiceHistoryItem
                 invoice={invoice}
+                isApplyingRecommendation={isApplyingRecommendation}
+                isPrimaryRecommendation={
+                    primaryInvoice?.id === invoice.id
+                }
                 isSaving={isSaving}
                 key={invoice.id}
+                onApplyRecommendation={onApplyRecommendation}
                 onUpdate={onUpdate}
-            />
+                record={record}
+                />
           ))}
         </div>
       )}

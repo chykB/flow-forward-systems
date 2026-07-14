@@ -1,6 +1,9 @@
 import type {
+  InvoiceDisputeResolutionOutcome,
   InvoiceStatus,
 } from "@/lib/client-workflow-types";
+
+
 
 export const invoiceStatusOptions: {
   label: string;
@@ -36,14 +39,46 @@ export const invoiceStatusOptions: {
   },
 ];
 
+export const invoiceDisputeResolutionOutcomeOptions: {
+  label: string;
+  value: InvoiceDisputeResolutionOutcome;
+}[] = [
+  {
+    value: "Payment received",
+    label: "Payment received",
+  },
+  {
+    value: "Payment still due",
+    label: "Payment remains due",
+  },
+  {
+    value: "Invoice voided or replaced",
+    label: "Invoice voided or replaced",
+  },
+];
+
 export function getInvoiceStatusLabel(
   status: InvoiceStatus,
 ) {
+  if (status === "Voided") {
+    return "Voided or replaced";
+  }
+
   return (
     invoiceStatusOptions.find(
       (option) => option.value === status,
     )?.label ?? status
   );
+}
+
+export function invoiceStatusRequiresIssuedDetails(
+  status: InvoiceStatus,
+) {
+  return ![
+    "Not needed",
+    "Draft needed",
+    "Voided",
+  ].includes(status);
 }
 
 export function invoiceStatusRequiresSentDate(

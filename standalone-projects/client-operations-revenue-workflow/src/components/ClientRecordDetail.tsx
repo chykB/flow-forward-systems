@@ -10,6 +10,9 @@ import { formatDateTime } from "@/lib/format-date";
 import { InvoicePanel } from "@/components/InvoicePanel";
 import type { NewInvoiceRecord, InvoiceRecordUpdates } from "@/lib/supabase/invoice-records";
 import type {
+  InvoiceWorkflowRecommendation as InvoiceRecommendationData,
+} from "@/lib/invoice-workflow";
+import type {
   ProposalWorkflowRecommendation as ProposalWorkflowRecommendationData,
 } from "@/lib/proposal-workflow";
 import type {
@@ -69,6 +72,11 @@ type ClientRecordDetailProps = {
     invoiceId: string,
     updates: InvoiceRecordUpdates,
   ) => Promise<void>;
+  isApplyingInvoiceRecommendation: boolean;
+  onApplyInvoiceRecommendation: (
+    invoice: InvoiceRecord,
+    recommendation: InvoiceRecommendationData,
+  ) => Promise<void>;
   };
 
 const detailTabs: { key: DetailTab; label: string }[] = [
@@ -121,7 +129,8 @@ export function ClientRecordDetail({
   record,
   tasks,
   isApplyingProposalRecommendation,
-  
+  isApplyingInvoiceRecommendation,
+  onApplyInvoiceRecommendation,
 }: ClientRecordDetailProps) {
   const [activeTab, setActiveTab] =
     useState<DetailTab>("overview");
@@ -266,6 +275,13 @@ export function ClientRecordDetail({
           isSaving={isInvoiceSaving}
           onCreate={onAddInvoice}
           onUpdate={onUpdateInvoice}
+          isApplyingRecommendation={
+            isApplyingInvoiceRecommendation
+          }
+          onApplyRecommendation={
+            onApplyInvoiceRecommendation
+          }
+          record={record}
         />
       </div>
     ) : null}

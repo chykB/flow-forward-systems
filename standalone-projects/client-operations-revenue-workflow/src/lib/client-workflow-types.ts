@@ -46,7 +46,13 @@ export type InvoiceStatus =
   | "Due soon"
   | "Overdue"
   | "Paid"
-  | "Disputed";
+  | "Disputed"
+  | "Voided";
+
+export type InvoiceDisputeResolutionOutcome =
+  | "Payment received"
+  | "Payment still due"
+  | "Invoice voided or replaced";
 
 export type RiskSignalSeverity = "Low" | "Medium" | "High" | "Critical";
 
@@ -102,6 +108,14 @@ export type InvoiceRecord = {
   dueDate: string;
   paidAt: string;
   disputeReason: string;
+  disputedAt: string;
+  disputeResolvedAt: string;
+  disputeResolutionOutcome:
+    | InvoiceDisputeResolutionOutcome
+    | "";
+  disputeResolutionNote: string;
+  workflowActionAppliedStatus: InvoiceStatus | "";
+  workflowActionAppliedAt: string;
   createdAt: string;
   updatedAt: string;
 };

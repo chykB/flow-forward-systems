@@ -1,11 +1,18 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { InvoiceRecord } from "@/lib/client-workflow-types";
+import type {
+  ClientWorkflowRecord,
+  InvoiceRecord,
+} from "@/lib/client-workflow-types";
+import {
+  mapClientWorkflowRecordRow,
+  type ClientWorkflowRecordRow,
+} from "@/lib/supabase/client-workflow-records";
 
 type InvoiceRecordRow = {
   id: string;
   workspace_id: string;
   client_workflow_record_id: string;
-  invoice_number: string;
+  invoice_number: string | null;
   amount: number | string;
   currency: string;
   description: string | null;
@@ -15,19 +22,44 @@ type InvoiceRecordRow = {
   due_date: string | null;
   paid_at: string | null;
   dispute_reason: string | null;
+  disputed_at: string | null;
+  dispute_resolved_at: string | null;
+  dispute_resolution_outcome:
+    | InvoiceRecord["disputeResolutionOutcome"]
+    | null;
+  dispute_resolution_note: string | null;
+  workflow_action_applied_status:
+  | InvoiceRecord["status"]
+  | null;
+  workflow_action_applied_at: string | null;
   created_at: string;
   updated_at: string;
 };
 
 export type NewInvoiceRecord = Omit<
   InvoiceRecord,
-  "id" | "createdAt" | "updatedAt"
+  | "id"
+  | "createdAt"
+  | "updatedAt"
+  | "workflowActionAppliedStatus"
+  | "workflowActionAppliedAt"
+  | "disputedAt"
+  | "disputeResolvedAt"
+  | "disputeResolutionOutcome"
+  | "disputeResolutionNote"
 >;
 
 export type InvoiceRecordUpdates = Partial<
   Omit<
     InvoiceRecord,
-    "id" | "clientWorkflowRecordId" | "createdAt" | "updatedAt"
+    | "id"
+    | "clientWorkflowRecordId"
+    | "createdAt"
+    | "updatedAt"
+    | "workflowActionAppliedStatus"
+    | "workflowActionAppliedAt"
+    | "disputedAt"
+    | "disputeResolvedAt"
   >
 >;
 
@@ -35,7 +67,7 @@ function mapInvoiceRow(row: InvoiceRecordRow): InvoiceRecord {
   return {
     id: row.id,
     clientWorkflowRecordId: row.client_workflow_record_id,
-    invoiceNumber: row.invoice_number,
+    invoiceNumber: row.invoice_number ?? "",
     amount: Number(row.amount ?? 0),
     currency: row.currency,
     description: row.description ?? "",
@@ -45,6 +77,16 @@ function mapInvoiceRow(row: InvoiceRecordRow): InvoiceRecord {
     dueDate: row.due_date ?? "",
     paidAt: row.paid_at ?? "",
     disputeReason: row.dispute_reason ?? "",
+    disputedAt: row.disputed_at ?? "",
+    disputeResolvedAt: row.dispute_resolved_at ?? "",
+    disputeResolutionOutcome:
+      row.dispute_resolution_outcome ?? "",
+    disputeResolutionNote:
+      row.dispute_resolution_note ?? "",
+    workflowActionAppliedStatus:
+        row.workflow_action_applied_status ?? "",
+    workflowActionAppliedAt:
+        row.workflow_action_applied_at ?? "",
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -98,7 +140,7 @@ export async function createInvoiceRecord(
     .insert({
       workspace_id: workspaceId,
       client_workflow_record_id: invoice.clientWorkflowRecordId,
-      invoice_number: invoice.invoiceNumber,
+      invoice_number: invoice.invoiceNumber || null,
       amount: invoice.amount,
       currency: invoice.currency,
       description: invoice.description || null,
@@ -165,6 +207,16 @@ function buildInvoiceUpdatePayload(
     payload.dispute_reason = updates.disputeReason || null;
   }
 
+    if (updates.disputeResolutionOutcome !== undefined) {
+    payload.dispute_resolution_outcome =
+      updates.disputeResolutionOutcome || null;
+  }
+
+  if (updates.disputeResolutionNote !== undefined) {
+    payload.dispute_resolution_note =
+      updates.disputeResolutionNote || null;
+  }
+
   return payload;
 }
 
@@ -194,4 +246,65 @@ export async function updateInvoiceRecord(
   }
 
   return mapInvoiceRow(data as InvoiceRecordRow);
+}
+type InvoiceWorkflowClientUpdates = Partial<
+  Pick<
+    ClientWorkflowRecord,
+    | "paymentStatus"
+    | "priority"
+    | "riskLevel"
+    | "nextAction"
+    | "nextFollowUpAt"
+  >
+>;
+
+type InvoiceWorkflowRpcResult = {
+  clientRecord: ClientWorkflowRecordRow;
+  invoice: InvoiceRecordRow;
+  alreadyApplied: boolean;
+};
+
+export async function applyInvoiceWorkflowRecommendationTransaction(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  invoice: InvoiceRecord,
+  effectiveStatus: InvoiceRecord["status"],
+  updates: InvoiceWorkflowClientUpdates,
+) {
+  const { data, error } = await supabase.rpc(
+    "apply_invoice_workflow_recommendation",
+    {
+      p_workspace_id: workspaceId,
+      p_invoice_id: invoice.id,
+      p_client_workflow_record_id:
+        invoice.clientWorkflowRecordId,
+      p_expected_invoice_status: invoice.status,
+      p_effective_invoice_status: effectiveStatus,
+      p_updates: updates,
+    },
+  );
+
+  if (error) {
+    console.error(
+      "Supabase invoice workflow transaction failed",
+      error,
+    );
+    throw new Error(error.message);
+  }
+
+  const result = data as InvoiceWorkflowRpcResult | null;
+
+  if (!result?.clientRecord || !result.invoice) {
+    throw new Error(
+      "The invoice workflow update returned an invalid response.",
+    );
+  }
+
+  return {
+    clientRecord: mapClientWorkflowRecordRow(
+      result.clientRecord,
+    ),
+    invoice: mapInvoiceRow(result.invoice),
+    alreadyApplied: result.alreadyApplied,
+  };
 }

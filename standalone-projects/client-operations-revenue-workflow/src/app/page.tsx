@@ -9,10 +9,16 @@ import { RecordFiltersBar } from "@/components/RecordFiltersBar";
 import { WorkspaceGate } from "@/components/WorkspaceGate";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser-client";
 import { getProposalsNeedingAction } from "@/lib/proposal-dashboard";
+import type {
+  InvoiceWorkflowRecommendation as InvoiceRecommendationData,
+} from "@/lib/invoice-workflow";
 import {
+  applyInvoiceWorkflowRecommendationTransaction,
   createInvoiceRecord,
   getWorkspaceInvoiceRecords,
-  type NewInvoiceRecord, updateInvoiceRecord, InvoiceRecordUpdates
+  updateInvoiceRecord,
+  type InvoiceRecordUpdates,
+  type NewInvoiceRecord,
 } from "@/lib/supabase/invoice-records";
 import type {
   ProposalWorkflowRecommendation as ProposalWorkflowRecommendationData,
@@ -233,6 +239,10 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
   >("loading");
   const [invoicesMessage, setInvoicesMessage] = useState("");
   const [isSavingInvoice, setIsSavingInvoice] = useState(false);
+  const [
+    isApplyingInvoiceRecommendation,
+    setIsApplyingInvoiceRecommendation,
+  ] = useState(false);
 
   const [
     isApplyingProposalRecommendation,
@@ -683,17 +693,49 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
       const statusChanged =
         previousInvoice?.status !== savedInvoice.status;
 
+      const disputeOpened =
+        previousInvoice?.status !== "Disputed" &&
+        savedInvoice.status === "Disputed";
+
+      const disputeResolved =
+        previousInvoice?.status === "Disputed" &&
+        savedInvoice.status !== "Disputed" &&
+        Boolean(savedInvoice.disputeResolvedAt);
+
+      const invoiceReference = savedInvoice.invoiceNumber
+        ? `Invoice ${savedInvoice.invoiceNumber}`
+        : "The invoice";
+
+      let actionType = "Invoice payment details updated";
+      let activityNote =
+        `${invoiceReference} payment details were updated.`;
+
+      if (disputeResolved) {
+        actionType = "Invoice dispute resolved";
+        activityNote =
+          `${invoiceReference} dispute was resolved. ` +
+          `Resolution: ${savedInvoice.disputeResolutionOutcome}. ` +
+          `${savedInvoice.disputeResolutionNote}`;
+      } else if (disputeOpened) {
+        actionType = "Invoice dispute opened";
+        activityNote =
+          `${invoiceReference} was marked as disputed. ` +
+          `Reason: ${savedInvoice.disputeReason}`;
+      } else if (statusChanged) {
+        actionType = "Invoice status updated";
+        activityNote =
+          `${invoiceReference} changed from ` +
+          `${previousInvoice?.status ?? "its previous status"} ` +
+          `to ${savedInvoice.status}.`;
+      }
+
       setActivityLogs((currentLogs) => [
         {
           id: `log-${Date.now()}`,
           clientWorkflowRecordId:
             savedInvoice.clientWorkflowRecordId,
-          actionType: statusChanged
-            ? "Invoice status updated"
-            : "Invoice payment details updated",
-          note: statusChanged
-            ? `Invoice ${savedInvoice.invoiceNumber} changed from ${previousInvoice?.status ?? "its previous status"} to ${savedInvoice.status}.`
-            : `Invoice ${savedInvoice.invoiceNumber} payment details were updated.`,
+          actionType,
+          note: activityNote,
           createdAt: new Date().toISOString(),
         },
         ...currentLogs,
@@ -708,6 +750,76 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
       throw invoiceError;
     } finally {
       setIsSavingInvoice(false);
+    }
+  }
+
+  async function applyInvoiceRecommendation(
+    invoice: InvoiceRecord,
+    recommendation: InvoiceRecommendationData,
+  ) {
+    if (
+      !selectedRecord ||
+      invoice.clientWorkflowRecordId !== selectedRecord.id
+    ) {
+      throw new Error(
+        "The invoice is not linked to the selected client.",
+      );
+    }
+
+    setIsApplyingInvoiceRecommendation(true);
+    setInvoicesMessage("");
+
+    try {
+      const result =
+        await applyInvoiceWorkflowRecommendationTransaction(
+          supabase,
+          workspaceId,
+          invoice,
+          recommendation.effectiveStatus,
+          recommendation.updates,
+        );
+
+      setRecords((current) =>
+        current.map((record) =>
+          record.id === result.clientRecord.id
+            ? result.clientRecord
+            : record,
+        ),
+      );
+
+      setInvoices((current) =>
+        current.map((item) =>
+          item.id === result.invoice.id
+            ? result.invoice
+            : item,
+        ),
+      );
+
+      if (!result.alreadyApplied) {
+        setActivityLogs((current) => [
+          {
+            id: `log-${Date.now()}`,
+            clientWorkflowRecordId:
+              result.invoice.clientWorkflowRecordId,
+            actionType: "Invoice payment step applied",
+            note: `${recommendation.title} was applied to the client workflow.`,
+            createdAt: new Date().toISOString(),
+          },
+          ...current,
+        ]);
+      }
+    } catch (error) {
+      const invoiceError =
+        error instanceof Error
+          ? error
+          : new Error(
+              "The recommended payment step could not be applied.",
+            );
+
+      setInvoicesMessage(invoiceError.message);
+      throw invoiceError;
+    } finally {
+      setIsApplyingInvoiceRecommendation(false);
     }
   }
 
@@ -1002,7 +1114,13 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
                 isInvoiceSaving={isSavingInvoice}
                 onAddInvoice={addInvoice}
                 onUpdateInvoice={saveInvoiceUpdates}
-              />
+                isApplyingInvoiceRecommendation={
+                  isApplyingInvoiceRecommendation
+                }
+                onApplyInvoiceRecommendation={
+                  applyInvoiceRecommendation
+                }
+                              />
             ) : null}
           </div>
         )}
