@@ -63,6 +63,12 @@ export type RiskSignalSourceType =
   | "invoice"
   | "workflow_task";
 
+export type RiskSignalType =
+  | "overdue_follow_up"
+  | "proposal_expired"
+  | "invoice_overdue"
+  | "invoice_disputed";
+
 export type WorkflowStatus =
   | "Not started"
   | "In progress"
@@ -131,7 +137,7 @@ export type RiskSignal = {
   signalKey: string;
   sourceType: RiskSignalSourceType;
   sourceRecordId: string;
-  riskType: string;
+  riskType: RiskSignalType;
   severity: RiskSignalSeverity;
   reason: string;
   recommendedAction: string;

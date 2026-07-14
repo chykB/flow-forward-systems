@@ -1,0 +1,210 @@
+import { getOverdueFollowUps } from "@/lib/dashboard";
+import {
+  getDisputedInvoices,
+  getOverdueInvoices,
+} from "@/lib/invoice-dashboard";
+import { getLocalDateKey } from "@/lib/date-key";
+import type {
+  ClientWorkflowRecord,
+  InvoiceRecord,
+  ProposalRecord,
+  RiskSignal,
+} from "@/lib/client-workflow-types";
+
+export type RiskSignalCandidate = Pick<
+  RiskSignal,
+  | "clientWorkflowRecordId"
+  | "signalKey"
+  | "sourceType"
+  | "sourceRecordId"
+  | "riskType"
+  | "severity"
+  | "reason"
+  | "recommendedAction"
+>;
+
+type RiskEngineInput = {
+  record: ClientWorkflowRecord;
+  proposals: ProposalRecord[];
+  invoices: InvoiceRecord[];
+  currentDate?: Date;
+};
+
+const severityRank: Record<RiskSignal["severity"], number> = {
+  Low: 0,
+  Medium: 1,
+  High: 2,
+  Critical: 3,
+};
+
+const healthPenalty: Record<RiskSignal["severity"], number> = {
+  Low: 5,
+  Medium: 10,
+  High: 20,
+  Critical: 35,
+};
+
+function getFollowUpCandidate(
+  record: ClientWorkflowRecord,
+  currentDate: Date,
+): RiskSignalCandidate[] {
+  if (getOverdueFollowUps([record], currentDate).length === 0) {
+    return [];
+  }
+
+  return [
+    {
+      clientWorkflowRecordId: record.id,
+      signalKey: "client_record:overdue_follow_up",
+      sourceType: "client_record",
+      sourceRecordId: record.id,
+      riskType: "overdue_follow_up",
+      severity: "Medium",
+      reason:
+        `The scheduled client follow-up was due on ` +
+        `${record.nextFollowUpAt}.`,
+      recommendedAction:
+        `Complete the overdue follow-up for ${record.name} ` +
+        "and set a new follow-up date.",
+    },
+  ];
+}
+
+function getProposalCandidates(
+  record: ClientWorkflowRecord,
+  proposals: ProposalRecord[],
+  currentDate: Date,
+): RiskSignalCandidate[] {
+  const today = getLocalDateKey(currentDate);
+
+  return proposals
+    .filter(
+      (proposal) =>
+        proposal.clientWorkflowRecordId === record.id &&
+        (
+          proposal.status === "Expired" ||
+          (
+            proposal.status === "Sent" &&
+            Boolean(proposal.expiresAt) &&
+            proposal.expiresAt < today
+          )
+        ),
+    )
+    .map((proposal) => ({
+      clientWorkflowRecordId: record.id,
+      signalKey: `proposal:${proposal.id}:expired`,
+      sourceType: "proposal" as const,
+      sourceRecordId: proposal.id,
+      riskType: "proposal_expired" as const,
+      severity: "Medium" as const,
+      reason:
+        proposal.expiresAt
+          ? `Proposal "${proposal.title}" expired on ${proposal.expiresAt}.`
+          : `Proposal "${proposal.title}" is marked as expired.`,
+      recommendedAction:
+        `Review "${proposal.title}" and either renew, revise, ` +
+        "or close the proposal.",
+    }));
+}
+
+function getInvoiceCandidates(
+  record: ClientWorkflowRecord,
+  invoices: InvoiceRecord[],
+  currentDate: Date,
+): RiskSignalCandidate[] {
+  const clientInvoices = invoices.filter(
+    (invoice) =>
+      invoice.clientWorkflowRecordId === record.id,
+  );
+  const disputedInvoices = getDisputedInvoices(clientInvoices);
+  const disputedIds = new Set(
+    disputedInvoices.map((invoice) => invoice.id),
+  );
+  const overdueInvoices = getOverdueInvoices(
+    clientInvoices,
+    currentDate,
+  ).filter((invoice) => !disputedIds.has(invoice.id));
+
+  const disputeCandidates = disputedInvoices.map((invoice) => {
+    const reference =
+      invoice.invoiceNumber || "this invoice";
+
+    return {
+      clientWorkflowRecordId: record.id,
+      signalKey: `invoice:${invoice.id}:disputed`,
+      sourceType: "invoice" as const,
+      sourceRecordId: invoice.id,
+      riskType: "invoice_disputed" as const,
+      severity: "Critical" as const,
+      reason: `Payment for ${reference} is disputed.`,
+      recommendedAction:
+        `Review the dispute for ${reference} and record an ` +
+        "explicit resolution before sending reminders.",
+    };
+  });
+
+  const overdueCandidates = overdueInvoices.map((invoice) => {
+    const reference =
+      invoice.invoiceNumber || "this invoice";
+
+    return {
+      clientWorkflowRecordId: record.id,
+      signalKey: `invoice:${invoice.id}:overdue`,
+      sourceType: "invoice" as const,
+      sourceRecordId: invoice.id,
+      riskType: "invoice_overdue" as const,
+      severity: "High" as const,
+      reason: invoice.dueDate
+        ? `${reference} was due on ${invoice.dueDate}.`
+        : `${reference} is marked as overdue.`,
+      recommendedAction:
+        `Review ${reference} and send a human-approved ` +
+        "payment reminder.",
+    };
+  });
+
+  return [...disputeCandidates, ...overdueCandidates];
+}
+
+export function getRiskSignalCandidates({
+  record,
+  proposals,
+  invoices,
+  currentDate = new Date(),
+}: RiskEngineInput) {
+  const candidates = [
+    ...getFollowUpCandidate(record, currentDate),
+    ...getProposalCandidates(
+      record,
+      proposals,
+      currentDate,
+    ),
+    ...getInvoiceCandidates(
+      record,
+      invoices,
+      currentDate,
+    ),
+  ];
+
+  return candidates.sort((first, second) => {
+    const severityDifference =
+      severityRank[second.severity] -
+      severityRank[first.severity];
+
+    return (
+      severityDifference ||
+      first.signalKey.localeCompare(second.signalKey)
+    );
+  });
+}
+
+export function calculateWorkflowHealthScore(
+  signals: Array<Pick<RiskSignal, "severity">>,
+) {
+  const totalPenalty = signals.reduce(
+    (sum, signal) => sum + healthPenalty[signal.severity],
+    0,
+  );
+
+  return Math.max(0, Math.min(100, 100 - totalPenalty));
+}

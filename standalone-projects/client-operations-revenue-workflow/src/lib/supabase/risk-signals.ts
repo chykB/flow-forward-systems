@@ -8,7 +8,7 @@ export type RiskSignalRow = {
   signal_key: string;
   source_type: RiskSignal["sourceType"];
   source_record_id: string;
-  risk_type: string;
+  risk_type: RiskSignal["riskType"];
   severity: RiskSignal["severity"];
   reason: string;
   recommended_action: string;
