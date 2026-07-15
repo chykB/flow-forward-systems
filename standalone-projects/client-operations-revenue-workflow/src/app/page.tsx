@@ -45,6 +45,7 @@ import type {
   ProposalRecord,
   WorkflowTask,
   InvoiceRecord,
+  RiskSignal,
 } from "@/lib/client-workflow-types";
 import {
   getDisputedInvoices,
@@ -64,6 +65,11 @@ import {
   getRecordOwners,
   initialRecordFilters,
 } from "@/lib/record-filters";
+import {
+  reconcileClientRiskSignals,
+  updateRiskSignalStatus,
+  type RiskSignalStatusUpdate,
+} from "@/lib/supabase/risk-signals";
 
 function buildPrioritySections(
   records: ClientWorkflowRecord[],
@@ -82,7 +88,7 @@ function buildPrioritySections(
       description: "Upcoming follow-ups that need a clear next action.",
       count: getFollowUpsDueSoon(records).length,
     },
-    
+
     {
       title: "Proposals Needing Action",
       description:
@@ -224,9 +230,17 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
 
   const [records, setRecords] = useState<ClientWorkflowRecord[]>([]);
+  const [riskSignals, setRiskSignals] = useState<RiskSignal[]>([]);
+  const [riskSignalsStatus, setRiskSignalsStatus] = useState<
+    "loading" | "ready" | "error"
+  >("loading");
+  const [riskSignalsMessage, setRiskSignalsMessage] =
+    useState("");
+  const [isSavingRiskSignal, setIsSavingRiskSignal] =
+    useState(false);
 
   const [proposals, setProposals] = useState<ProposalRecord[]>([]);
-  
+
   const [proposalsStatus, setProposalsStatus] = useState<
     "loading" | "ready" | "error"
   >("loading");
@@ -317,12 +331,25 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
     [invoices, selectedRecord],
   );
 
+  const selectedRecordRiskSignals = useMemo(
+    () =>
+      selectedRecord
+        ? riskSignals.filter(
+            (signal) =>
+              signal.clientWorkflowRecordId === selectedRecord.id,
+          )
+        : [],
+    [riskSignals, selectedRecord],
+  );
+
   useEffect(() => {
     let isMounted = true;
 
     async function loadRecords() {
       setRecordsStatus("loading");
       setRecordsMessage("");
+      setRiskSignalsStatus("loading");
+      setRiskSignalsMessage("");
 
       try {
         const workspaceRecords = await getClientWorkflowRecords(
@@ -330,20 +357,76 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
           workspaceId,
         );
 
+        const reconciliationResults = await Promise.allSettled(
+          workspaceRecords.map((record) =>
+            reconcileClientRiskSignals(
+              supabase,
+              workspaceId,
+              record.id,
+            ),
+          ),
+        );
+
         if (!isMounted) {
           return;
         }
 
-        setRecords(workspaceRecords);
-        setSelectedRecordId(workspaceRecords[0]?.id);
+        const reconciledRecords =
+          new Map<string, ClientWorkflowRecord>();
+        const loadedRiskSignals: RiskSignal[] = [];
+        let failedReconciliations = 0;
+
+        reconciliationResults.forEach((result) => {
+          if (result.status === "fulfilled") {
+            reconciledRecords.set(
+              result.value.clientRecord.id,
+              result.value.clientRecord,
+            );
+            loadedRiskSignals.push(
+              ...result.value.riskSignals,
+            );
+          } else {
+            failedReconciliations += 1;
+            console.error(
+              "Workflow health review failed",
+              result.reason,
+            );
+          }
+        });
+
+        const currentRecords = workspaceRecords.map(
+          (record) =>
+            reconciledRecords.get(record.id) ?? record,
+        );
+
+        setRecords(currentRecords);
+        setRiskSignals(loadedRiskSignals);
+        setSelectedRecordId(currentRecords[0]?.id);
         setRecordsStatus("ready");
-      } catch {
+
+        if (failedReconciliations > 0) {
+          setRiskSignalsStatus("error");
+          setRiskSignalsMessage(
+            "Some workflow health information could not be refreshed. Refresh and try again.",
+          );
+        } else {
+          setRiskSignalsStatus("ready");
+        }
+      } catch (error) {
+        console.error("Workspace records load failed", error);
+
         if (!isMounted) {
           return;
         }
 
         setRecordsStatus("error");
-        setRecordsMessage("Workspace records could not be loaded. Refresh and try again.");
+        setRecordsMessage(
+          "Workspace records could not be loaded. Refresh and try again.",
+        );
+        setRiskSignalsStatus("error");
+        setRiskSignalsMessage(
+          "Workflow health could not be reviewed because the client records did not load.",
+        );
       }
     }
 
@@ -434,7 +517,7 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
       isMounted = false;
     };
   }, [supabase, workspaceId]);
-  
+
   async function addRecord(record: ClientWorkflowRecord) {
     const now = new Date().toISOString();
 
@@ -445,7 +528,12 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
         record,
       );
 
-      setRecords((currentRecords) => [savedRecord, ...currentRecords]);
+      setRecords((currentRecords) => [
+        savedRecord,
+        ...currentRecords,
+      ]);
+
+      await refreshRiskSignalsAfterChange(savedRecord.id);
 
       setActivityLogs((currentLogs) => [
         {
@@ -457,20 +545,23 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
         },
         ...currentLogs,
       ]);
-      
+
       setRecordFilters(initialRecordFilters);
       setSelectedRecordId(savedRecord.id);
       setIsAddRecordOpen(false);
       setRecordsMessage("");
-      } catch (error) {
-        console.error("Create client workflow record failed", error);
+    } catch (error) {
+      console.error(
+        "Create client workflow record failed",
+        error,
+      );
 
-        setRecordsMessage(
-          error instanceof Error
-            ? error.message
-            : "The record could not be saved. Please try again.",
-        );
-      }
+      setRecordsMessage(
+        error instanceof Error
+          ? error.message
+          : "The record could not be saved. Please try again.",
+      );
+    }
   }
 
   function addHandoffNote(note: HandoffNote) {
@@ -512,6 +603,129 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
     void saveSelectedRecordUpdates(updates, note);
   }
 
+  function applyRiskReconciliation(
+    result: Awaited<
+      ReturnType<typeof reconcileClientRiskSignals>
+    >,
+  ) {
+    setRecords((currentRecords) =>
+      currentRecords.map((record) =>
+        record.id === result.clientRecord.id
+          ? result.clientRecord
+          : record,
+      ),
+    );
+
+    setRiskSignals((currentSignals) => [
+      ...currentSignals.filter(
+        (signal) =>
+          signal.clientWorkflowRecordId !==
+          result.clientRecord.id,
+      ),
+      ...result.riskSignals,
+    ]);
+  }
+
+  async function refreshRiskSignalsAfterChange(
+    clientWorkflowRecordId: string,
+  ) {
+    try {
+      const result = await reconcileClientRiskSignals(
+        supabase,
+        workspaceId,
+        clientWorkflowRecordId,
+      );
+
+      applyRiskReconciliation(result);
+      setRiskSignalsStatus("ready");
+      setRiskSignalsMessage("");
+    } catch (error) {
+      console.error(
+        "Workflow health refresh after record change failed",
+        error,
+      );
+      setRiskSignalsStatus("error");
+      setRiskSignalsMessage(
+        "The change was saved, but workflow health could not be refreshed. Refresh and try again.",
+      );
+    }
+  }
+
+  async function saveRiskSignalStatus(
+    riskSignalId: string,
+    update: RiskSignalStatusUpdate,
+  ) {
+    const existingSignal = riskSignals.find(
+      (signal) => signal.id === riskSignalId,
+    );
+
+    if (!existingSignal) {
+      throw new Error("The risk item could not be found.");
+    }
+
+    setIsSavingRiskSignal(true);
+    setRiskSignalsMessage("");
+
+    try {
+      const savedSignal = await updateRiskSignalStatus(
+        supabase,
+        workspaceId,
+        riskSignalId,
+        update,
+      );
+
+      setRiskSignals((currentSignals) =>
+        currentSignals.map((signal) =>
+          signal.id === savedSignal.id
+            ? savedSignal
+            : signal,
+        ),
+      );
+
+      try {
+        const result = await reconcileClientRiskSignals(
+          supabase,
+          workspaceId,
+          savedSignal.clientWorkflowRecordId,
+        );
+
+        applyRiskReconciliation(result);
+        setRiskSignalsStatus("ready");
+
+        const reconciledSignal = result.riskSignals.find(
+          (signal) => signal.id === savedSignal.id,
+        );
+
+        if (
+          update.status === "Resolved" &&
+          reconciledSignal?.status === "Open"
+        ) {
+          setRiskSignalsMessage(
+            "This risk remains open because the underlying issue is still present. Complete the recommended next step before resolving it.",
+          );
+        }
+      } catch (error) {
+        console.error(
+          "Workflow health refresh after review failed",
+          error,
+        );
+        setRiskSignalsStatus("error");
+        setRiskSignalsMessage(
+          "The review was saved, but the health score could not be refreshed. Refresh and try again.",
+        );
+      }
+    } catch (error) {
+      const riskError =
+        error instanceof Error
+          ? error
+          : new Error("The risk review could not be saved.");
+
+      setRiskSignalsMessage(riskError.message);
+      throw riskError;
+    } finally {
+      setIsSavingRiskSignal(false);
+    }
+  }
   async function saveSelectedRecordUpdates(
     updates: Partial<ClientWorkflowRecord>,
     note: string,
@@ -548,7 +762,7 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
           record.id === savedRecord.id ? savedRecord : record,
         ),
       );
-
+      await refreshRiskSignalsAfterChange(savedRecord.id);
       setActivityLogs((currentLogs) => [
         {
           id: `log-${Date.now()}`,
@@ -595,6 +809,9 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
         savedProposal,
         ...currentProposals,
       ]);
+      await refreshRiskSignalsAfterChange(
+        savedProposal.clientWorkflowRecordId,
+      );
 
       setActivityLogs((currentLogs) => [
         {
@@ -635,6 +852,10 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
         savedInvoice,
         ...currentInvoices,
       ]);
+
+      await refreshRiskSignalsAfterChange(
+        savedInvoice.clientWorkflowRecordId,
+      );
 
       const invoiceLabel =
         savedInvoice.status === "Not needed"
@@ -689,7 +910,9 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
           invoice.id === savedInvoice.id ? savedInvoice : invoice,
         ),
       );
-
+      await refreshRiskSignalsAfterChange(
+        savedInvoice.clientWorkflowRecordId,
+      );
       const statusChanged =
         previousInvoice?.status !== savedInvoice.status;
 
@@ -794,7 +1017,9 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
             : item,
         ),
       );
-
+      await refreshRiskSignalsAfterChange(
+        result.invoice.clientWorkflowRecordId,
+      );
       if (!result.alreadyApplied) {
         setActivityLogs((current) => [
           {
@@ -849,7 +1074,9 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
             : proposal,
         ),
       );
-
+      await refreshRiskSignalsAfterChange(
+        savedProposal.clientWorkflowRecordId,
+      );
       const statusChanged =
         previousProposal?.status !== savedProposal.status;
 
@@ -925,6 +1152,9 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
             ? result.proposal
             : currentProposal,
         ),
+      );
+      await refreshRiskSignalsAfterChange(
+        result.proposal.clientWorkflowRecordId,
       );
 
       if (!result.alreadyApplied) {
@@ -1120,6 +1350,13 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
                 onApplyInvoiceRecommendation={
                   applyInvoiceRecommendation
                 }
+                                isRiskSignalsLoading={
+                  riskSignalsStatus === "loading"
+                }
+                isRiskSignalSaving={isSavingRiskSignal}
+                onUpdateRiskSignalStatus={saveRiskSignalStatus}
+                riskSignalMessage={riskSignalsMessage}
+                riskSignals={selectedRecordRiskSignals}
                               />
             ) : null}
           </div>

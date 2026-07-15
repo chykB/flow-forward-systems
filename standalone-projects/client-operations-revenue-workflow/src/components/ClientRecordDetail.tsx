@@ -9,6 +9,7 @@ import { WorkflowTaskForm } from "@/components/WorkflowTaskForm";
 import { formatDateTime } from "@/lib/format-date";
 import { InvoicePanel } from "@/components/InvoicePanel";
 import type { NewInvoiceRecord, InvoiceRecordUpdates } from "@/lib/supabase/invoice-records";
+import { RiskSignalPanel } from "@/components/RiskSignalPanel";
 import type {
   InvoiceWorkflowRecommendation as InvoiceRecommendationData,
 } from "@/lib/invoice-workflow";
@@ -21,8 +22,13 @@ import type {
   HandoffNote,
   InvoiceRecord,
   ProposalRecord,
+  RiskSignal,
   WorkflowTask,
+
 } from "@/lib/client-workflow-types";
+import type {
+  RiskSignalStatusUpdate,
+} from "@/lib/supabase/risk-signals";
 import type {
   NewProposalRecord,
   ProposalRecordUpdates,
@@ -30,13 +36,13 @@ import type {
 
 type DetailTab =
   | "overview"
+  | "workflow-health"
   | "next-action"
   | "proposals"
+  | "invoices"
   | "work-items"
   | "handoff"
-  | "activity"
-  | "invoices"
-  ;
+  | "activity";
 
 type ClientRecordDetailProps = {
   activityLogs: ActivityLog[];
@@ -77,17 +83,26 @@ type ClientRecordDetailProps = {
     invoice: InvoiceRecord,
     recommendation: InvoiceRecommendationData,
   ) => Promise<void>;
+    isRiskSignalsLoading: boolean;
+  isRiskSignalSaving: boolean;
+  riskSignalMessage: string;
+  riskSignals: RiskSignal[];
+  onUpdateRiskSignalStatus: (
+    riskSignalId: string,
+    update: RiskSignalStatusUpdate,
+  ) => Promise<void>;
   };
 
 const detailTabs: { key: DetailTab; label: string }[] = [
   { key: "overview", label: "Overview" },
+  { key: "workflow-health", label: "Workflow Health" },
   { key: "next-action", label: "Next Action" },
   { key: "proposals", label: "Proposals & Quotes" },
   { key: "invoices", label: "Invoices" },
   { key: "work-items", label: "Work Items" },
   { key: "handoff", label: "Handoff Notes" },
   { key: "activity", label: "Activity" },
-  
+
 ];
 
 function DetailRow({
@@ -131,6 +146,11 @@ export function ClientRecordDetail({
   isApplyingProposalRecommendation,
   isApplyingInvoiceRecommendation,
   onApplyInvoiceRecommendation,
+  isRiskSignalsLoading,
+  isRiskSignalSaving,
+  onUpdateRiskSignalStatus,
+  riskSignalMessage,
+  riskSignals,
 }: ClientRecordDetailProps) {
   const [activeTab, setActiveTab] =
     useState<DetailTab>("overview");
@@ -147,7 +167,7 @@ export function ClientRecordDetail({
     (note) => note.clientWorkflowRecordId === record.id,
   );
 
-  
+
 
   return (
     <section className="rounded-lg border border-[#D9DED8] bg-white p-5">
@@ -184,7 +204,7 @@ export function ClientRecordDetail({
         <div className="mt-5">
           <div className="grid gap-4 md:grid-cols-2">
             <DetailRow
-              label="Lifecycle stage"
+              label="Workflow stage"
               value={record.lifecycleStage}
             />
             <DetailRow
@@ -220,6 +240,18 @@ export function ClientRecordDetail({
           <RecordStatusControls
             record={record}
             onUpdateRecord={onUpdateRecord}
+          />
+        </div>
+      ) : null}
+      {activeTab === "workflow-health" ? (
+        <div className="mt-5">
+          <RiskSignalPanel
+            errorMessage={riskSignalMessage}
+            isLoading={isRiskSignalsLoading}
+            isSaving={isRiskSignalSaving}
+            onUpdateStatus={onUpdateRiskSignalStatus}
+            record={record}
+            riskSignals={riskSignals}
           />
         </div>
       ) : null}
