@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState, useRef, useSyncExternalStore } from "react";
 import { ClientRecordCard } from "@/components/ClientRecordCard";
 import { ClientRecordDetail } from "@/components/ClientRecordDetail";
 import { ClientRecordForm } from "@/components/ClientRecordForm";
@@ -9,6 +9,11 @@ import { RecordFiltersBar } from "@/components/RecordFiltersBar";
 import { WorkspaceGate } from "@/components/WorkspaceGate";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser-client";
 import { getProposalsNeedingAction } from "@/lib/proposal-dashboard";
+import {
+  createActivityLog,
+  getWorkspaceActivityLogs,
+  type NewActivityLog,
+} from "@/lib/supabase/activity-logs";
 import type {
   InvoiceWorkflowRecommendation as InvoiceRecommendationData,
 } from "@/lib/invoice-workflow";
@@ -70,6 +75,12 @@ import {
   updateRiskSignalStatus,
   type RiskSignalStatusUpdate,
 } from "@/lib/supabase/risk-signals";
+import {
+  getInvoiceStatusLabel,
+} from "@/lib/invoice-options";
+import {
+  getProposalStatusLabel,
+} from "@/lib/proposal-options";
 
 function buildPrioritySections(
   records: ClientWorkflowRecord[],
@@ -220,7 +231,6 @@ type WorkspaceDashboardProps = {
 function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
   const storageKeys = useMemo(
     () => ({
-      activityLogs: `client-ops:${workspaceId}:activity-logs`,
       handoffNotes: `client-ops:${workspaceId}:handoff-notes`,
       records: `client-ops:${workspaceId}:records`,
       tasks: `client-ops:${workspaceId}:tasks`,
@@ -228,7 +238,7 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
     [workspaceId],
   );
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
-
+  const isSavingRecordRef = useRef(false);
   const [records, setRecords] = useState<ClientWorkflowRecord[]>([]);
   const [riskSignals, setRiskSignals] = useState<RiskSignal[]>([]);
   const [riskSignalsStatus, setRiskSignalsStatus] = useState<
@@ -268,10 +278,12 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
   );
   const [recordsMessage, setRecordsMessage] = useState("");
 
-  const [activityLogs, setActivityLogs] = useStoredState<ActivityLog[]>(
-    storageKeys.activityLogs,
-    [],
-  );
+  const [activityLogs, setActivityLogs] =
+    useState<ActivityLog[]>([]);
+  const [activityLogsStatus, setActivityLogsStatus] =
+    useState<"loading" | "ready" | "error">("loading");
+  const [activityLogsMessage, setActivityLogsMessage] =
+    useState("");
   const [handoffNotes, setHandoffNotes] = useStoredState<HandoffNote[]>(
     storageKeys.handoffNotes,
     [],
@@ -437,6 +449,54 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
     };
   }, [supabase, workspaceId]);
 
+    useEffect(() => {
+    if (recordsStatus !== "ready") {
+      return;
+    }
+
+    let isMounted = true;
+
+    async function loadActivityHistory() {
+      setActivityLogsStatus("loading");
+      setActivityLogsMessage("");
+
+      try {
+        const workspaceActivityLogs =
+          await getWorkspaceActivityLogs(
+            supabase,
+            workspaceId,
+          );
+
+        if (!isMounted) {
+          return;
+        }
+
+        setActivityLogs(workspaceActivityLogs);
+        setActivityLogsStatus("ready");
+      } catch (error) {
+        console.error(
+          "Workspace activity history load failed",
+          error,
+        );
+
+        if (!isMounted) {
+          return;
+        }
+
+        setActivityLogsStatus("error");
+        setActivityLogsMessage(
+          "Activity history could not be loaded. Refresh and try again.",
+        );
+      }
+    }
+
+    void loadActivityHistory();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [recordsStatus, supabase, workspaceId]);
+
   useEffect(() => {
     let isMounted = true;
 
@@ -535,16 +595,12 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
 
       await refreshRiskSignalsAfterChange(savedRecord.id);
 
-      setActivityLogs((currentLogs) => [
-        {
-          id: `log-${Date.now()}`,
-          clientWorkflowRecordId: savedRecord.id,
-          actionType: "Record created",
-          note: `${savedRecord.name} was added to the workflow with next action: ${savedRecord.nextAction}.`,
-          createdAt: now,
-        },
-        ...currentLogs,
-      ]);
+      await recordActivity({
+        clientWorkflowRecordId: savedRecord.id,
+        actionType: "Record created",
+        note: `${savedRecord.name} was added to the workflow with next action: ${savedRecord.nextAction}.`,
+        createdAt: now,
+      });
 
       setRecordFilters(initialRecordFilters);
       setSelectedRecordId(savedRecord.id);
@@ -568,32 +624,24 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
     const now = new Date().toISOString();
 
     setHandoffNotes((currentNotes) => [note, ...currentNotes]);
-    setActivityLogs((currentLogs) => [
-      {
-        id: `log-${Date.now()}`,
-        clientWorkflowRecordId: note.clientWorkflowRecordId,
-        actionType: "Handoff note added",
-        note: `${note.title} was added for delegation context.`,
-        createdAt: now,
-      },
-      ...currentLogs,
-    ]);
+    void recordActivity({
+      clientWorkflowRecordId: note.clientWorkflowRecordId,
+      actionType: "Handoff note added",
+      note: `${note.title} was added for delegation context.`,
+      createdAt: now,
+    });
   }
 
   function addWorkflowTask(task: WorkflowTask) {
     const now = new Date().toISOString();
 
     setWorkflowTasks((currentTasks) => [task, ...currentTasks]);
-    setActivityLogs((currentLogs) => [
-      {
-        id: `log-${Date.now()}`,
-        clientWorkflowRecordId: task.clientWorkflowRecordId,
-        actionType: "Work item added",
-        note: `${task.title} was added as a ${task.type.toLowerCase()} work item.`,
-        createdAt: now,
-      },
-      ...currentLogs,
-    ]);
+    void recordActivity({
+      clientWorkflowRecordId: task.clientWorkflowRecordId,
+      actionType: "Work item added",
+      note: `${task.title} was added as a ${task.type.toLowerCase()} work item.`,
+      createdAt: now,
+    });
   }
 
   function updateSelectedRecord(
@@ -603,6 +651,58 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
     void saveSelectedRecordUpdates(updates, note);
   }
 
+    async function refreshActivityHistory() {
+    try {
+      const workspaceActivityLogs =
+        await getWorkspaceActivityLogs(
+          supabase,
+          workspaceId,
+        );
+
+      setActivityLogs(workspaceActivityLogs);
+      setActivityLogsStatus("ready");
+      setActivityLogsMessage("");
+    } catch (error) {
+      console.error(
+        "Workspace activity history refresh failed",
+        error,
+      );
+      setActivityLogsStatus("error");
+      setActivityLogsMessage(
+        "Activity history could not be refreshed. Refresh and try again.",
+      );
+    }
+  }
+
+  async function recordActivity(
+    activity: NewActivityLog,
+  ) {
+    try {
+      const savedActivity = await createActivityLog(
+        supabase,
+        workspaceId,
+        activity,
+      );
+
+      setActivityLogs((currentLogs) => [
+        savedActivity,
+        ...currentLogs.filter(
+          (log) => log.id !== savedActivity.id,
+        ),
+      ]);
+      setActivityLogsStatus("ready");
+      setActivityLogsMessage("");
+    } catch (error) {
+      console.error(
+        "Workspace activity history insert failed",
+        error,
+      );
+      setActivityLogsStatus("error");
+      setActivityLogsMessage(
+        "The change was saved, but activity history could not be updated. Refresh and try again.",
+      );
+    }
+  }
   function applyRiskReconciliation(
     result: Awaited<
       ReturnType<typeof reconcileClientRiskSignals>
@@ -639,6 +739,10 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
       applyRiskReconciliation(result);
       setRiskSignalsStatus("ready");
       setRiskSignalsMessage("");
+
+      if (result.changed) {
+        await refreshActivityHistory();
+      }
     } catch (error) {
       console.error(
         "Workflow health refresh after record change failed",
@@ -692,6 +796,10 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
         applyRiskReconciliation(result);
         setRiskSignalsStatus("ready");
 
+        if (result.changed) {
+          await refreshActivityHistory();
+        }
+
         const reconciledSignal = result.riskSignals.find(
           (signal) => signal.id === savedSignal.id,
         );
@@ -731,11 +839,27 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
     note: string,
   ) {
     if (!selectedRecord) {
-      return;
+      return false;
     }
 
-    const now = new Date().toISOString();
+    if (isSavingRecordRef.current) {
+      return false;
+    }
+
     const previousRecord = selectedRecord;
+    const hasChanges = Object.entries(updates).some(
+      ([key, value]) =>
+        value !==
+        previousRecord[key as keyof ClientWorkflowRecord],
+    );
+
+    if (!hasChanges) {
+      setRecordsMessage("No workflow changes to save.");
+      return false;
+    }
+
+    isSavingRecordRef.current = true;
+    const now = new Date().toISOString();
 
     setRecords((currentRecords) =>
       currentRecords.map((record) =>
@@ -763,16 +887,12 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
         ),
       );
       await refreshRiskSignalsAfterChange(savedRecord.id);
-      setActivityLogs((currentLogs) => [
-        {
-          id: `log-${Date.now()}`,
-          clientWorkflowRecordId: savedRecord.id,
-          actionType: "Workflow status updated",
-          note,
-          createdAt: now,
-        },
-        ...currentLogs,
-      ]);
+      await recordActivity({
+        clientWorkflowRecordId: savedRecord.id,
+        actionType: "Workflow status updated",
+        note,
+        createdAt: now,
+      });
 
       setRecordsMessage("");
       return true;
@@ -790,9 +910,13 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
           ? error.message
           : "The record could not be updated. Please try again.",
       );
+    }finally {
+      isSavingRecordRef.current = false;
     }
+
     return false;
   }
+
 
   async function addProposal(proposal: NewProposalRecord) {
     setIsSavingProposal(true);
@@ -813,17 +937,12 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
         savedProposal.clientWorkflowRecordId,
       );
 
-      setActivityLogs((currentLogs) => [
-        {
-          id: `log-${Date.now()}`,
-          clientWorkflowRecordId:
-            savedProposal.clientWorkflowRecordId,
-          actionType: "Proposal or quote added",
-          note: `${savedProposal.title} was added with status: ${savedProposal.status}.`,
-          createdAt: new Date().toISOString(),
-        },
-        ...currentLogs,
-      ]);
+      await recordActivity({
+        clientWorkflowRecordId:
+          savedProposal.clientWorkflowRecordId,
+        actionType: "Proposal or quote added",
+        note: `${savedProposal.title} was added with status: ${getProposalStatusLabel(savedProposal.status)}.`,
+      });
     } catch (error) {
       const proposalError =
         error instanceof Error
@@ -860,19 +979,16 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
       const invoiceLabel =
         savedInvoice.status === "Not needed"
           ? "Invoice not needed"
-          : `Invoice ${savedInvoice.invoiceNumber}`;
+          : savedInvoice.invoiceNumber
+            ? `Invoice ${savedInvoice.invoiceNumber}`
+            : "Invoice preparation";
 
-      setActivityLogs((currentLogs) => [
-        {
-          id: `log-${Date.now()}`,
-          clientWorkflowRecordId:
-            savedInvoice.clientWorkflowRecordId,
-          actionType: "Invoice added",
-          note: `${invoiceLabel} was added with status: ${savedInvoice.status}.`,
-          createdAt: new Date().toISOString(),
-        },
-        ...currentLogs,
-      ]);
+        await recordActivity({
+        clientWorkflowRecordId:
+          savedInvoice.clientWorkflowRecordId,
+        actionType: "Invoice added",
+        note: `${invoiceLabel} was added with status: ${getInvoiceStatusLabel(savedInvoice.status)}.`,
+      });
     } catch (error) {
       const invoiceError =
         error instanceof Error
@@ -948,21 +1064,19 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
         actionType = "Invoice status updated";
         activityNote =
           `${invoiceReference} changed from ` +
-          `${previousInvoice?.status ?? "its previous status"} ` +
-          `to ${savedInvoice.status}.`;
+          `${
+            previousInvoice
+              ? getInvoiceStatusLabel(previousInvoice.status)
+              : "its previous status"
+          } to ${getInvoiceStatusLabel(savedInvoice.status)}.`;
       }
 
-      setActivityLogs((currentLogs) => [
-        {
-          id: `log-${Date.now()}`,
-          clientWorkflowRecordId:
-            savedInvoice.clientWorkflowRecordId,
-          actionType,
-          note: activityNote,
-          createdAt: new Date().toISOString(),
-        },
-        ...currentLogs,
-      ]);
+      await recordActivity({
+        clientWorkflowRecordId:
+          savedInvoice.clientWorkflowRecordId,
+        actionType,
+        note: activityNote,
+      });
     } catch (error) {
       const invoiceError =
         error instanceof Error
@@ -1021,17 +1135,12 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
         result.invoice.clientWorkflowRecordId,
       );
       if (!result.alreadyApplied) {
-        setActivityLogs((current) => [
-          {
-            id: `log-${Date.now()}`,
-            clientWorkflowRecordId:
-              result.invoice.clientWorkflowRecordId,
-            actionType: "Invoice payment step applied",
-            note: `${recommendation.title} was applied to the client workflow.`,
-            createdAt: new Date().toISOString(),
-          },
-          ...current,
-        ]);
+        await recordActivity({
+          clientWorkflowRecordId:
+            result.invoice.clientWorkflowRecordId,
+          actionType: "Invoice payment step applied",
+          note: `${recommendation.title} was applied to the client workflow.`,
+        });
       }
     } catch (error) {
       const invoiceError =
@@ -1080,21 +1189,24 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
       const statusChanged =
         previousProposal?.status !== savedProposal.status;
 
-      setActivityLogs((currentLogs) => [
-        {
-          id: `log-${Date.now()}`,
-          clientWorkflowRecordId:
-            savedProposal.clientWorkflowRecordId,
-          actionType: statusChanged
-            ? "Proposal status updated"
-            : "Proposal updated",
+      await recordActivity({
+        clientWorkflowRecordId:
+          savedProposal.clientWorkflowRecordId,
+        actionType: statusChanged
+          ? "Proposal status updated"
+          : "Proposal updated",
           note: statusChanged
-            ? `${savedProposal.title} changed from ${previousProposal?.status ?? "its previous status"} to ${savedProposal.status}.`
-            : `${savedProposal.title} details were updated.`,
-          createdAt: new Date().toISOString(),
-        },
-        ...currentLogs,
-      ]);
+          ? `${savedProposal.title} changed from ${
+              previousProposal
+                ? getProposalStatusLabel(
+                    previousProposal.status,
+                  )
+                : "its previous status"
+            } to ${getProposalStatusLabel(
+              savedProposal.status,
+            )}.`
+          : `${savedProposal.title} details were updated.`,
+      });
     } catch (error) {
       const proposalError =
         error instanceof Error
@@ -1158,19 +1270,15 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
       );
 
       if (!result.alreadyApplied) {
-        setActivityLogs((currentLogs) => [
-          {
-            id: `log-${Date.now()}`,
-            clientWorkflowRecordId:
-              result.clientRecord.id,
-            actionType: "Proposal next step applied",
-            note: `${recommendation.title} was applied to the client workflow.`,
-            createdAt:
-              result.proposal.workflowActionAppliedAt ||
-              new Date().toISOString(),
-          },
-          ...currentLogs,
-        ]);
+        await recordActivity({
+          clientWorkflowRecordId:
+            result.clientRecord.id,
+          actionType: "Proposal next step applied",
+          note: `${recommendation.title} was applied to the client workflow.`,
+          createdAt:
+            result.proposal.workflowActionAppliedAt ||
+            new Date().toISOString(),
+        });
       }
     } catch (error) {
       const applicationError =
@@ -1357,6 +1465,10 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
                 onUpdateRiskSignalStatus={saveRiskSignalStatus}
                 riskSignalMessage={riskSignalsMessage}
                 riskSignals={selectedRecordRiskSignals}
+                activityMessage={activityLogsMessage}
+                isActivityLoading={
+                  activityLogsStatus === "loading"
+                }
                               />
             ) : null}
           </div>

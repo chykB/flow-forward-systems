@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { ClientWorkflowRecord } from "@/lib/client-workflow-types";
 
+
 type NextActionFormProps = {
   onUpdateRecord: (updates: Partial<ClientWorkflowRecord>, note: string) => void;
   record: ClientWorkflowRecord;
@@ -42,6 +43,14 @@ function FieldError({ message }: { message?: string }) {
   return <p className="text-sm font-semibold text-red-700">{message}</p>;
 }
 
+function ensureSentenceEnding(value: string) {
+  const trimmedValue = value.trim();
+
+  return /[.!?]$/.test(trimmedValue)
+    ? trimmedValue
+    : `${trimmedValue}.`;
+}
+
 export function NextActionForm({
   onUpdateRecord,
   record,
@@ -75,13 +84,16 @@ export function NextActionForm({
       return;
     }
 
+    const nextAction = values.nextAction.trim();
     onUpdateRecord(
       {
-        nextAction: values.nextAction.trim(),
+        nextAction,
         nextFollowUpAt: values.nextFollowUpAt,
         assignedTo: values.assignedTo.trim(),
       },
-      `Next action updated to: ${values.nextAction.trim()}.`,
+      `Next action updated to: ${ensureSentenceEnding(
+        nextAction,
+      )}`,
     );
   }
 

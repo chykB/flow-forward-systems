@@ -91,6 +91,8 @@ type ClientRecordDetailProps = {
     riskSignalId: string,
     update: RiskSignalStatusUpdate,
   ) => Promise<void>;
+  activityMessage: string;
+  isActivityLoading: boolean;
   };
 
 const detailTabs: { key: DetailTab; label: string }[] = [
@@ -151,6 +153,8 @@ export function ClientRecordDetail({
   onUpdateRiskSignalStatus,
   riskSignalMessage,
   riskSignals,
+  activityMessage,
+  isActivityLoading,
 }: ClientRecordDetailProps) {
   const [activeTab, setActiveTab] =
     useState<DetailTab>("overview");
@@ -410,29 +414,41 @@ export function ClientRecordDetail({
             A simple history of updates made to this workflow
             record.
           </p>
-
-          <div className="mt-3 grid gap-3">
-            {recordLogs.length > 0 ? (
-              recordLogs.map((log) => (
-                <div
-                  className="rounded-md border border-[#D9DED8] p-4"
-                  key={log.id}
-                >
-                  <p className="font-bold">{log.actionType}</p>
-                  <p className="mt-2 leading-7 text-[#5F6862]">
-                    {log.note}
-                  </p>
-                  <p className="mt-2 text-sm text-[#5F6862]">
-                    {formatDateTime(log.createdAt)}
-                  </p>
-                </div>
-              ))
-            ) : (
-              <p className="rounded-md bg-[#EDF3EF] p-4 text-[#5F6862]">
-                No activity has been logged for this record yet.
-              </p>
-            )}
-          </div>
+          {activityMessage ? (
+            <p className="mt-4 rounded-md bg-red-50 p-4 font-semibold text-red-700">
+              {activityMessage}
+            </p>
+          ) : null}
+                    {isActivityLoading ? (
+            <p className="mt-4 text-[#5F6862]">
+              Loading activity history...
+            </p>
+          ) : (
+            <div className="mt-3 grid gap-3">
+              {recordLogs.length > 0 ? (
+                recordLogs.map((log) => (
+                  <div
+                    className="rounded-md border border-[#D9DED8] p-4"
+                    key={log.id}
+                  >
+                    <p className="font-bold">
+                      {log.actionType}
+                    </p>
+                    <p className="mt-2 leading-7 text-[#5F6862]">
+                      {log.note}
+                    </p>
+                    <p className="mt-2 text-sm text-[#5F6862]">
+                      {formatDateTime(log.createdAt)}
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <p className="rounded-md bg-[#EDF3EF] p-4 text-[#5F6862]">
+                  No activity has been logged for this record yet.
+                </p>
+              )}
+            </div>
+          )}
         </div>
       ) : null}
     </section>
