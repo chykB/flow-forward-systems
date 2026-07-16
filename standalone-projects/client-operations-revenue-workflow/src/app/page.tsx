@@ -1,6 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState, useRef, useSyncExternalStore } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { ClientRecordCard } from "@/components/ClientRecordCard";
 import { ClientRecordDetail } from "@/components/ClientRecordDetail";
 import { ClientRecordForm } from "@/components/ClientRecordForm";
@@ -81,6 +86,16 @@ import {
 import {
   getProposalStatusLabel,
 } from "@/lib/proposal-options";
+import {
+  createHandoffNote,
+  getWorkspaceHandoffNotes,
+  type NewHandoffNote,
+} from "@/lib/supabase/handoff-notes";
+import {
+  createWorkflowTask,
+  getWorkspaceWorkflowTasks,
+  type NewWorkflowTask,
+} from "@/lib/supabase/workflow-tasks";
 
 function buildPrioritySections(
   records: ClientWorkflowRecord[],
@@ -149,94 +164,13 @@ function buildPrioritySections(
   ];
 }
 
-function readStoredValue<T>(key: string, fallback: T): T {
-  if (typeof window === "undefined") {
-    return fallback;
-  }
 
-  const storedValue = window.localStorage.getItem(key);
-
-  if (!storedValue) {
-    return fallback;
-  }
-
-  try {
-    return JSON.parse(storedValue) as T;
-  } catch {
-    return fallback;
-  }
-}
-
-function writeStoredValue<T>(key: string, value: T) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.localStorage.setItem(key, JSON.stringify(value));
-}
-
-function subscribeToStoredState(onStoreChange: () => void) {
-  if (typeof window === "undefined") {
-    return () => {};
-  }
-
-  window.addEventListener("storage", onStoreChange);
-  window.addEventListener("client-ops-storage", onStoreChange);
-
-  return () => {
-    window.removeEventListener("storage", onStoreChange);
-    window.removeEventListener("client-ops-storage", onStoreChange);
-  };
-}
-
-function notifyStoredStateChanged() {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.dispatchEvent(new Event("client-ops-storage"));
-}
-
-function getStoredSnapshot<T>(key: string, fallback: T) {
-  return JSON.stringify(readStoredValue(key, fallback));
-}
-
-function useStoredState<T>(key: string, fallback: T) {
-  const snapshot = useSyncExternalStore(
-    subscribeToStoredState,
-    () => getStoredSnapshot(key, fallback),
-    () => JSON.stringify(fallback),
-  );
-
-  const value = useMemo(() => JSON.parse(snapshot) as T, [snapshot]);
-
-  function setStoredValue(valueOrUpdater: T | ((currentValue: T) => T)) {
-    const currentValue = readStoredValue(key, fallback);
-    const nextValue =
-      typeof valueOrUpdater === "function"
-        ? (valueOrUpdater as (currentValue: T) => T)(currentValue)
-        : valueOrUpdater;
-
-    writeStoredValue(key, nextValue);
-    notifyStoredStateChanged();
-  }
-
-  return [value, setStoredValue] as const;
-}
 
 type WorkspaceDashboardProps = {
   workspaceId: string;
 };
 
 function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
-  const storageKeys = useMemo(
-    () => ({
-      handoffNotes: `client-ops:${workspaceId}:handoff-notes`,
-      records: `client-ops:${workspaceId}:records`,
-      tasks: `client-ops:${workspaceId}:tasks`,
-    }),
-    [workspaceId],
-  );
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
   const isSavingRecordRef = useRef(false);
   const [records, setRecords] = useState<ClientWorkflowRecord[]>([]);
@@ -284,14 +218,23 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
     useState<"loading" | "ready" | "error">("loading");
   const [activityLogsMessage, setActivityLogsMessage] =
     useState("");
-  const [handoffNotes, setHandoffNotes] = useStoredState<HandoffNote[]>(
-    storageKeys.handoffNotes,
-    [],
-  );
-  const [workflowTasks, setWorkflowTasks] = useStoredState<WorkflowTask[]>(
-    storageKeys.tasks,
-    [],
-  );
+  const [handoffNotes, setHandoffNotes] =
+    useState<HandoffNote[]>([]);
+  const [handoffNotesStatus, setHandoffNotesStatus] =
+    useState<"loading" | "ready" | "error">("loading");
+  const [isSavingHandoffNote, setIsSavingHandoffNote] =
+    useState(false);
+  const [handoffNotesMessage, setHandoffNotesMessage] =
+    useState("");
+  const [workflowTasks, setWorkflowTasks] =
+  useState<WorkflowTask[]>([]);
+  const [workflowTasksStatus, setWorkflowTasksStatus] =
+    useState<"loading" | "ready" | "error">("loading");
+
+  const [workflowTasksMessage, setWorkflowTasksMessage] =
+    useState("");
+  const [isSavingWorkflowTask, setIsSavingWorkflowTask] =
+  useState(false);
   const [recordFilters, setRecordFilters] = useState(initialRecordFilters);
   const [isAddRecordOpen, setIsAddRecordOpen] = useState(false);
   const [selectedRecordId, setSelectedRecordId] = useState<string | undefined>(
@@ -498,6 +441,102 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
   }, [recordsStatus, supabase, workspaceId]);
 
   useEffect(() => {
+    if (recordsStatus !== "ready") {
+      return;
+    }
+
+    let isMounted = true;
+
+    async function loadHandoffNotes() {
+      setHandoffNotesStatus("loading");
+      setHandoffNotesMessage("");
+
+      try {
+        const workspaceHandoffNotes =
+          await getWorkspaceHandoffNotes(
+            supabase,
+            workspaceId,
+          );
+
+        if (!isMounted) {
+          return;
+        }
+
+        setHandoffNotes(workspaceHandoffNotes);
+        setHandoffNotesStatus("ready");
+      } catch (error) {
+        console.error(
+          "Workspace handoff notes load failed",
+          error,
+        );
+
+        if (!isMounted) {
+          return;
+        }
+
+        setHandoffNotesStatus("error");
+        setHandoffNotesMessage(
+          "Handoff notes could not be loaded. Refresh and try again.",
+        );
+      }
+    }
+
+    void loadHandoffNotes();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [recordsStatus, supabase, workspaceId]);
+
+  useEffect(() => {
+    if (recordsStatus !== "ready") {
+      return;
+    }
+
+    let isMounted = true;
+
+    async function loadWorkflowTasks() {
+      setWorkflowTasksStatus("loading");
+      setWorkflowTasksMessage("");
+
+      try {
+        const workspaceWorkflowTasks =
+          await getWorkspaceWorkflowTasks(
+            supabase,
+            workspaceId,
+          );
+
+        if (!isMounted) {
+          return;
+        }
+
+        setWorkflowTasks(workspaceWorkflowTasks);
+        setWorkflowTasksStatus("ready");
+      } catch (error) {
+        console.error(
+          "Workspace work items load failed",
+          error,
+        );
+
+        if (!isMounted) {
+          return;
+        }
+
+        setWorkflowTasksStatus("error");
+        setWorkflowTasksMessage(
+          "Work items could not be loaded. Refresh and try again.",
+        );
+      }
+    }
+
+    void loadWorkflowTasks();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [recordsStatus, supabase, workspaceId]);
+
+  useEffect(() => {
     let isMounted = true;
 
     async function loadProposals() {
@@ -620,28 +659,80 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
     }
   }
 
-  function addHandoffNote(note: HandoffNote) {
-    const now = new Date().toISOString();
+  async function addHandoffNote(
+    handoffNote: NewHandoffNote,
+  ) {
+    setIsSavingHandoffNote(true);
+    setHandoffNotesMessage("");
 
-    setHandoffNotes((currentNotes) => [note, ...currentNotes]);
-    void recordActivity({
-      clientWorkflowRecordId: note.clientWorkflowRecordId,
-      actionType: "Handoff note added",
-      note: `${note.title} was added for delegation context.`,
-      createdAt: now,
-    });
+    try {
+      const savedHandoffNote = await createHandoffNote(
+        supabase,
+        workspaceId,
+        handoffNote,
+      );
+
+      setHandoffNotes((currentNotes) => [
+        savedHandoffNote,
+        ...currentNotes,
+      ]);
+
+      await recordActivity({
+        clientWorkflowRecordId:
+          savedHandoffNote.clientWorkflowRecordId,
+        actionType: "Handoff note added",
+        note: `${savedHandoffNote.title} was added for delegation context.`,
+        createdAt: savedHandoffNote.createdAt,
+      });
+    } catch (error) {
+      const handoffError =
+        error instanceof Error
+          ? error
+          : new Error(
+              "The handoff note could not be saved.",
+            );
+
+      setHandoffNotesMessage(handoffError.message);
+      throw handoffError;
+    } finally {
+      setIsSavingHandoffNote(false);
+    }
   }
 
-  function addWorkflowTask(task: WorkflowTask) {
-    const now = new Date().toISOString();
+  async function addWorkflowTask(task: NewWorkflowTask) {
+    setIsSavingWorkflowTask(true);
+    setWorkflowTasksMessage("");
 
-    setWorkflowTasks((currentTasks) => [task, ...currentTasks]);
-    void recordActivity({
-      clientWorkflowRecordId: task.clientWorkflowRecordId,
-      actionType: "Work item added",
-      note: `${task.title} was added as a ${task.type.toLowerCase()} work item.`,
-      createdAt: now,
-    });
+    try {
+      const savedTask = await createWorkflowTask(
+        supabase,
+        workspaceId,
+        task,
+      );
+
+      setWorkflowTasks((currentTasks) => [
+        savedTask,
+        ...currentTasks,
+      ]);
+
+      await recordActivity({
+        clientWorkflowRecordId:
+          savedTask.clientWorkflowRecordId,
+        actionType: "Work item added",
+        note: `${savedTask.title} was added as a ${savedTask.type.toLowerCase()} work item.`,
+        createdAt: savedTask.createdAt,
+      });
+    } catch (error) {
+      const taskError =
+        error instanceof Error
+          ? error
+          : new Error("The work item could not be saved.");
+
+      setWorkflowTasksMessage(taskError.message);
+      throw taskError;
+    } finally {
+      setIsSavingWorkflowTask(false);
+    }
   }
 
   function updateSelectedRecord(
@@ -1440,6 +1531,11 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
                 proposals={selectedRecordProposals}
                 record={selectedRecord}
                 tasks={workflowTasks}
+                tasksMessage={workflowTasksMessage}
+                isTaskSaving={isSavingWorkflowTask}
+                isTasksLoading={
+                  workflowTasksStatus === "loading"
+                }
                 isApplyingProposalRecommendation={
                   isApplyingProposalRecommendation
                 }
@@ -1458,7 +1554,7 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
                 onApplyInvoiceRecommendation={
                   applyInvoiceRecommendation
                 }
-                                isRiskSignalsLoading={
+                isRiskSignalsLoading={
                   riskSignalsStatus === "loading"
                 }
                 isRiskSignalSaving={isSavingRiskSignal}
@@ -1469,6 +1565,11 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
                 isActivityLoading={
                   activityLogsStatus === "loading"
                 }
+                handoffMessage={handoffNotesMessage}
+                isHandoffLoading={
+                  handoffNotesStatus === "loading"
+                }
+                isHandoffSaving={isSavingHandoffNote}
                               />
             ) : null}
           </div>

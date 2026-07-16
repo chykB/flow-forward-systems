@@ -1,11 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import type { HandoffNote } from "@/lib/client-workflow-types";
+import type {
+  NewHandoffNote,
+} from "@/lib/supabase/handoff-notes";
 
 type HandoffNoteFormProps = {
   clientWorkflowRecordId: string;
-  onAddNote: (note: HandoffNote) => void;
+  isSubmitting: boolean;
+  onAddNote: (note: NewHandoffNote) => Promise<void>;
 };
 
 type FormValues = {
@@ -14,7 +17,9 @@ type FormValues = {
   owner: string;
 };
 
-type FormErrors = Partial<Record<keyof FormValues, string>>;
+type FormErrors = Partial<
+  Record<keyof FormValues, string>
+>;
 
 const initialValues: FormValues = {
   title: "",
@@ -45,17 +50,28 @@ function FieldError({ message }: { message?: string }) {
     return null;
   }
 
-  return <p className="text-sm font-semibold text-red-700">{message}</p>;
+  return (
+    <p className="text-sm font-semibold text-red-700">
+      {message}
+    </p>
+  );
 }
 
 export function HandoffNoteForm({
   clientWorkflowRecordId,
+  isSubmitting,
   onAddNote,
 }: HandoffNoteFormProps) {
-  const [values, setValues] = useState<FormValues>(initialValues);
-  const [errors, setErrors] = useState<FormErrors>({});
+  const [values, setValues] =
+    useState<FormValues>(initialValues);
+  const [errors, setErrors] =
+    useState<FormErrors>({});
+  const [formMessage, setFormMessage] = useState("");
 
-  function updateField(field: keyof FormValues, value: string) {
+  function updateField(
+    field: keyof FormValues,
+    value: string,
+  ) {
     setValues((currentValues) => ({
       ...currentValues,
       [field]: value,
@@ -65,71 +81,94 @@ export function HandoffNoteForm({
       ...currentErrors,
       [field]: undefined,
     }));
+
+    setFormMessage("");
   }
 
-  function submitForm(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
+  async function submitNote() {
     const validationErrors = validateForm(values);
     setErrors(validationErrors);
+    setFormMessage("");
 
     if (Object.keys(validationErrors).length > 0) {
       return;
     }
 
-    onAddNote({
-      id: `handoff-${Date.now()}`,
-      clientWorkflowRecordId,
-      title: values.title.trim(),
-      note: values.note.trim(),
-      owner: values.owner.trim(),
-      createdAt: new Date().toISOString(),
-    });
+    try {
+      await onAddNote({
+        clientWorkflowRecordId,
+        title: values.title.trim(),
+        note: values.note.trim(),
+        owner: values.owner.trim(),
+      });
 
-    setValues(initialValues);
-    setErrors({});
+      setValues(initialValues);
+      setErrors({});
+    } catch (error) {
+      setFormMessage(
+        error instanceof Error
+          ? error.message
+          : "The handoff note could not be saved.",
+      );
+    }
   }
 
   return (
     <form
       className="mt-4 rounded-md border border-[#D9DED8] bg-[#F7F8F6] p-4"
-      onSubmit={submitForm}
+      onSubmit={(event) => {
+        event.preventDefault();
+        void submitNote();
+      }}
     >
       <h4 className="font-bold">Add Handoff Note</h4>
       <p className="mt-2 text-sm leading-6 text-[#5F6862]">
-        Add the context someone else would need to continue this client
-        workflow.
+        Add the context someone else would need to continue this
+        client workflow.
       </p>
 
       <div className="mt-4 grid gap-3">
         <div className="grid gap-2">
-          <label className="font-bold" htmlFor="handoff-title">
+          <label
+            className="font-bold"
+            htmlFor="handoff-title"
+          >
             Note title
           </label>
           <input
             className="rounded-md border border-[#D9DED8] bg-white px-4 py-3 outline-none focus:border-[#174F42]"
             id="handoff-title"
             value={values.title}
-            onChange={(event) => updateField("title", event.target.value)}
+            onChange={(event) =>
+              updateField("title", event.target.value)
+            }
           />
           <FieldError message={errors.title} />
         </div>
 
         <div className="grid gap-2">
-          <label className="font-bold" htmlFor="handoff-note">
+          <label
+            className="font-bold"
+            htmlFor="handoff-note"
+          >
             Handoff context
           </label>
           <textarea
             className="min-h-24 rounded-md border border-[#D9DED8] bg-white px-4 py-3 outline-none focus:border-[#174F42]"
             id="handoff-note"
             value={values.note}
-            onChange={(event) => updateField("note", event.target.value)}
+            onChange={(event) =>
+              updateField("note", event.target.value)
+            }
           />
           <FieldError message={errors.note} />
         </div>
 
         <div className="grid gap-2">
-          <label className="font-bold" htmlFor="handoff-owner">
+          <label
+            className="font-bold"
+            htmlFor="handoff-owner"
+          >
             Owner
           </label>
           <input
@@ -137,17 +176,26 @@ export function HandoffNoteForm({
             id="handoff-owner"
             placeholder="Example: Founder, VA, assistant"
             value={values.owner}
-            onChange={(event) => updateField("owner", event.target.value)}
+            onChange={(event) =>
+              updateField("owner", event.target.value)
+            }
           />
           <FieldError message={errors.owner} />
         </div>
       </div>
 
+      {formMessage ? (
+        <p className="mt-4 font-semibold text-red-700">
+          {formMessage}
+        </p>
+      ) : null}
+
       <button
-        className="mt-4 rounded-md bg-[#174F42] px-5 py-3 font-bold text-white hover:bg-[#1F6F5B]"
+        className="mt-4 rounded-md bg-[#174F42] px-5 py-3 font-bold text-white hover:bg-[#1F6F5B] disabled:cursor-not-allowed disabled:opacity-70"
+        disabled={isSubmitting}
         type="submit"
       >
-        Add Handoff Note
+        {isSubmitting ? "Saving..." : "Add Handoff Note"}
       </button>
     </form>
   );

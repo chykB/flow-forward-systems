@@ -33,6 +33,12 @@ import type {
   NewProposalRecord,
   ProposalRecordUpdates,
 } from "@/lib/supabase/proposal-records";
+import type {
+  NewHandoffNote,
+} from "@/lib/supabase/handoff-notes";
+import type {
+  NewWorkflowTask,
+} from "@/lib/supabase/workflow-tasks";
 
 type DetailTab =
   | "overview"
@@ -49,9 +55,12 @@ type ClientRecordDetailProps = {
   handoffNotes: HandoffNote[];
   isProposalLoading: boolean;
   isProposalSaving: boolean;
-  onAddHandoffNote: (note: HandoffNote) => void;
+  onAddHandoffNote: (
+    note: NewHandoffNote,
+  ) => Promise<void>;
+  isHandoffSaving: boolean;
   onAddProposal: (proposal: NewProposalRecord) => Promise<void>;
-  onAddTask: (task: WorkflowTask) => void;
+  onAddTask: (task: NewWorkflowTask) => Promise<void>;
   onUpdateProposal: (
     proposalId: string,
     updates: ProposalRecordUpdates,
@@ -64,6 +73,9 @@ type ClientRecordDetailProps = {
   proposals: ProposalRecord[];
   record: ClientWorkflowRecord;
   tasks: WorkflowTask[];
+  tasksMessage: string;
+  isTasksLoading: boolean;
+  isTaskSaving: boolean;
   isApplyingProposalRecommendation: boolean;
   invoices: InvoiceRecord[];
   invoiceMessage: string;
@@ -93,6 +105,8 @@ type ClientRecordDetailProps = {
   ) => Promise<void>;
   activityMessage: string;
   isActivityLoading: boolean;
+  handoffMessage: string;
+  isHandoffLoading: boolean;
   };
 
 const detailTabs: { key: DetailTab; label: string }[] = [
@@ -145,6 +159,9 @@ export function ClientRecordDetail({
   proposals,
   record,
   tasks,
+  tasksMessage,
+  isTasksLoading,
+  isTaskSaving,
   isApplyingProposalRecommendation,
   isApplyingInvoiceRecommendation,
   onApplyInvoiceRecommendation,
@@ -155,6 +172,9 @@ export function ClientRecordDetail({
   riskSignals,
   activityMessage,
   isActivityLoading,
+  handoffMessage,
+  isHandoffLoading,
+  isHandoffSaving
 }: ClientRecordDetailProps) {
   const [activeTab, setActiveTab] =
     useState<DetailTab>("overview");
@@ -330,39 +350,52 @@ export function ClientRecordDetail({
             approvals, payments, or handoff.
           </p>
 
-          <div className="mt-3 grid gap-3">
-            {recordTasks.length > 0 ? (
-              recordTasks.map((task) => (
-                <div
-                  className="rounded-md border border-[#D9DED8] p-4"
-                  key={task.id}
-                >
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                      <p className="font-bold">{task.title}</p>
-                      <p className="mt-1 text-sm text-[#5F6862]">
-                        {task.type} | {task.owner}
+          {tasksMessage ? (
+            <p className="mt-4 rounded-md bg-red-50 p-4 font-semibold text-red-700">
+              {tasksMessage}
+            </p>
+          ) : null}
+
+          {isTasksLoading ? (
+            <p className="mt-4 text-[#5F6862]">
+              Loading work items...
+            </p>
+          ) : (
+            <div className="mt-3 grid gap-3">
+              {recordTasks.length > 0 ? (
+                recordTasks.map((task) => (
+                  <div
+                    className="rounded-md border border-[#D9DED8] p-4"
+                    key={task.id}
+                  >
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <p className="font-bold">{task.title}</p>
+                        <p className="mt-1 text-sm text-[#5F6862]">
+                          {task.type} | {task.owner}
+                        </p>
+                      </div>
+                      <p className="text-sm font-bold text-[#174F42]">
+                        {task.status}
                       </p>
                     </div>
-                    <p className="text-sm font-bold text-[#174F42]">
-                      {task.status}
+                    <p className="mt-2 text-sm text-[#5F6862]">
+                      Due: {task.dueDate} | Criticality:{" "}
+                      {task.criticality}
                     </p>
                   </div>
-                  <p className="mt-2 text-sm text-[#5F6862]">
-                    Due: {task.dueDate} | Criticality:{" "}
-                    {task.criticality}
-                  </p>
-                </div>
-              ))
-            ) : (
-              <p className="rounded-md bg-[#EDF3EF] p-4 text-[#5F6862]">
-                No work items added yet.
-              </p>
-            )}
-          </div>
+                ))
+              ) : (
+                <p className="rounded-md bg-[#EDF3EF] p-4 text-[#5F6862]">
+                  No work items added yet.
+                </p>
+              )}
+            </div>
+          )}
 
           <WorkflowTaskForm
             clientWorkflowRecordId={record.id}
+            isSubmitting={isTaskSaving}
             onAddTask={onAddTask}
           />
         </div>
@@ -375,33 +408,44 @@ export function ClientRecordDetail({
             Notes that help a VA, assistant, or teammate continue
             the work with enough context.
           </p>
-
-          <div className="mt-3 grid gap-3">
-            {recordHandoffNotes.length > 0 ? (
-              recordHandoffNotes.map((note) => (
-                <div
-                  className="rounded-md border border-[#D9DED8] p-4"
-                  key={note.id}
-                >
-                  <p className="font-bold">{note.title}</p>
-                  <p className="mt-2 leading-7 text-[#5F6862]">
-                    {note.note}
-                  </p>
-                  <p className="mt-2 text-sm text-[#5F6862]">
-                    Owner: {note.owner}
-                  </p>
-                </div>
-              ))
-            ) : (
-              <p className="rounded-md bg-[#EDF3EF] p-4 text-[#5F6862]">
-                No handoff notes yet. Add context before
-                delegating this client workflow.
-              </p>
-            )}
-          </div>
+          {handoffMessage ? (
+            <p className="mt-4 rounded-md bg-red-50 p-4 font-semibold text-red-700">
+              {handoffMessage}
+            </p>
+          ) : null}
+          {isHandoffLoading ? (
+            <p className="mt-4 text-[#5F6862]">
+              Loading handoff notes...
+            </p>
+          ) : (
+            <div className="mt-3 grid gap-3">
+              {recordHandoffNotes.length > 0 ? (
+                recordHandoffNotes.map((note) => (
+                  <div
+                    className="rounded-md border border-[#D9DED8] p-4"
+                    key={note.id}
+                  >
+                    <p className="font-bold">{note.title}</p>
+                    <p className="mt-2 leading-7 text-[#5F6862]">
+                      {note.note}
+                    </p>
+                    <p className="mt-2 text-sm text-[#5F6862]">
+                      Owner: {note.owner}
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <p className="rounded-md bg-[#EDF3EF] p-4 text-[#5F6862]">
+                  No handoff notes yet. Add context before
+                  delegating this client workflow.
+                </p>
+              )}
+            </div>
+          )}
 
           <HandoffNoteForm
             clientWorkflowRecordId={record.id}
+            isSubmitting={isHandoffSaving}
             onAddNote={onAddHandoffNote}
           />
         </div>

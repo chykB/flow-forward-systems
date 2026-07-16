@@ -5,12 +5,15 @@ import type {
   TaskCriticality,
   TaskType,
   WorkflowStatus,
-  WorkflowTask,
 } from "@/lib/client-workflow-types";
+import type {
+  NewWorkflowTask,
+} from "@/lib/supabase/workflow-tasks";
 
 type WorkflowTaskFormProps = {
   clientWorkflowRecordId: string;
-  onAddTask: (task: WorkflowTask) => void;
+  isSubmitting: boolean;
+  onAddTask: (task: NewWorkflowTask) => Promise<void>;
 };
 
 type FormValues = {
@@ -86,10 +89,13 @@ function FieldError({ message }: { message?: string }) {
 
 export function WorkflowTaskForm({
   clientWorkflowRecordId,
+  isSubmitting,
   onAddTask,
 }: WorkflowTaskFormProps) {
-  const [values, setValues] = useState<FormValues>(initialValues);
+  const [values, setValues] =
+    useState<FormValues>(initialValues);
   const [errors, setErrors] = useState<FormErrors>({});
+  const [formMessage, setFormMessage] = useState("");
 
   function updateField<Key extends keyof FormValues>(
     field: Key,
@@ -104,41 +110,47 @@ export function WorkflowTaskForm({
       ...currentErrors,
       [field]: undefined,
     }));
+    setFormMessage("");
   }
 
-  function submitForm(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
+  async function submitTask() {
     const validationErrors = validateForm(values);
     setErrors(validationErrors);
+    setFormMessage("");
 
     if (Object.keys(validationErrors).length > 0) {
       return;
     }
 
-    const now = new Date().toISOString();
+    try {
+      await onAddTask({
+        clientWorkflowRecordId,
+        title: values.title.trim(),
+        type: values.type,
+        owner: values.owner.trim(),
+        dueDate: values.dueDate,
+        status: values.status,
+        criticality: values.criticality,
+      });
 
-    onAddTask({
-      id: `task-${Date.now()}`,
-      clientWorkflowRecordId,
-      title: values.title.trim(),
-      type: values.type,
-      owner: values.owner.trim(),
-      dueDate: values.dueDate,
-      status: values.status,
-      criticality: values.criticality,
-      createdAt: now,
-      updatedAt: now,
-    });
-
-    setValues(initialValues);
-    setErrors({});
+      setValues(initialValues);
+      setErrors({});
+    } catch (error) {
+      setFormMessage(
+        error instanceof Error
+          ? error.message
+          : "The work item could not be saved.",
+      );
+    }
   }
 
   return (
     <form
       className="mt-4 rounded-md border border-[#D9DED8] bg-[#F7F8F6] p-4"
-      onSubmit={submitForm}
+      onSubmit={(event) => {
+        event.preventDefault();
+        void submitTask();
+      }}
     >
       <h4 className="font-bold">Add Work Item</h4>
       <p className="mt-2 text-sm leading-6 text-[#5F6862]">
@@ -254,11 +266,18 @@ payment, or handoff.
         </div>
       </div>
 
+      {formMessage ? (
+        <p className="mt-4 font-semibold text-red-700">
+          {formMessage}
+        </p>
+      ) : null}
+
       <button
-        className="mt-4 rounded-md bg-[#174F42] px-5 py-3 font-bold text-white hover:bg-[#1F6F5B]"
+        className="mt-4 rounded-md bg-[#174F42] px-5 py-3 font-bold text-white hover:bg-[#1F6F5B] disabled:cursor-not-allowed disabled:opacity-70"
+        disabled={isSubmitting}
         type="submit"
       >
-        Add Work Item
+        {isSubmitting ? "Saving..." : "Add Work Item"}
       </button>
     </form>
   );
