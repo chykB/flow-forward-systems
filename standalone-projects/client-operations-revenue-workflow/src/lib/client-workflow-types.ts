@@ -69,7 +69,8 @@ export type RiskSignalType =
   | "invoice_overdue"
   | "invoice_disputed"
   | "delivery_blocked"
-  | "approval_delayed";
+  | "approval_delayed"
+  | "handoff_delayed";
 
 export type WorkflowStatus =
   | "Not started"

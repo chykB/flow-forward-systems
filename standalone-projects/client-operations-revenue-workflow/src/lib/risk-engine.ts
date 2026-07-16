@@ -238,6 +238,49 @@ function getDelayedApprovalCandidates(
     }));
 }
 
+function getDelayedHandoffCandidates(
+  record: ClientWorkflowRecord,
+  tasks: WorkflowTask[],
+  currentDate: Date,
+): RiskSignalCandidate[] {
+  const today = getLocalDateKey(currentDate);
+
+  return tasks
+    .filter(
+      (task) =>
+        task.clientWorkflowRecordId === record.id &&
+        task.type === "Handoff" &&
+        (
+          task.status === "Blocked" ||
+          (
+            task.dueDate < today &&
+            (
+              task.status === "Not started" ||
+              task.status === "In progress" ||
+              task.status === "Waiting"
+            )
+          )
+        ),
+    )
+    .map((task) => ({
+      clientWorkflowRecordId: record.id,
+      signalKey:
+        `workflow_task:${task.id}:handoff_delayed`,
+      sourceType: "workflow_task" as const,
+      sourceRecordId: task.id,
+      riskType: "handoff_delayed" as const,
+      severity: task.criticality,
+      reason:
+        task.status === "Blocked"
+          ? `Handoff work item "${task.title}" is blocked.`
+          : `Handoff work item "${task.title}" was due on ${task.dueDate}.`,
+      recommendedAction:
+        task.status === "Blocked"
+          ? `Resolve the handoff blocker for "${task.title}" with ${task.owner}, then update the work item status.`
+          : `Follow up on "${task.title}" with ${task.owner}, then update the handoff work item status.`,
+    }));
+}
+
 export function getRiskSignalCandidates({
   record,
   proposals,
@@ -259,6 +302,11 @@ export function getRiskSignalCandidates({
     ),
     ...getBlockedDeliveryCandidates(record, tasks),
     ...getDelayedApprovalCandidates(
+      record,
+      tasks,
+      currentDate,
+    ),
+    ...getDelayedHandoffCandidates(
       record,
       tasks,
       currentDate,
