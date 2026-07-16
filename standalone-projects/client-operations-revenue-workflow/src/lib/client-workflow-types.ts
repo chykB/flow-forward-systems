@@ -67,7 +67,8 @@ export type RiskSignalType =
   | "overdue_follow_up"
   | "proposal_expired"
   | "invoice_overdue"
-  | "invoice_disputed";
+  | "invoice_disputed"
+  | "delivery_blocked";
 
 export type WorkflowStatus =
   | "Not started"

@@ -10,6 +10,7 @@ const riskTypeLabels: Record<RiskSignalType, string> = {
   proposal_expired: "Expired proposal",
   invoice_overdue: "Invoice overdue",
   invoice_disputed: "Payment dispute",
+  delivery_blocked: "Delivery blocker",
 };
 
 const riskStatusLabels: Record<RiskSignalStatus, string> = {

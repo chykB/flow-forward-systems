@@ -749,6 +749,10 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
         ...currentTasks,
       ]);
 
+      await refreshRiskSignalsAfterChange(
+        savedTask.clientWorkflowRecordId,
+      );
+
       await recordActivity({
         clientWorkflowRecordId:
           savedTask.clientWorkflowRecordId,
@@ -811,6 +815,10 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
         currentTasks.map((task) =>
           task.id === savedTask.id ? savedTask : task,
         ),
+      );
+
+      await refreshRiskSignalsAfterChange(
+        savedTask.clientWorkflowRecordId,
       );
 
       await recordActivity({

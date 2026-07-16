@@ -9,6 +9,7 @@ import type {
   InvoiceRecord,
   ProposalRecord,
   RiskSignal,
+  WorkflowTask,
 } from "@/lib/client-workflow-types";
 
 export type RiskSignalCandidate = Pick<
@@ -27,6 +28,7 @@ type RiskEngineInput = {
   record: ClientWorkflowRecord;
   proposals: ProposalRecord[];
   invoices: InvoiceRecord[];
+  tasks: WorkflowTask[];
   currentDate?: Date;
 };
 
@@ -166,10 +168,37 @@ function getInvoiceCandidates(
   return [...disputeCandidates, ...overdueCandidates];
 }
 
+function getBlockedDeliveryCandidates(
+  record: ClientWorkflowRecord,
+  tasks: WorkflowTask[],
+): RiskSignalCandidate[] {
+  return tasks
+    .filter(
+      (task) =>
+        task.clientWorkflowRecordId === record.id &&
+        task.type === "Delivery" &&
+        task.status === "Blocked",
+    )
+    .map((task) => ({
+      clientWorkflowRecordId: record.id,
+      signalKey:
+        `workflow_task:${task.id}:delivery_blocked`,
+      sourceType: "workflow_task" as const,
+      sourceRecordId: task.id,
+      riskType: "delivery_blocked" as const,
+      severity: task.criticality,
+      reason:
+        `Delivery work item "${task.title}" is blocked.`,
+      recommendedAction:
+        `Resolve the blocker for "${task.title}" with ` +
+        `${task.owner}, then update the work item status.`,
+    }));
+}
 export function getRiskSignalCandidates({
   record,
   proposals,
   invoices,
+  tasks,
   currentDate = new Date(),
 }: RiskEngineInput) {
   const candidates = [
@@ -184,6 +213,7 @@ export function getRiskSignalCandidates({
       invoices,
       currentDate,
     ),
+    ...getBlockedDeliveryCandidates(record, tasks),
   ];
 
   return candidates.sort((first, second) => {
