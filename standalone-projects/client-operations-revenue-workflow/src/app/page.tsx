@@ -94,7 +94,9 @@ import {
 import {
   createWorkflowTask,
   getWorkspaceWorkflowTasks,
+  updateWorkflowTaskStatus,
   type NewWorkflowTask,
+  type WorkflowTaskStatusUpdate,
 } from "@/lib/supabase/workflow-tasks";
 
 function buildPrioritySections(
@@ -173,6 +175,8 @@ type WorkspaceDashboardProps = {
 function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
   const isSavingRecordRef = useRef(false);
+  const updatingWorkflowTaskIdsRef =
+  useRef(new Set<string>());
   const [records, setRecords] = useState<ClientWorkflowRecord[]>([]);
   const [riskSignals, setRiskSignals] = useState<RiskSignal[]>([]);
   const [riskSignalsStatus, setRiskSignalsStatus] = useState<
@@ -235,6 +239,10 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
     useState("");
   const [isSavingWorkflowTask, setIsSavingWorkflowTask] =
   useState(false);
+  const [
+  updatingWorkflowTaskId,
+  setUpdatingWorkflowTaskId,
+] = useState<string | null>(null);
   const [recordFilters, setRecordFilters] = useState(initialRecordFilters);
   const [isAddRecordOpen, setIsAddRecordOpen] = useState(false);
   const [selectedRecordId, setSelectedRecordId] = useState<string | undefined>(
@@ -732,6 +740,77 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
       throw taskError;
     } finally {
       setIsSavingWorkflowTask(false);
+    }
+  }
+
+  async function saveWorkflowTaskStatus(
+    workflowTaskId: string,
+    update: WorkflowTaskStatusUpdate,
+  ) {
+    const previousTask = workflowTasks.find(
+      (task) => task.id === workflowTaskId,
+    );
+
+    if (!previousTask) {
+      throw new Error("The work item could not be found.");
+    }
+
+    if (previousTask.status === update.status) {
+      return;
+    }
+
+    if (
+      updatingWorkflowTaskIdsRef.current.has(
+        workflowTaskId,
+      )
+    ) {
+      return;
+    }
+
+    updatingWorkflowTaskIdsRef.current.add(
+      workflowTaskId,
+    );
+    setUpdatingWorkflowTaskId(workflowTaskId);
+    setWorkflowTasksMessage("");
+
+    try {
+      const savedTask = await updateWorkflowTaskStatus(
+        supabase,
+        workspaceId,
+        workflowTaskId,
+        update,
+      );
+
+      setWorkflowTasks((currentTasks) =>
+        currentTasks.map((task) =>
+          task.id === savedTask.id ? savedTask : task,
+        ),
+      );
+
+      await recordActivity({
+        clientWorkflowRecordId:
+          savedTask.clientWorkflowRecordId,
+        actionType: "Work item status updated",
+        note: `${savedTask.title} changed from ${previousTask.status} to ${savedTask.status}.`,
+        createdAt: savedTask.updatedAt,
+      });
+    } catch (error) {
+      const taskError =
+        error instanceof Error
+          ? error
+          : new Error(
+              "The work item status could not be saved.",
+            );
+
+      setWorkflowTasksMessage(taskError.message);
+      throw taskError;
+    } finally {
+      updatingWorkflowTaskIdsRef.current.delete(
+        workflowTaskId,
+      );
+      setUpdatingWorkflowTaskId((currentId) =>
+        currentId === workflowTaskId ? null : currentId,
+      );
     }
   }
 
@@ -1536,6 +1615,8 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
                 isTasksLoading={
                   workflowTasksStatus === "loading"
                 }
+                onUpdateTaskStatus={saveWorkflowTaskStatus}
+                updatingTaskId={updatingWorkflowTaskId}
                 isApplyingProposalRecommendation={
                   isApplyingProposalRecommendation
                 }

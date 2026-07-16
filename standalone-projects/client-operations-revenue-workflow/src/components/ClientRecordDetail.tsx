@@ -10,6 +10,10 @@ import { formatDateTime } from "@/lib/format-date";
 import { InvoicePanel } from "@/components/InvoicePanel";
 import type { NewInvoiceRecord, InvoiceRecordUpdates } from "@/lib/supabase/invoice-records";
 import { RiskSignalPanel } from "@/components/RiskSignalPanel";
+import { WorkflowTaskStatusEditor } from "@/components/WorkflowTaskStatusEditor";
+import type {
+  WorkflowTaskStatusUpdate,
+} from "@/lib/supabase/workflow-tasks";
 import type {
   InvoiceWorkflowRecommendation as InvoiceRecommendationData,
 } from "@/lib/invoice-workflow";
@@ -107,6 +111,11 @@ type ClientRecordDetailProps = {
   isActivityLoading: boolean;
   handoffMessage: string;
   isHandoffLoading: boolean;
+  onUpdateTaskStatus: (
+    workflowTaskId: string,
+    update: WorkflowTaskStatusUpdate,
+  ) => Promise<void>;
+  updatingTaskId: string | null;
   };
 
 const detailTabs: { key: DetailTab; label: string }[] = [
@@ -174,7 +183,9 @@ export function ClientRecordDetail({
   isActivityLoading,
   handoffMessage,
   isHandoffLoading,
-  isHandoffSaving
+  isHandoffSaving,
+  onUpdateTaskStatus,
+  updatingTaskId,
 }: ClientRecordDetailProps) {
   const [activeTab, setActiveTab] =
     useState<DetailTab>("overview");
@@ -383,6 +394,13 @@ export function ClientRecordDetail({
                       Due: {task.dueDate} | Criticality:{" "}
                       {task.criticality}
                     </p>
+                    <WorkflowTaskStatusEditor
+                      isSaving={updatingTaskId === task.id}
+                      onUpdateStatus={(update) =>
+                        onUpdateTaskStatus(task.id, update)
+                      }
+                      task={task}
+                    />
                   </div>
                 ))
               ) : (

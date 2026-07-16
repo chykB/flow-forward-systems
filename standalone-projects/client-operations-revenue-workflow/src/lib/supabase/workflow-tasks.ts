@@ -19,6 +19,9 @@ export type NewWorkflowTask = Omit<
   WorkflowTask,
   "id" | "createdAt" | "updatedAt"
 >;
+export type WorkflowTaskStatusUpdate = {
+  status: WorkflowTask["status"];
+};
 
 function mapWorkflowTaskRow(
   row: WorkflowTaskRow,
@@ -100,6 +103,32 @@ export async function createWorkflowTask(
   if (error) {
     console.error(
       "Supabase work item insert failed",
+      error,
+    );
+    throw new Error(error.message);
+  }
+
+  return mapWorkflowTaskRow(data as WorkflowTaskRow);
+}
+export async function updateWorkflowTaskStatus(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  workflowTaskId: string,
+  update: WorkflowTaskStatusUpdate,
+) {
+  const { data, error } = await supabase
+    .from("workflow_tasks")
+    .update({
+      status: update.status,
+    })
+    .eq("workspace_id", workspaceId)
+    .eq("id", workflowTaskId)
+    .select("*")
+    .single();
+
+  if (error) {
+    console.error(
+      "Supabase work item status update failed",
       error,
     );
     throw new Error(error.message);
