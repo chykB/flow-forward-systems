@@ -7,7 +7,11 @@ import {
   useState,
 } from "react";
 import { ClientRecordCard } from "@/components/ClientRecordCard";
-import { ClientRecordDetail } from "@/components/ClientRecordDetail";
+import {
+  ClientRecordDetail,
+  type DetailTab,
+} from "@/components/ClientRecordDetail";
+import { WorkspaceHealthQueue } from "@/components/WorkspaceHealthQueue";
 import { ClientRecordForm } from "@/components/ClientRecordForm";
 import { PriorityCard } from "@/components/PriorityCard";
 import { RecordFiltersBar } from "@/components/RecordFiltersBar";
@@ -98,6 +102,7 @@ import {
   type NewWorkflowTask,
   type WorkflowTaskStatusUpdate,
 } from "@/lib/supabase/workflow-tasks";
+
 
 function buildPrioritySections(
   records: ClientWorkflowRecord[],
@@ -248,7 +253,8 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
   const [selectedRecordId, setSelectedRecordId] = useState<string | undefined>(
     records[0]?.id,
   );
-
+  const [selectedDetailTab, setSelectedDetailTab] =
+  useState<DetailTab>("overview");
 
   const filteredRecords = useMemo(
     () => filterRecords(records, recordFilters),
@@ -304,6 +310,25 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
         : [],
     [riskSignals, selectedRecord],
   );
+  function selectClientRecord(recordId: string) {
+    setSelectedRecordId(recordId);
+    setSelectedDetailTab("overview");
+  }
+
+  function reviewClientWorkflow(recordId: string) {
+    setRecordFilters(initialRecordFilters);
+    setSelectedRecordId(recordId);
+    setSelectedDetailTab("workflow-health");
+
+    window.requestAnimationFrame(() => {
+      document
+        .getElementById("records")
+        ?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+    });
+  }
 
   useEffect(() => {
     let isMounted = true;
@@ -651,6 +676,7 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
 
       setRecordFilters(initialRecordFilters);
       setSelectedRecordId(savedRecord.id);
+      setSelectedDetailTab("overview");
       setIsAddRecordOpen(false);
       setRecordsMessage("");
     } catch (error) {
@@ -1491,6 +1517,22 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
         </div>
       </section>
 
+      <div
+        className="mx-auto max-w-6xl px-6 pb-12"
+        id="workflow-health-queue"
+      >
+        <WorkspaceHealthQueue
+          errorMessage={riskSignalsMessage}
+          isLoading={
+            recordsStatus === "loading" ||
+            riskSignalsStatus === "loading"
+          }
+          onReviewRecord={reviewClientWorkflow}
+          records={records}
+          riskSignals={riskSignals}
+        />
+      </div>
+
       <section className="mx-auto max-w-6xl px-6 pb-10" id="workspace">
         <div className="flex flex-col gap-4 rounded-lg border border-[#D9DED8] bg-white p-5 md:flex-row md:items-center md:justify-between">
           <div>
@@ -1583,7 +1625,7 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
                 <ClientRecordCard
                   isSelected={record.id === selectedRecord?.id}
                   key={record.id}
-                  onSelect={() => setSelectedRecordId(record.id)}
+                  onSelect={() => selectClientRecord(record.id)}
                   record={record}
                 />
               ))}
@@ -1597,6 +1639,8 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
 
             {selectedRecord ? (
               <ClientRecordDetail
+                activeTab={selectedDetailTab}
+                onTabChange={setSelectedDetailTab}
                 activityLogs={activityLogs}
                 handoffNotes={handoffNotes}
                 isProposalLoading={proposalsStatus === "loading"}

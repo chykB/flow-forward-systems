@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+
 import { HandoffNoteForm } from "@/components/HandoffNoteForm";
 import { NextActionForm } from "@/components/NextActionForm";
 import { ProposalPanel } from "@/components/ProposalPanel";
@@ -44,7 +44,7 @@ import type {
   NewWorkflowTask,
 } from "@/lib/supabase/workflow-tasks";
 
-type DetailTab =
+export type DetailTab =
   | "overview"
   | "workflow-health"
   | "next-action"
@@ -55,6 +55,8 @@ type DetailTab =
   | "activity";
 
 type ClientRecordDetailProps = {
+  activeTab: DetailTab;
+  onTabChange: (tab: DetailTab) => void;
   activityLogs: ActivityLog[];
   handoffNotes: HandoffNote[];
   isProposalLoading: boolean;
@@ -148,6 +150,8 @@ function DetailRow({
 }
 
 export function ClientRecordDetail({
+  activeTab,
+  onTabChange,
   activityLogs,
   handoffNotes,
   invoiceMessage,
@@ -187,8 +191,7 @@ export function ClientRecordDetail({
   onUpdateTaskStatus,
   updatingTaskId,
 }: ClientRecordDetailProps) {
-  const [activeTab, setActiveTab] =
-    useState<DetailTab>("overview");
+
 
   const recordTasks = tasks.filter(
     (task) => task.clientWorkflowRecordId === record.id,
@@ -228,7 +231,7 @@ export function ClientRecordDetail({
             }`}
             key={tab.key}
             type="button"
-            onClick={() => setActiveTab(tab.key)}
+            onClick={() => onTabChange(tab.key)}
           >
             {tab.label}
           </button>

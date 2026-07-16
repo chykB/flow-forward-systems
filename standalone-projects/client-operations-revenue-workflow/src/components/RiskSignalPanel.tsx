@@ -9,6 +9,12 @@ import { formatDateTime } from "@/lib/format-date";
 import type {
   RiskSignalStatusUpdate,
 } from "@/lib/supabase/risk-signals";
+import {
+  getRiskSignalStatusLabel,
+  getRiskSignalTypeLabel,
+  getWorkflowHealthLabel,
+  isActiveRiskSignal,
+} from "@/lib/risk-signal-display";
 
 type Props = {
   errorMessage: string;
@@ -24,31 +30,7 @@ type Props = {
 
 type ClosingStatus = "Resolved" | "Dismissed";
 
-const riskTypeLabels: Record<RiskSignal["riskType"], string> = {
-  overdue_follow_up: "Overdue follow-up",
-  proposal_expired: "Expired proposal",
-  invoice_overdue: "Invoice overdue",
-  invoice_disputed: "Payment dispute",
-};
 
-const statusLabels: Record<RiskSignal["status"], string> = {
-  Open: "Needs review",
-  Reviewed: "Reviewed",
-  Resolved: "Resolved",
-  Dismissed: "Dismissed",
-};
-
-const activeStatuses = new Set<RiskSignal["status"]>([
-  "Open",
-  "Reviewed",
-]);
-
-function getHealthLabel(score: number) {
-  if (score >= 85) return "Healthy";
-  if (score >= 70) return "Needs attention";
-  if (score >= 50) return "At risk";
-  return "Critical";
-}
 
 function getSeverityClasses(severity: RiskSignal["severity"]) {
   if (severity === "Critical") {
@@ -82,7 +64,7 @@ export function RiskSignalPanel({
   const [formMessage, setFormMessage] = useState("");
 
   const activeSignalCount = riskSignals.filter((signal) =>
-    activeStatuses.has(signal.status),
+    isActiveRiskSignal(signal)
   ).length;
 
   function beginClosing(
@@ -146,7 +128,7 @@ export function RiskSignalPanel({
             Current health
           </p>
           <p className="mt-1 font-bold text-[#17201C]">
-            {getHealthLabel(record.workflowHealthScore)}
+            {getWorkflowHealthLabel(record.workflowHealthScore)}
           </p>
         </div>
         <div>
@@ -176,7 +158,7 @@ export function RiskSignalPanel({
       ) : (
         <div className="mt-5">
           {riskSignals.map((signal) => {
-            const isActive = activeStatuses.has(signal.status);
+            const isActive = isActiveRiskSignal(signal);
             const isClosing = closingSignalId === signal.id;
 
             return (
@@ -187,7 +169,7 @@ export function RiskSignalPanel({
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <h4 className="font-bold text-[#17201C]">
-                      {riskTypeLabels[signal.riskType]}
+                      {getRiskSignalTypeLabel(signal.riskType)}
                     </h4>
                     <p className="mt-2 leading-7 text-[#5F6862]">
                       {signal.reason}
@@ -203,7 +185,7 @@ export function RiskSignalPanel({
                       {signal.severity}
                     </span>
                     <span className="rounded-md bg-[#EDF3EF] px-3 py-2 text-sm font-bold text-[#174F42]">
-                      {statusLabels[signal.status]}
+                      {getRiskSignalStatusLabel(signal.status)}
                     </span>
                   </div>
                 </div>
