@@ -72,7 +72,9 @@ export type RiskSignalType =
   | "delivery_delayed"
   | "approval_delayed"
   | "handoff_delayed"
-  | "onboarding_delayed";
+  | "onboarding_delayed"
+  | "payment_blocked"
+  | "follow_up_blocked";
 
 export type WorkflowStatus =
   | "Not started"

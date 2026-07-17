@@ -358,6 +358,58 @@ function getDelayedOnboardingCandidates(
     }));
 }
 
+function getBlockedPaymentCandidates(
+  record: ClientWorkflowRecord,
+  tasks: WorkflowTask[],
+): RiskSignalCandidate[] {
+  return tasks
+    .filter(
+      (task) =>
+        task.clientWorkflowRecordId === record.id &&
+        task.type === "Payment" &&
+        task.status === "Blocked",
+    )
+    .map((task) => ({
+      clientWorkflowRecordId: record.id,
+      signalKey:
+        `workflow_task:${task.id}:payment_blocked`,
+      sourceType: "workflow_task" as const,
+      sourceRecordId: task.id,
+      riskType: "payment_blocked" as const,
+      severity: task.criticality,
+      reason:
+        `Payment work item "${task.title}" is blocked.`,
+      recommendedAction:
+        `Resolve the payment blocker for "${task.title}" with ${task.owner}, then update the work item status.`,
+    }));
+}
+
+function getBlockedFollowUpTaskCandidates(
+  record: ClientWorkflowRecord,
+  tasks: WorkflowTask[],
+): RiskSignalCandidate[] {
+  return tasks
+    .filter(
+      (task) =>
+        task.clientWorkflowRecordId === record.id &&
+        task.type === "Follow-up" &&
+        task.status === "Blocked",
+    )
+    .map((task) => ({
+      clientWorkflowRecordId: record.id,
+      signalKey:
+        `workflow_task:${task.id}:follow_up_blocked`,
+      sourceType: "workflow_task" as const,
+      sourceRecordId: task.id,
+      riskType: "follow_up_blocked" as const,
+      severity: task.criticality,
+      reason:
+        `Follow-up work item "${task.title}" is blocked.`,
+      recommendedAction:
+        `Resolve the follow-up blocker for "${task.title}" with ${task.owner}, then update the work item status.`,
+    }));
+}
+
 export function getRiskSignalCandidates({
   record,
   proposals,
@@ -397,6 +449,11 @@ export function getRiskSignalCandidates({
       record,
       tasks,
       currentDate,
+    ),
+    ...getBlockedPaymentCandidates(record, tasks),
+    ...getBlockedFollowUpTaskCandidates(
+      record,
+      tasks,
     ),
   ];
 

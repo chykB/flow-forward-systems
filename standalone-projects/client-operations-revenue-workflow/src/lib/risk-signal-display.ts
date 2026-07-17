@@ -15,6 +15,8 @@ const riskTypeLabels: Record<RiskSignalType, string> = {
   approval_delayed: "Approval delay",
   handoff_delayed: "Handoff delay",
   onboarding_delayed: "Onboarding delay",
+  payment_blocked: "Payment blocker",
+  follow_up_blocked: "Follow-up blocker",
 };
 
 const riskStatusLabels: Record<RiskSignalStatus, string> = {
