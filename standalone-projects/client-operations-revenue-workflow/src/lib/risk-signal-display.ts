@@ -11,6 +11,7 @@ const riskTypeLabels: Record<RiskSignalType, string> = {
   invoice_overdue: "Invoice overdue",
   invoice_disputed: "Payment dispute",
   delivery_blocked: "Delivery blocker",
+  delivery_delayed: "Delivery delay",
   approval_delayed: "Approval delay",
   handoff_delayed: "Handoff delay",
   onboarding_delayed: "Onboarding delay",

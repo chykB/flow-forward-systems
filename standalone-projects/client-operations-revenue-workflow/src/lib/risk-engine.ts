@@ -195,6 +195,40 @@ function getBlockedDeliveryCandidates(
     }));
 }
 
+function getOverdueDeliveryCandidates(
+  record: ClientWorkflowRecord,
+  tasks: WorkflowTask[],
+  currentDate: Date,
+): RiskSignalCandidate[] {
+  const today = getLocalDateKey(currentDate);
+
+  return tasks
+    .filter(
+      (task) =>
+        task.clientWorkflowRecordId === record.id &&
+        task.type === "Delivery" &&
+        task.dueDate < today &&
+        (
+          task.status === "Not started" ||
+          task.status === "In progress" ||
+          task.status === "Waiting"
+        ),
+    )
+    .map((task) => ({
+      clientWorkflowRecordId: record.id,
+      signalKey:
+        `workflow_task:${task.id}:delivery_delayed`,
+      sourceType: "workflow_task" as const,
+      sourceRecordId: task.id,
+      riskType: "delivery_delayed" as const,
+      severity: task.criticality,
+      reason:
+        `Delivery work item "${task.title}" was due on ${task.dueDate}.`,
+      recommendedAction:
+        `Follow up on "${task.title}" with ${task.owner}, then update the delivery work item status.`,
+    }));
+}
+
 function getDelayedApprovalCandidates(
   record: ClientWorkflowRecord,
   tasks: WorkflowTask[],
@@ -344,6 +378,11 @@ export function getRiskSignalCandidates({
       currentDate,
     ),
     ...getBlockedDeliveryCandidates(record, tasks),
+    ...getOverdueDeliveryCandidates(
+      record,
+      tasks,
+      currentDate,
+    ),
     ...getDelayedApprovalCandidates(
       record,
       tasks,

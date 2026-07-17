@@ -69,6 +69,7 @@ export type RiskSignalType =
   | "invoice_overdue"
   | "invoice_disputed"
   | "delivery_blocked"
+  | "delivery_delayed"
   | "approval_delayed"
   | "handoff_delayed"
   | "onboarding_delayed";
