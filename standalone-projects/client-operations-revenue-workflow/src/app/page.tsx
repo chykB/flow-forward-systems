@@ -64,6 +64,7 @@ import type {
   ActivityLog,
   ClientWorkflowRecord,
   HandoffNote,
+  LifecycleStage,
   ProposalRecord,
   WorkflowTask,
   InvoiceRecord,
@@ -514,6 +515,25 @@ function WorkspaceDashboard({
   function selectClientRecord(recordId: string) {
     rememberSelectedRecord(recordId);
     setSelectedDetailTab("overview");
+  }
+
+  function openClientStage(stage: LifecycleStage) {
+    const stageFilters: RecordFilters = {
+      ...initialRecordFilters,
+      stage,
+    };
+    const firstStageRecord = records.find(
+      (record) => record.lifecycleStage === stage,
+    );
+
+    setRecordFilters(stageFilters);
+
+    if (firstStageRecord) {
+      rememberSelectedRecord(firstStageRecord.id);
+    }
+
+    setSelectedDetailTab("overview");
+    navigateWorkspaceView("client-records");
   }
 
   function openClientRecord(recordId: string) {
@@ -1814,14 +1834,21 @@ function WorkspaceDashboard({
 
       {activeWorkspaceView === "workflow-snapshot" ? (
         <WorkspaceSnapshot
-          errorMessage={recordsMessage || riskSignalsMessage}
+          errorMessage={
+            recordsMessage ||
+            riskSignalsMessage ||
+            workflowTasksMessage
+          }
           isLoading={
             recordsStatus === "loading" ||
-            riskSignalsStatus === "loading"
+            riskSignalsStatus === "loading" ||
+            workflowTasksStatus === "loading"
           }
           onOpenRecord={openClientRecord}
+          onOpenStage={openClientStage}
           records={records}
           riskSignals={riskSignals}
+          tasks={workflowTasks}
         />
       ) : null}
 
