@@ -41,7 +41,6 @@ const lifecycleStages: LifecycleStage[] = [
   "In delivery",
   "Waiting for approval",
   "Payment follow-up",
-  "At risk",
   "Completed",
   "Lost or inactive",
 ];

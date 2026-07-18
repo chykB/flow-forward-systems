@@ -1,5 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { ClientWorkflowRecord } from "@/lib/client-workflow-types";
+import type {
+  ClientWorkflowRecord,
+  LifecycleStage,
+} from "@/lib/client-workflow-types";
+
+type StoredLifecycleStage = LifecycleStage | "At risk";
 
 export type ClientWorkflowRecordRow = {
   id: string;
@@ -11,7 +16,7 @@ export type ClientWorkflowRecordRow = {
   source: string | null;
   interest: string | null;
   message: string | null;
-  lifecycle_stage: ClientWorkflowRecord["lifecycleStage"];
+  lifecycle_stage: StoredLifecycleStage;
   next_action: string;
   next_follow_up_at: string | null;
   assigned_to: string | null;
@@ -30,6 +35,69 @@ export type ClientWorkflowRecordRow = {
   workflow_health_score: number;
 };
 
+function isActiveWorkflowStatus(
+  status: ClientWorkflowRecord["onboardingStatus"],
+) {
+  return (
+    status === "In progress" ||
+    status === "Waiting" ||
+    status === "Blocked"
+  );
+}
+
+function inferLegacyLifecycleStage(
+  row: ClientWorkflowRecordRow,
+): LifecycleStage {
+  if (isActiveWorkflowStatus(row.payment_status)) {
+    return "Payment follow-up";
+  }
+
+  if (isActiveWorkflowStatus(row.approval_status)) {
+    return "Waiting for approval";
+  }
+
+  if (isActiveWorkflowStatus(row.delivery_status)) {
+    return "In delivery";
+  }
+
+  if (isActiveWorkflowStatus(row.onboarding_status)) {
+    return "Onboarding";
+  }
+
+  const workflowStatuses = [
+    row.onboarding_status,
+    row.delivery_status,
+    row.approval_status,
+    row.payment_status,
+  ];
+  const hasCompletedWork = workflowStatuses.includes("Complete");
+  const hasOnlyResolvedWork = workflowStatuses.every(
+    (status) => status === "Complete" || status === "Not needed",
+  );
+
+  if (hasCompletedWork && hasOnlyResolvedWork) {
+    return "Completed";
+  }
+
+  if (row.client_type === "Past client") {
+    return "Lost or inactive";
+  }
+
+  if (row.client_type === "Lead") {
+    return "Follow-up needed";
+  }
+
+  return "Won client";
+}
+
+function normalizeLifecycleStage(
+  row: ClientWorkflowRecordRow,
+): LifecycleStage {
+  return row.lifecycle_stage === "At risk"
+    ? inferLegacyLifecycleStage(row)
+    : row.lifecycle_stage;
+}
+
 export function mapClientWorkflowRecordRow(
   row: ClientWorkflowRecordRow,
 ): ClientWorkflowRecord {
@@ -42,7 +110,7 @@ export function mapClientWorkflowRecordRow(
     source: row.source ?? "",
     interest: row.interest ?? "",
     message: row.message ?? "",
-    lifecycleStage: row.lifecycle_stage,
+    lifecycleStage: normalizeLifecycleStage(row),
     priority: row.priority,
     riskLevel: row.risk_level,
     nextAction: row.next_action,
@@ -59,7 +127,7 @@ export function mapClientWorkflowRecordRow(
     lastProjectDate: row.last_project_date ?? "",
     estimatedValue: Number(row.estimated_value ?? 0),
     workflowHealthScore: row.workflow_health_score ?? 75,
-        
+
   };
 }
 

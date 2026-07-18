@@ -10,10 +10,6 @@ export function getLifecycleStageLabel(
     return "Engagement confirmed";
   }
 
-  if (stage === "At risk") {
-    return "Relationship at risk";
-  }
-
   return stage;
 }
 
