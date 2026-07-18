@@ -12,6 +12,11 @@ export type WorkspaceRiskQueueItem = {
   signal: RiskSignal;
 };
 
+export type WorkspaceRiskQueueGroup = {
+  record: ClientWorkflowRecord;
+  signals: RiskSignal[];
+};
+
 export type WorkspaceHealthSummary = {
   activeRiskCount: number;
   affectedClientCount: number;
@@ -82,6 +87,34 @@ export function buildWorkspaceRiskQueue(
         first.signal.id.localeCompare(second.signal.id)
       );
     });
+}
+
+export function buildWorkspaceRiskQueueGroups(
+  records: ClientWorkflowRecord[],
+  riskSignals: RiskSignal[],
+) {
+  const groupsByRecordId = new Map<
+    string,
+    WorkspaceRiskQueueGroup
+  >();
+
+  buildWorkspaceRiskQueue(records, riskSignals).forEach(
+    ({ record, signal }) => {
+      const existingGroup = groupsByRecordId.get(record.id);
+
+      if (existingGroup) {
+        existingGroup.signals.push(signal);
+        return;
+      }
+
+      groupsByRecordId.set(record.id, {
+        record,
+        signals: [signal],
+      });
+    },
+  );
+
+  return [...groupsByRecordId.values()];
 }
 
 export function getWorkspaceHealthSummary(

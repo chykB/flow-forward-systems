@@ -12,7 +12,7 @@ import {
   getWorkflowHealthLabel,
 } from "@/lib/risk-signal-display";
 import {
-  buildWorkspaceRiskQueue,
+  buildWorkspaceRiskQueueGroups,
   getWorkspaceHealthSummary,
 } from "@/lib/workflow-health-dashboard";
 
@@ -61,6 +61,49 @@ function SummaryMetric({
   );
 }
 
+function RiskIssue({ signal }: { signal: RiskSignal }) {
+  return (
+    <section className="py-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h5 className="font-bold text-[#17201C]">
+            {getRiskSignalTypeLabel(signal.riskType)}
+          </h5>
+          <p className="mt-2 leading-7 text-[#5F6862]">
+            {signal.reason}
+          </p>
+        </div>
+
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <span
+            className={`rounded-md px-3 py-2 text-sm font-bold ${getSeverityClasses(
+              signal.severity,
+            )}`}
+          >
+            {signal.severity}
+          </span>
+          <span className="rounded-md bg-[#EDF3EF] px-3 py-2 text-sm font-bold text-[#174F42]">
+            {getRiskSignalStatusLabel(signal.status)}
+          </span>
+        </div>
+      </div>
+
+      <div className="mt-4 border-l-4 border-[#174F42] pl-4">
+        <p className="text-sm font-bold text-[#17201C]">
+          Recommended next step
+        </p>
+        <p className="mt-1 leading-7 text-[#5F6862]">
+          {signal.recommendedAction}
+        </p>
+      </div>
+
+      <p className="mt-3 text-sm text-[#5F6862]">
+        Last detected {formatDateTime(signal.lastDetectedAt)}
+      </p>
+    </section>
+  );
+}
+
 export function WorkspaceHealthQueue({
   errorMessage,
   isLoading,
@@ -68,8 +111,8 @@ export function WorkspaceHealthQueue({
   records,
   riskSignals,
 }: WorkspaceHealthQueueProps) {
-  const queue = useMemo(
-    () => buildWorkspaceRiskQueue(records, riskSignals),
+  const queueGroups = useMemo(
+    () => buildWorkspaceRiskQueueGroups(records, riskSignals),
     [records, riskSignals],
   );
   const summary = useMemo(
@@ -133,75 +176,57 @@ export function WorkspaceHealthQueue({
                 Fix-It Queue
               </h3>
               <p className="mt-2 text-sm leading-6 text-[#5F6862]">
-                Critical and lower-health workflows appear first.
+                Clients with the most severe issues appear first.
+                Each client&apos;s issues are ordered by severity.
               </p>
             </div>
 
-            {queue.length === 0 ? (
+            {queueGroups.length === 0 ? (
               <p className="mt-4 rounded-md bg-[#EDF3EF] p-4 text-[#5F6862]">
                 No active workflow issues need attention.
               </p>
             ) : (
               <div className="mt-4 grid gap-4">
-                {queue.map(({ record, signal }) => (
+                {queueGroups.map(({ record, signals }) => (
                   <article
                     className="rounded-lg border border-[#D9DED8] bg-white p-5"
-                    key={signal.id}
+                    key={record.id}
                   >
-                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0">
-                        <p className="text-sm font-bold text-[#5F6862]">
-                          {record.name} | {record.businessName}
-                        </p>
-                        <h4 className="mt-1 font-bold text-[#17201C]">
-                          {getRiskSignalTypeLabel(
-                            signal.riskType,
-                          )}
+                        <h4 className="text-lg font-bold text-[#17201C]">
+                          {record.name}
                         </h4>
-                        <p className="mt-2 leading-7 text-[#5F6862]">
-                          {signal.reason}
-                        </p>
+                        {record.businessName ? (
+                          <p className="mt-1 text-sm text-[#5F6862]">
+                            {record.businessName}
+                          </p>
+                        ) : null}
                       </div>
 
-                      <div className="flex shrink-0 flex-wrap gap-2">
-                        <span
-                          className={`rounded-md px-3 py-2 text-sm font-bold ${getSeverityClasses(
-                            signal.severity,
-                          )}`}
-                        >
-                          {signal.severity}
-                        </span>
-                        <span className="rounded-md bg-[#EDF3EF] px-3 py-2 text-sm font-bold text-[#174F42]">
-                          {getRiskSignalStatusLabel(
-                            signal.status,
-                          )}
-                        </span>
-                      </div>
+                      <span className="w-fit shrink-0 rounded-md bg-[#EDF3EF] px-3 py-2 text-sm font-bold text-[#174F42]">
+                        {signals.length} active{" "}
+                        {signals.length === 1 ? "issue" : "issues"}
+                      </span>
                     </div>
 
-                    <div className="mt-4 border-l-4 border-[#174F42] pl-4">
-                      <p className="text-sm font-bold text-[#17201C]">
-                        Recommended next step
-                      </p>
-                      <p className="mt-1 leading-7 text-[#5F6862]">
-                        {signal.recommendedAction}
-                      </p>
+                    <div className="mt-5 divide-y divide-[#D9DED8] border-y border-[#D9DED8]">
+                      {signals.map((signal) => (
+                        <RiskIssue
+                          key={signal.id}
+                          signal={signal}
+                        />
+                      ))}
                     </div>
 
-                    <div className="mt-5 flex flex-col gap-3 border-t border-[#D9DED8] pt-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                       <div className="text-sm text-[#5F6862]">
-                        <p>
-                          Workflow health:{" "}
-                          <span className="font-bold text-[#17201C]">
-                            {record.workflowHealthScore}/100 |{" "}
-                            {getWorkflowHealthLabel(
-                              record.workflowHealthScore,
-                            )}
-                          </span>
-                        </p>
-                        <p className="mt-1">
-                          Last detected{" "}
-                          {formatDateTime(signal.lastDetectedAt)}
+                        <p>Workflow health</p>
+                        <p className="mt-1 font-bold text-[#17201C]">
+                          {record.workflowHealthScore}/100 |{" "}
+                          {getWorkflowHealthLabel(
+                            record.workflowHealthScore,
+                          )}
                         </p>
                       </div>
 
