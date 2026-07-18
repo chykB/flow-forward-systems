@@ -20,6 +20,7 @@ import {
 import { WorkspaceSnapshot } from "@/components/WorkspaceSnapshot";
 import { ClientRecordForm } from "@/components/ClientRecordForm";
 import { PriorityCard } from "@/components/PriorityCard";
+import { PrioritySummaryRow } from "@/components/PrioritySummaryRow";
 import { RecordFiltersBar } from "@/components/RecordFiltersBar";
 import { WorkspaceGate } from "@/components/WorkspaceGate";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser-client";
@@ -110,69 +111,139 @@ import {
 } from "@/lib/supabase/workflow-tasks";
 
 
+function getRelatedClientRecords(
+  records: ClientWorkflowRecord[],
+  relatedItems: Array<{
+    clientWorkflowRecordId: string;
+  }>,
+) {
+  const relatedRecordIds = new Set(
+    relatedItems.map(
+      (item) => item.clientWorkflowRecordId,
+    ),
+  );
+
+  return records.filter((record) =>
+    relatedRecordIds.has(record.id),
+  );
+}
+
 function buildPrioritySections(
   records: ClientWorkflowRecord[],
   tasks: WorkflowTask[],
   proposals: ProposalRecord[],
   invoices: InvoiceRecord[],
 ) {
+  const currentDate = new Date();
+  const overdueFollowUps = getOverdueFollowUps(
+    records,
+    currentDate,
+  );
+  const followUpsDueSoon = getFollowUpsDueSoon(
+    records,
+    currentDate,
+  );
+  const proposalsNeedingAction = getProposalsNeedingAction(
+    proposals,
+    currentDate,
+  );
+  const waitingApprovals = getWaitingApprovals(records);
+  const invoicesToPrepare = getInvoicesToPrepare(invoices);
+  const paymentsDueSoon = getInvoicesDueSoon(
+    invoices,
+    currentDate,
+  );
+  const overdueInvoices = getOverdueInvoices(
+    invoices,
+    currentDate,
+  );
+  const disputedInvoices = getDisputedInvoices(invoices);
+  const blockedDeliveryTasks = getBlockedDeliveryTasks(tasks);
+  const atRiskClients = getAtRiskClients(records);
+
   return [
     {
       title: "Overdue Follow-Ups",
       description: "Leads or clients that should have been followed up already.",
-      count: getOverdueFollowUps(records).length,
+      count: overdueFollowUps.length,
+      clients: overdueFollowUps,
     },
     {
       title: "Follow-Ups Due Soon",
       description: "Upcoming follow-ups that need a clear next action.",
-      count: getFollowUpsDueSoon(records).length,
+      count: followUpsDueSoon.length,
+      clients: followUpsDueSoon,
     },
-
     {
       title: "Proposals Needing Action",
       description:
         "Proposals to prepare, revise, renew, or follow up.",
-      count: getProposalsNeedingAction(proposals).length,
+      count: proposalsNeedingAction.length,
+      clients: getRelatedClientRecords(
+        records,
+        proposalsNeedingAction,
+      ),
     },
-
     {
       title: "Approvals Waiting",
       description: "Client approvals that may block delivery progress.",
-      count: getWaitingApprovals(records).length,
+      count: waitingApprovals.length,
+      clients: waitingApprovals,
     },
     {
       title: "Invoices To Prepare",
       description:
         "Draft invoices that still need to be prepared and sent.",
-      count: getInvoicesToPrepare(invoices).length,
+      count: invoicesToPrepare.length,
+      clients: getRelatedClientRecords(
+        records,
+        invoicesToPrepare,
+      ),
     },
     {
       title: "Payments Due Soon",
       description:
         "Outstanding invoices due within the next seven days.",
-      count: getInvoicesDueSoon(invoices).length,
+      count: paymentsDueSoon.length,
+      clients: getRelatedClientRecords(
+        records,
+        paymentsDueSoon,
+      ),
     },
     {
       title: "Overdue Invoices",
       description:
         "Unpaid invoices that have passed their due date.",
-      count: getOverdueInvoices(invoices).length,
+      count: overdueInvoices.length,
+      clients: getRelatedClientRecords(
+        records,
+        overdueInvoices,
+      ),
     },
     {
       title: "Payment Disputes",
       description:
         "Disputed payments that need human review before reminders continue.",
-      count: getDisputedInvoices(invoices).length,
+      count: disputedInvoices.length,
+      clients: getRelatedClientRecords(
+        records,
+        disputedInvoices,
+      ),
     },
     {
       title: "Blocked Delivery",
       description: "Delivery tasks that cannot move forward yet.",
-      count: getBlockedDeliveryTasks(tasks).length,
+      count: blockedDeliveryTasks.length,
+      clients: getRelatedClientRecords(
+        records,
+        blockedDeliveryTasks,
+      ),
     },
     {
       title: "At-Risk Clients",
       description: "Clients or leads with higher workflow risk.",
-      count: getAtRiskClients(records).length,
+      count: atRiskClients.length,
+      clients: atRiskClients,
     },
   ];
 }
@@ -304,6 +375,17 @@ function WorkspaceDashboard({
       ),
     [invoices, proposals, records, workflowTasks],
   );
+  const activePrioritySections = prioritySections.filter(
+    (section) => section.count > 0,
+  );
+  const clearPrioritySections = prioritySections.filter(
+    (section) => section.count === 0,
+  );
+  const isPriorityLoading =
+    recordsStatus === "loading" ||
+    workflowTasksStatus === "loading" ||
+    proposalsStatus === "loading" ||
+    invoicesStatus === "loading";
 
   const selectedRecord =
     filteredRecords.find((record) => record.id === selectedRecordId) ||
@@ -1605,16 +1687,72 @@ function WorkspaceDashboard({
           </section>
 
           <section className="mt-7 pb-8" id="today-priorities">
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {prioritySections.map((section) => (
-                <PriorityCard
-                  count={section.count}
-                  description={section.description}
-                  key={section.title}
-                  title={section.title}
-                />
-              ))}
-            </div>
+            {isPriorityLoading ? (
+              <p className="border-y border-[#D9DED8] py-5 font-semibold text-[#5F6862]">
+                Reviewing today&apos;s priorities...
+              </p>
+            ) : (
+              <>
+                {activePrioritySections.length > 0 ? (
+                  <div>
+                    <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
+                      <h3 className="text-xl font-bold text-[#17201C]">
+                        Attention now
+                      </h3>
+                      <p className="text-sm font-semibold text-[#5F6862]">
+                        {activePrioritySections.length} active
+                        {activePrioritySections.length === 1
+                          ? " category"
+                          : " categories"}
+                      </p>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
+                      {activePrioritySections.map((section) => (
+                        <PriorityCard
+                          clients={section.clients}
+                          count={section.count}
+                          description={section.description}
+                          key={section.title}
+                          title={section.title}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="border-y border-[#D9DED8] py-5">
+                    <h3 className="text-xl font-bold text-[#17201C]">
+                      No priorities need attention today
+                    </h3>
+                    <p className="mt-1 text-sm text-[#5F6862]">
+                      All monitored workflow categories are clear.
+                    </p>
+                  </div>
+                )}
+
+                {clearPrioritySections.length > 0 ? (
+                  <div className="mt-8 border-t border-[#D9DED8] pt-5">
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                      <h3 className="font-bold text-[#17201C]">
+                        Clear today
+                      </h3>
+                      <p className="text-sm text-[#5F6862]">
+                        {clearPrioritySections.length} categories
+                      </p>
+                    </div>
+                    <div className="mt-2 grid gap-x-6 sm:grid-cols-2 xl:grid-cols-3">
+                      {clearPrioritySections.map((section) => (
+                        <PrioritySummaryRow
+                          description={section.description}
+                          key={section.title}
+                          title={section.title}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </>
+            )}
           </section>
         </div>
       ) : null}
