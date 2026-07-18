@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Client Operations & Revenue Workflow System",
   description:
-    "A demo client workflow system for tracking leads, follow-ups, delivery, approvals, payments, risks, and handoff notes.",
+    "Manage client workflows, next actions, delivery, approvals, payments, risks, and handoff context in one durable workspace.",
 };
 
 export default function RootLayout({

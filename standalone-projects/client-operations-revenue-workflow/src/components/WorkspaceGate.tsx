@@ -26,6 +26,7 @@ export type WorkspaceGateState = {
   mode: "sample" | "workspace";
   workspace: Workspace | null;
   userEmail: string | null;
+  onSignOut: () => void;
   onCreateWorkspace: () => void;
   isCreatingWorkspace: boolean;
 };
@@ -335,41 +336,12 @@ export function WorkspaceGate({
         </main>
     );
     }
- return (
-        <>
-            <div className="border-b border-[#D9DED8] bg-white px-6 py-4">
-            <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3">
-                <div>
-                <p className="text-sm font-bold uppercase tracking-[0.2em] text-[#5F6862]">
-                    Client Operations Workspace
-                </p>
-                <h1 className="mt-1 text-2xl font-bold text-[#17201C]">
-                    {workspace?.name ?? "Workspace"}
-                </h1>
-                {user?.email ? (
-                    <p className="mt-1 text-sm text-[#5F6862]">
-                    Signed in as {user.email}
-                    </p>
-                ) : null}
-                </div>
-
-                <button
-                className="rounded-md border border-[#174F42] bg-white px-4 py-2 font-bold text-[#174F42] hover:bg-[#174F42] hover:text-white"
-                type="button"
-                onClick={() => void handleSignOut()}
-                >
-                Sign Out
-                </button>
-            </div>
-            </div>
-
-            {children({
-            mode: "workspace",
-            workspace,
-            userEmail: user?.email ?? null,
-            onCreateWorkspace: handleCreateWorkspace,
-            isCreatingWorkspace,
-            })}
-        </>
-        );
+  return children({
+    mode: "workspace",
+    workspace,
+    userEmail: user?.email ?? null,
+    onSignOut: handleSignOut,
+    onCreateWorkspace: handleCreateWorkspace,
+    isCreatingWorkspace,
+  });
 }

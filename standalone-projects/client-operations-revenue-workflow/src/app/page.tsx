@@ -12,6 +12,12 @@ import {
   type DetailTab,
 } from "@/components/ClientRecordDetail";
 import { WorkspaceHealthQueue } from "@/components/WorkspaceHealthQueue";
+import { WorkspaceActivity } from "@/components/WorkspaceActivity";
+import {
+  WorkspaceShell,
+  type WorkspaceView,
+} from "@/components/WorkspaceShell";
+import { WorkspaceSnapshot } from "@/components/WorkspaceSnapshot";
 import { ClientRecordForm } from "@/components/ClientRecordForm";
 import { PriorityCard } from "@/components/PriorityCard";
 import { RecordFiltersBar } from "@/components/RecordFiltersBar";
@@ -171,13 +177,36 @@ function buildPrioritySections(
   ];
 }
 
+const workspaceViews = new Set<WorkspaceView>([
+  "today",
+  "workflow-snapshot",
+  "client-records",
+  "action-queue",
+  "activity",
+]);
+
+function getWorkspaceViewFromHash(): WorkspaceView {
+  const hashView = window.location.hash.slice(1);
+
+  return workspaceViews.has(hashView as WorkspaceView)
+    ? (hashView as WorkspaceView)
+    : "today";
+}
 
 
 type WorkspaceDashboardProps = {
+  onSignOut: () => void;
+  userEmail: string | null;
   workspaceId: string;
+  workspaceName: string;
 };
 
-function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
+function WorkspaceDashboard({
+  onSignOut,
+  userEmail,
+  workspaceId,
+  workspaceName,
+}: WorkspaceDashboardProps) {
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
   const isSavingRecordRef = useRef(false);
   const updatingWorkflowTaskIdsRef =
@@ -255,6 +284,8 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
   );
   const [selectedDetailTab, setSelectedDetailTab] =
   useState<DetailTab>("overview");
+  const [activeWorkspaceView, setActiveWorkspaceView] =
+    useState<WorkspaceView>("today");
 
   const filteredRecords = useMemo(
     () => filterRecords(records, recordFilters),
@@ -310,24 +341,74 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
         : [],
     [riskSignals, selectedRecord],
   );
+
+  useEffect(() => {
+    function syncWorkspaceView() {
+      setActiveWorkspaceView(getWorkspaceViewFromHash());
+    }
+
+    syncWorkspaceView();
+    window.addEventListener("hashchange", syncWorkspaceView);
+    window.addEventListener("popstate", syncWorkspaceView);
+
+    return () => {
+      window.removeEventListener(
+        "hashchange",
+        syncWorkspaceView,
+      );
+      window.removeEventListener("popstate", syncWorkspaceView);
+    };
+  }, []);
+
+  function navigateWorkspaceView(view: WorkspaceView) {
+    setActiveWorkspaceView(view);
+
+    const nextHash = `#${view}`;
+
+    if (window.location.hash !== nextHash) {
+      window.history.pushState(null, "", nextHash);
+    }
+
+    window.requestAnimationFrame(() => {
+      window.scrollTo({
+        behavior: "smooth",
+        top: 0,
+      });
+    });
+  }
+
+  function changeWorkspaceView(view: WorkspaceView) {
+    if (view === "client-records") {
+      setSelectedDetailTab("overview");
+    }
+
+    navigateWorkspaceView(view);
+  }
+
   function selectClientRecord(recordId: string) {
     setSelectedRecordId(recordId);
     setSelectedDetailTab("overview");
+  }
+
+  function openClientRecord(recordId: string) {
+    setRecordFilters(initialRecordFilters);
+    setSelectedRecordId(recordId);
+    setSelectedDetailTab("overview");
+    navigateWorkspaceView("client-records");
   }
 
   function reviewClientWorkflow(recordId: string) {
     setRecordFilters(initialRecordFilters);
     setSelectedRecordId(recordId);
     setSelectedDetailTab("workflow-health");
+    navigateWorkspaceView("client-records");
+  }
 
-    window.requestAnimationFrame(() => {
-      document
-        .getElementById("records")
-        ?.scrollIntoView({
-          behavior: "smooth",
-          block: "start",
-        });
-    });
+  function openClientActivity(recordId: string) {
+    setRecordFilters(initialRecordFilters);
+    setSelectedRecordId(recordId);
+    setSelectedDetailTab("activity");
+    navigateWorkspaceView("client-records");
   }
 
   useEffect(() => {
@@ -1500,224 +1581,287 @@ function WorkspaceDashboard({ workspaceId }: WorkspaceDashboardProps) {
   }
 
   return (
-    <main className="min-h-screen bg-[#F7F8F6] text-[#17201C]">
-      <section className="mx-auto max-w-6xl px-6 py-8">
-        <p className="text-sm font-bold uppercase tracking-[0.18em] text-[#5F6862]">
-          Today&apos;s Priority View
-        </p>
-        <h2 className="mt-3 text-3xl font-bold">What needs attention today</h2>
-        <p className="mt-3 max-w-3xl leading-7 text-[#5F6862]">
-          Review follow-ups, approvals, payments, delivery blockers, and client risks
-          before moving into individual records.
-        </p>
-      </section>
+    <WorkspaceShell
+      activeView={activeWorkspaceView}
+      onSignOut={onSignOut}
+      onViewChange={changeWorkspaceView}
+      userEmail={userEmail}
+      workspaceName={workspaceName}
+    >
+      {activeWorkspaceView === "today" ? (
+        <div id="today">
+          <section>
+            <p className="text-sm font-bold uppercase tracking-[0.16em] text-[#5F6862]">
+              Today&apos;s Priority View
+            </p>
+            <h2 className="mt-3 text-3xl font-bold">
+              What needs attention today
+            </h2>
+            <p className="mt-3 max-w-3xl leading-7 text-[#5F6862]">
+              Review follow-ups, approvals, payments, delivery
+              blockers, and client risks before moving into
+              individual records.
+            </p>
+          </section>
 
-      <section className="mx-auto max-w-6xl px-6 pb-12" id="work-queue">
-        <div className="grid gap-4 md:grid-cols-3">
-          {prioritySections.map((section) => (
-            <PriorityCard
-              count={section.count}
-              description={section.description}
-              key={section.title}
-              title={section.title}
-            />
-          ))}
+          <section className="mt-7 pb-8" id="today-priorities">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {prioritySections.map((section) => (
+                <PriorityCard
+                  count={section.count}
+                  description={section.description}
+                  key={section.title}
+                  title={section.title}
+                />
+              ))}
+            </div>
+          </section>
         </div>
-      </section>
+      ) : null}
 
-      <div
-        className="mx-auto max-w-6xl px-6 pb-12"
-        id="workflow-health-queue"
-      >
-        <WorkspaceHealthQueue
-          errorMessage={riskSignalsMessage}
+      {activeWorkspaceView === "workflow-snapshot" ? (
+        <WorkspaceSnapshot
+          errorMessage={recordsMessage || riskSignalsMessage}
           isLoading={
             recordsStatus === "loading" ||
             riskSignalsStatus === "loading"
           }
-          onReviewRecord={reviewClientWorkflow}
+          onOpenRecord={openClientRecord}
           records={records}
           riskSignals={riskSignals}
         />
-      </div>
+      ) : null}
 
-      <section className="mx-auto max-w-6xl px-6 pb-10" id="workspace">
-        <div className="flex flex-col gap-4 rounded-lg border border-[#D9DED8] bg-white p-5 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p className="text-sm font-bold uppercase tracking-[0.18em] text-[#5F6862]">
-              Client Records
-            </p>
-            <h2 className="mt-3 text-2xl font-bold">
-              Manage leads and client work
-            </h2>
-            <p className="mt-2 leading-7 text-[#5F6862]">
-              Add leads or clients, then track next actions, work items,
-              handoff notes, and activity history.
-            </p>
-          </div>
-
-          <button
-            className="rounded-md bg-[#174F42] px-5 py-3 font-bold text-white hover:bg-[#1F6F5B]"
-            type="button"
-            onClick={() => setIsAddRecordOpen((isOpen) => !isOpen)}
-          >
-            {isAddRecordOpen ? "Close Form" : "Add Lead Or Client"}
-          </button>
+      {activeWorkspaceView === "action-queue" ? (
+        <div id="action-queue">
+          <WorkspaceHealthQueue
+            errorMessage={riskSignalsMessage}
+            isLoading={
+              recordsStatus === "loading" ||
+              riskSignalsStatus === "loading"
+            }
+            onReviewRecord={reviewClientWorkflow}
+            records={records}
+            riskSignals={riskSignals}
+          />
         </div>
+      ) : null}
 
-        {isAddRecordOpen ? (
-          <div className="mt-5">
-            <ClientRecordForm onAddRecord={addRecord} />
-          </div>
-        ) : null}
-      </section>
+      {activeWorkspaceView === "activity" ? (
+        <WorkspaceActivity
+          activityLogs={activityLogs}
+          errorMessage={activityLogsMessage}
+          isLoading={activityLogsStatus === "loading"}
+          onOpenRecord={openClientActivity}
+          records={records}
+        />
+      ) : null}
 
-      <section className="mx-auto max-w-6xl px-6 pb-16" id="records">
-        <div className="max-w-3xl">
-          <p className="text-sm font-bold uppercase tracking-[0.18em] text-[#5F6862]">
-            Client Workflow Records
-          </p>
-          <h2 className="mt-4 text-3xl font-bold">
-            Leads and clients in progress
-          </h2>
-          <p className="mt-4 leading-8 text-[#5F6862]">
-            Select a record to review workflow status, work items, handoff
-            notes, and activity history.
-          </p>
-        </div>
-
-        {records.length > 0 ? (
-          <div className="mt-8">
-            <RecordFiltersBar
-              filters={recordFilters}
-              onChange={setRecordFilters}
-              owners={recordOwners}
-            />
-          </div>
-        ) : null}
-        {recordsMessage ? (
-          <p className="mt-5 rounded-md bg-white p-4 font-semibold text-red-700">
-            {recordsMessage}
-          </p>
-        ) : null}
-        {recordsStatus === "loading" ? (
-          <div className="mt-8 rounded-lg border border-[#D9DED8] bg-white p-6">
-            <h3 className="text-2xl font-bold text-[#17201C]">
-              Loading client records
-            </h3>
-            <p className="mt-3 leading-7 text-[#5F6862]">
-              Checking this workspace for saved leads and client workflow records.
-            </p>
-          </div>
-        ) : records.length === 0 ? (
-          <div className="mt-8 rounded-lg border border-[#D9DED8] bg-white p-6">
-            <h3 className="text-2xl font-bold text-[#17201C]">
-              No client records yet
-            </h3>
-            <p className="mt-3 max-w-2xl leading-7 text-[#5F6862]">
-              Add your first lead or client to start tracking follow-ups, work
-              items, handoff notes, and activity history.
-            </p>
-            <button
-              className="mt-5 rounded-md bg-[#174F42] px-5 py-3 font-bold text-white hover:bg-[#1F6F5B]"
-              type="button"
-              onClick={() => setIsAddRecordOpen(true)}
-            >
-              Add First Lead Or Client
-            </button>
-          </div>
-        ) : (
-          <div className="mt-6 grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-            <div className="grid content-start gap-4">
-              {filteredRecords.map((record) => (
-                <ClientRecordCard
-                  isSelected={record.id === selectedRecord?.id}
-                  key={record.id}
-                  onSelect={() => selectClientRecord(record.id)}
-                  record={record}
-                />
-              ))}
-
-              {filteredRecords.length === 0 ? (
-                <p className="rounded-lg border border-[#D9DED8] bg-white p-5 text-[#5F6862]">
-                  No records match the current filters.
+      {activeWorkspaceView === "client-records" ? (
+        <div id="client-records">
+          <section id="workspace">
+            <div className="flex flex-col gap-4 rounded-lg border border-[#D9DED8] bg-white p-5 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="text-sm font-bold uppercase tracking-[0.16em] text-[#5F6862]">
+                  Client Records
                 </p>
-              ) : null}
+                <h2 className="mt-3 text-2xl font-bold">
+                  Manage leads and client work
+                </h2>
+                <p className="mt-2 leading-7 text-[#5F6862]">
+                  Add leads or clients, then track next actions,
+                  work items, handoff notes, and activity history.
+                </p>
+              </div>
+
+              <button
+                className="rounded-md bg-[#174F42] px-5 py-3 font-bold text-white hover:bg-[#1F6F5B]"
+                onClick={() =>
+                  setIsAddRecordOpen((isOpen) => !isOpen)
+                }
+                type="button"
+              >
+                {isAddRecordOpen
+                  ? "Close Form"
+                  : "Add Lead Or Client"}
+              </button>
             </div>
 
-            {selectedRecord ? (
-              <ClientRecordDetail
-                activeTab={selectedDetailTab}
-                onTabChange={setSelectedDetailTab}
-                activityLogs={activityLogs}
-                handoffNotes={handoffNotes}
-                isProposalLoading={proposalsStatus === "loading"}
-                isProposalSaving={isSavingProposal}
-                onAddHandoffNote={addHandoffNote}
-                onAddProposal={addProposal}
-                onAddTask={addWorkflowTask}
-                onUpdateProposal={saveProposalUpdates}
-                onUpdateRecord={updateSelectedRecord}
-                proposalMessage={proposalsMessage}
-                proposals={selectedRecordProposals}
-                record={selectedRecord}
-                tasks={workflowTasks}
-                tasksMessage={workflowTasksMessage}
-                isTaskSaving={isSavingWorkflowTask}
-                isTasksLoading={
-                  workflowTasksStatus === "loading"
-                }
-                onUpdateTaskStatus={saveWorkflowTaskStatus}
-                updatingTaskId={updatingWorkflowTaskId}
-                isApplyingProposalRecommendation={
-                  isApplyingProposalRecommendation
-                }
-                onApplyProposalRecommendation={
-                  applyProposalRecommendation
-                }
-                invoiceMessage={invoicesMessage}
-                invoices={selectedRecordInvoices}
-                isInvoiceLoading={invoicesStatus === "loading"}
-                isInvoiceSaving={isSavingInvoice}
-                onAddInvoice={addInvoice}
-                onUpdateInvoice={saveInvoiceUpdates}
-                isApplyingInvoiceRecommendation={
-                  isApplyingInvoiceRecommendation
-                }
-                onApplyInvoiceRecommendation={
-                  applyInvoiceRecommendation
-                }
-                isRiskSignalsLoading={
-                  riskSignalsStatus === "loading"
-                }
-                isRiskSignalSaving={isSavingRiskSignal}
-                onUpdateRiskSignalStatus={saveRiskSignalStatus}
-                riskSignalMessage={riskSignalsMessage}
-                riskSignals={selectedRecordRiskSignals}
-                activityMessage={activityLogsMessage}
-                isActivityLoading={
-                  activityLogsStatus === "loading"
-                }
-                handoffMessage={handoffNotesMessage}
-                isHandoffLoading={
-                  handoffNotesStatus === "loading"
-                }
-                isHandoffSaving={isSavingHandoffNote}
-                              />
+            {isAddRecordOpen ? (
+              <div className="mt-5">
+                <ClientRecordForm onAddRecord={addRecord} />
+              </div>
             ) : null}
-          </div>
-        )}
-      </section>
-    </main>
+          </section>
+
+          <section className="pt-9" id="records">
+            <div className="max-w-3xl">
+              <p className="text-sm font-bold uppercase tracking-[0.16em] text-[#5F6862]">
+                Client Workflow Records
+              </p>
+              <h2 className="mt-3 text-3xl font-bold">
+                Leads and clients in progress
+              </h2>
+              <p className="mt-3 leading-7 text-[#5F6862]">
+                Select a record to review workflow status, work
+                items, handoff notes, and activity history.
+              </p>
+            </div>
+
+            {records.length > 0 ? (
+              <div className="mt-7">
+                <RecordFiltersBar
+                  filters={recordFilters}
+                  onChange={setRecordFilters}
+                  owners={recordOwners}
+                />
+              </div>
+            ) : null}
+            {recordsMessage ? (
+              <p className="mt-5 rounded-md bg-white p-4 font-semibold text-red-700">
+                {recordsMessage}
+              </p>
+            ) : null}
+            {recordsStatus === "loading" ? (
+              <div className="mt-7 rounded-lg border border-[#D9DED8] bg-white p-6">
+                <h3 className="text-2xl font-bold text-[#17201C]">
+                  Loading client records
+                </h3>
+                <p className="mt-3 leading-7 text-[#5F6862]">
+                  Checking this workspace for saved leads and
+                  client workflow records.
+                </p>
+              </div>
+            ) : records.length === 0 ? (
+              <div className="mt-7 rounded-lg border border-[#D9DED8] bg-white p-6">
+                <h3 className="text-2xl font-bold text-[#17201C]">
+                  No client records yet
+                </h3>
+                <p className="mt-3 max-w-2xl leading-7 text-[#5F6862]">
+                  Add your first lead or client to start tracking
+                  follow-ups, work items, handoff notes, and
+                  activity history.
+                </p>
+                <button
+                  className="mt-5 rounded-md bg-[#174F42] px-5 py-3 font-bold text-white hover:bg-[#1F6F5B]"
+                  onClick={() => setIsAddRecordOpen(true)}
+                  type="button"
+                >
+                  Add First Lead Or Client
+                </button>
+              </div>
+            ) : (
+              <div className="mt-6 grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+                <div className="grid content-start gap-4">
+                  {filteredRecords.map((record) => (
+                    <ClientRecordCard
+                      isSelected={
+                        record.id === selectedRecord?.id
+                      }
+                      key={record.id}
+                      onSelect={() =>
+                        selectClientRecord(record.id)
+                      }
+                      record={record}
+                    />
+                  ))}
+
+                  {filteredRecords.length === 0 ? (
+                    <p className="rounded-lg border border-[#D9DED8] bg-white p-5 text-[#5F6862]">
+                      No records match the current filters.
+                    </p>
+                  ) : null}
+                </div>
+
+                {selectedRecord ? (
+                  <ClientRecordDetail
+                    activeTab={selectedDetailTab}
+                    activityMessage={activityLogsMessage}
+                    activityLogs={activityLogs}
+                    handoffMessage={handoffNotesMessage}
+                    handoffNotes={handoffNotes}
+                    invoiceMessage={invoicesMessage}
+                    invoices={selectedRecordInvoices}
+                    isActivityLoading={
+                      activityLogsStatus === "loading"
+                    }
+                    isApplyingInvoiceRecommendation={
+                      isApplyingInvoiceRecommendation
+                    }
+                    isApplyingProposalRecommendation={
+                      isApplyingProposalRecommendation
+                    }
+                    isHandoffLoading={
+                      handoffNotesStatus === "loading"
+                    }
+                    isHandoffSaving={isSavingHandoffNote}
+                    isInvoiceLoading={
+                      invoicesStatus === "loading"
+                    }
+                    isInvoiceSaving={isSavingInvoice}
+                    isProposalLoading={
+                      proposalsStatus === "loading"
+                    }
+                    isProposalSaving={isSavingProposal}
+                    isRiskSignalSaving={isSavingRiskSignal}
+                    isRiskSignalsLoading={
+                      riskSignalsStatus === "loading"
+                    }
+                    isTaskSaving={isSavingWorkflowTask}
+                    isTasksLoading={
+                      workflowTasksStatus === "loading"
+                    }
+                    onAddHandoffNote={addHandoffNote}
+                    onAddInvoice={addInvoice}
+                    onAddProposal={addProposal}
+                    onAddTask={addWorkflowTask}
+                    onApplyInvoiceRecommendation={
+                      applyInvoiceRecommendation
+                    }
+                    onApplyProposalRecommendation={
+                      applyProposalRecommendation
+                    }
+                    onTabChange={setSelectedDetailTab}
+                    onUpdateInvoice={saveInvoiceUpdates}
+                    onUpdateProposal={saveProposalUpdates}
+                    onUpdateRecord={updateSelectedRecord}
+                    onUpdateRiskSignalStatus={
+                      saveRiskSignalStatus
+                    }
+                    onUpdateTaskStatus={
+                      saveWorkflowTaskStatus
+                    }
+                    proposalMessage={proposalsMessage}
+                    proposals={selectedRecordProposals}
+                    record={selectedRecord}
+                    riskSignalMessage={riskSignalsMessage}
+                    riskSignals={selectedRecordRiskSignals}
+                    tasks={workflowTasks}
+                    tasksMessage={workflowTasksMessage}
+                    updatingTaskId={updatingWorkflowTaskId}
+                  />
+                ) : null}
+              </div>
+            )}
+          </section>
+        </div>
+      ) : null}
+    </WorkspaceShell>
   );
 }
 
 export default function Home() {
   return (
     <WorkspaceGate>
-      {({ workspace }) =>
+      {({ onSignOut, userEmail, workspace }) =>
         workspace ? (
-          <WorkspaceDashboard key={workspace.id} workspaceId={workspace.id} />
+          <WorkspaceDashboard
+            key={workspace.id}
+            onSignOut={onSignOut}
+            userEmail={userEmail}
+            workspaceId={workspace.id}
+            workspaceName={workspace.name}
+          />
         ) : null
       }
     </WorkspaceGate>
