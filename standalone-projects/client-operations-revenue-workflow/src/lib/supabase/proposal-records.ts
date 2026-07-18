@@ -1,8 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type {
-  ClientWorkflowRecord,
-  ProposalRecord,
-} from "@/lib/client-workflow-types";
+import type { ProposalRecord } from "@/lib/client-workflow-types";
+import type { ProposalWorkflowUpdates } from "@/lib/proposal-workflow";
 
 import {
   mapClientWorkflowRecordRow,
@@ -222,21 +220,6 @@ export async function updateProposalRecord(
   return mapProposalRow(data as ProposalRecordRow);
 
 }
-type ProposalWorkflowClientUpdates = Partial<
-  Pick<
-    ClientWorkflowRecord,
-    | "lifecycleStage"
-    | "clientType"
-    | "returningClientStatus"
-    | "nextAction"
-    | "nextFollowUpAt"
-    | "onboardingStatus"
-    | "priority"
-    | "riskLevel"
-    | "estimatedValue"
-  >
->;
-
 type ProposalWorkflowRpcResult = {
   clientRecord: ClientWorkflowRecordRow;
   proposal: ProposalRecordRow;
@@ -247,7 +230,7 @@ export async function applyProposalWorkflowRecommendationTransaction(
   supabase: SupabaseClient,
   workspaceId: string,
   proposal: ProposalRecord,
-  updates: ProposalWorkflowClientUpdates,
+  updates: ProposalWorkflowUpdates,
 ) {
   const { data, error } = await supabase.rpc(
     "apply_proposal_workflow_recommendation",

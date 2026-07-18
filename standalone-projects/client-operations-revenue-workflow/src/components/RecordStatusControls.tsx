@@ -8,6 +8,7 @@ import type {
   RiskLevel,
   WorkflowStatus,
 } from "@/lib/client-workflow-types";
+import { getLifecycleStageLabel } from "@/lib/client-workflow-display";
 
 type RecordStatusControlsProps = {
   onUpdateRecord: (updates: Partial<ClientWorkflowRecord>, note: string) => void;
@@ -28,12 +29,6 @@ const returningClientStatuses: ReturningClientStatus[] = [
   "Reactivated",
   "Dormant",
 ];
-
-function getLifecycleStageLabel(stage: LifecycleStage) {
-  return stage === "Won client"
-    ? "Engagement confirmed"
-    : stage;
-}
 
 const lifecycleStages: LifecycleStage[] = [
   "New lead",
@@ -169,7 +164,7 @@ export function RecordStatusControls({
 
         <div className="grid gap-2">
           <label className="font-bold" htmlFor="status-risk">
-            Risk level
+            Relationship concern
           </label>
           <select
             className="rounded-md border border-[#D9DED8] bg-white px-4 py-3 outline-none focus:border-[#174F42]"
@@ -178,7 +173,7 @@ export function RecordStatusControls({
             onChange={(event) =>
               onUpdateRecord(
                 { riskLevel: event.target.value as RiskLevel },
-                `Risk level changed to ${event.target.value}.`,
+                `Relationship concern changed to ${event.target.value}.`,
               )
             }
           >

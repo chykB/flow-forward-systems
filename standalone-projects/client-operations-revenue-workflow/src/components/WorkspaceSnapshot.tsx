@@ -8,6 +8,7 @@ import type {
   RiskSignal,
   WorkflowTask,
 } from "@/lib/client-workflow-types";
+import { getLifecycleStageLabel } from "@/lib/client-workflow-display";
 import { formatDateTime } from "@/lib/format-date";
 import { isActiveRiskSignal } from "@/lib/risk-signal-display";
 
@@ -213,7 +214,7 @@ export function WorkspaceSnapshot({
             See where client work is concentrated
           </h2>
           <p className="mt-3 leading-7 text-[#5F6862]">
-            Review current stage load, active friction, blockers,
+            Review current stage load, open issues, blockers,
             and decisions waiting across client workflows.
           </p>
         </div>
@@ -248,7 +249,7 @@ export function WorkspaceSnapshot({
               value={records.length}
             />
             <SnapshotMetric
-              label="Active issues"
+              label="Open issues"
               value={activeSignals.length}
             />
             <SnapshotMetric
@@ -271,7 +272,7 @@ export function WorkspaceSnapshot({
             </h3>
             <p className="text-sm font-semibold text-[#5F6862]">
               {snapshot.stagesWithFriction} of {snapshot.stages.length}
-              {" "}occupied stages have active friction
+              {" "}occupied stages have open issues
             </p>
           </div>
 
@@ -308,7 +309,7 @@ export function WorkspaceSnapshot({
                     <div className="min-w-0">
                       <div className="flex items-baseline justify-between gap-3">
                         <h4 className="break-words font-bold text-[#17201C]">
-                          {stage.stage}
+                          {getLifecycleStageLabel(stage.stage)}
                         </h4>
                         <span className="shrink-0 text-sm font-bold text-[#5F6862]">
                           {stage.records.length}
@@ -331,7 +332,7 @@ export function WorkspaceSnapshot({
                     <dl className="grid grid-cols-3 gap-3">
                       <div className="min-w-0">
                         <dt className="text-xs font-bold text-[#5F6862]">
-                          Active issues
+                          Open issues
                         </dt>
                         <dd className="mt-1 text-lg font-bold text-[#17201C]">
                           {stage.activeIssueCount}

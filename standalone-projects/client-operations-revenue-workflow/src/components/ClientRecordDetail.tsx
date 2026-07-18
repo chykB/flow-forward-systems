@@ -6,6 +6,10 @@ import { NextActionForm } from "@/components/NextActionForm";
 import { ProposalPanel } from "@/components/ProposalPanel";
 import { RecordStatusControls } from "@/components/RecordStatusControls";
 import { WorkflowTaskForm } from "@/components/WorkflowTaskForm";
+import {
+  getLifecycleStageLabel,
+  getRelationshipConcernLabel,
+} from "@/lib/client-workflow-display";
 import { formatDateTime } from "@/lib/format-date";
 import { InvoicePanel } from "@/components/InvoicePanel";
 import type { NewInvoiceRecord, InvoiceRecordUpdates } from "@/lib/supabase/invoice-records";
@@ -266,7 +270,7 @@ export function ClientRecordDetail({
               record.riskLevel,
             )}`}
           >
-            {record.riskLevel} risk
+            {getRelationshipConcernLabel(record.riskLevel)}
           </span>
         </div>
       </div>
@@ -299,7 +303,9 @@ export function ClientRecordDetail({
           <div className="grid gap-4 md:grid-cols-2">
             <DetailRow
               label="Workflow stage"
-              value={record.lifecycleStage}
+              value={getLifecycleStageLabel(
+                record.lifecycleStage,
+              )}
             />
             <DetailRow
               label="Next action"

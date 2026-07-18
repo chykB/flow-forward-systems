@@ -4,12 +4,11 @@ import type {
   InvoiceStatus,
 } from "@/lib/client-workflow-types";
 
-type InvoiceWorkflowUpdates = Partial<
+export type InvoiceWorkflowUpdates = Partial<
   Pick<
     ClientWorkflowRecord,
     | "paymentStatus"
     | "priority"
-    | "riskLevel"
     | "nextAction"
     | "nextFollowUpAt"
   >
@@ -247,7 +246,6 @@ export function getInvoiceWorkflowRecommendation(
       updates: {
         paymentStatus: "Waiting",
         priority: "High",
-        riskLevel: atLeast(record.riskLevel, "Medium"),
         nextAction: `Review ${reference} and send an approved overdue payment reminder.`,
         nextFollowUpAt: today,
       },
@@ -262,7 +260,6 @@ export function getInvoiceWorkflowRecommendation(
       updates: {
         paymentStatus: "Blocked",
         priority: "High",
-        riskLevel: atLeast(record.riskLevel, "Medium"),
         nextAction: disputeNextAction,
         nextFollowUpAt: today,
       },

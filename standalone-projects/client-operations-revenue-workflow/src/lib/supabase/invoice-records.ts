@@ -1,8 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type {
-  ClientWorkflowRecord,
-  InvoiceRecord,
-} from "@/lib/client-workflow-types";
+import type { InvoiceRecord } from "@/lib/client-workflow-types";
+import type { InvoiceWorkflowUpdates } from "@/lib/invoice-workflow";
 import {
   mapClientWorkflowRecordRow,
   type ClientWorkflowRecordRow,
@@ -247,17 +245,6 @@ export async function updateInvoiceRecord(
 
   return mapInvoiceRow(data as InvoiceRecordRow);
 }
-type InvoiceWorkflowClientUpdates = Partial<
-  Pick<
-    ClientWorkflowRecord,
-    | "paymentStatus"
-    | "priority"
-    | "riskLevel"
-    | "nextAction"
-    | "nextFollowUpAt"
-  >
->;
-
 type InvoiceWorkflowRpcResult = {
   clientRecord: ClientWorkflowRecordRow;
   invoice: InvoiceRecordRow;
@@ -269,7 +256,7 @@ export async function applyInvoiceWorkflowRecommendationTransaction(
   workspaceId: string,
   invoice: InvoiceRecord,
   effectiveStatus: InvoiceRecord["status"],
-  updates: InvoiceWorkflowClientUpdates,
+  updates: InvoiceWorkflowUpdates,
 ) {
   const { data, error } = await supabase.rpc(
     "apply_invoice_workflow_recommendation",

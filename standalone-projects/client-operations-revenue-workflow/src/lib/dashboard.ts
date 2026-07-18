@@ -1,11 +1,13 @@
 import type {
   ClientWorkflowRecord,
+  RiskSignal,
   WorkflowTask,
 } from "@/lib/client-workflow-types";
 import {
   getFutureLocalDateKey,
   getLocalDateKey,
 } from "@/lib/date-key";
+import { isActiveRiskSignal } from "@/lib/risk-signal-display";
 
 const FOLLOW_UP_WINDOW_DAYS = 3;
 
@@ -70,13 +72,20 @@ export function getPaymentFollowUps(
   );
 }
 
-export function getAtRiskClients(
+export function getClientsWithActiveWorkflowRisk(
   records: ClientWorkflowRecord[],
+  riskSignals: RiskSignal[],
 ) {
-  return records.filter(
-    (record) =>
-      record.riskLevel === "High" ||
-      record.lifecycleStage === "At risk",
+  const affectedClientIds = new Set(
+    riskSignals
+      .filter(isActiveRiskSignal)
+      .map(
+        (signal) => signal.clientWorkflowRecordId,
+      ),
+  );
+
+  return records.filter((record) =>
+    affectedClientIds.has(record.id),
   );
 }
 

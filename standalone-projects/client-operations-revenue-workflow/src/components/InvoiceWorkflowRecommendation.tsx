@@ -24,7 +24,6 @@ type Props = {
 const changeFields = [
   ["paymentStatus", "Payment workflow"],
   ["priority", "Priority"],
-  ["riskLevel", "Risk level"],
   ["nextAction", "Next action"],
   ["nextFollowUpAt", "Next follow-up date"],
 ] as const;

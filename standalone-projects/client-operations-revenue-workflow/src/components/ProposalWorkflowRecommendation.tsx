@@ -5,6 +5,7 @@ import type {
   ClientWorkflowRecord,
   ProposalRecord,
 } from "@/lib/client-workflow-types";
+import { getLifecycleStageLabel } from "@/lib/client-workflow-display";
 import {
   getProposalWorkflowRecommendation,
   type ProposalWorkflowRecommendation,
@@ -46,7 +47,11 @@ function buildChangeSummary(
     updates.lifecycleStage &&
     updates.lifecycleStage !== record.lifecycleStage
   ) {
-    changes.push(`Lifecycle stage: ${updates.lifecycleStage}`);
+    changes.push(
+      `Lifecycle stage: ${getLifecycleStageLabel(
+        updates.lifecycleStage,
+      )}`,
+    );
   }
 
   if (
@@ -94,13 +99,6 @@ function buildChangeSummary(
     updates.priority !== record.priority
   ) {
     changes.push(`Priority: ${updates.priority}`);
-  }
-
-  if (
-    updates.riskLevel &&
-    updates.riskLevel !== record.riskLevel
-  ) {
-    changes.push(`Risk level: ${updates.riskLevel}`);
   }
 
   if (

@@ -77,8 +77,8 @@ import {
   getOverdueInvoices,
 } from "@/lib/invoice-dashboard";
 import {
-  getAtRiskClients,
   getBlockedDeliveryTasks,
+  getClientsWithActiveWorkflowRisk,
   getFollowUpsDueSoon,
   getOverdueFollowUps,
   getWaitingApprovals,
@@ -136,6 +136,7 @@ function buildPrioritySections(
   tasks: WorkflowTask[],
   proposals: ProposalRecord[],
   invoices: InvoiceRecord[],
+  riskSignals: RiskSignal[],
 ) {
   const currentDate = new Date();
   const overdueFollowUps = getOverdueFollowUps(
@@ -162,7 +163,11 @@ function buildPrioritySections(
   );
   const disputedInvoices = getDisputedInvoices(invoices);
   const blockedDeliveryTasks = getBlockedDeliveryTasks(tasks);
-  const atRiskClients = getAtRiskClients(records);
+  const clientsWithActiveRisks =
+    getClientsWithActiveWorkflowRisk(
+      records,
+      riskSignals,
+    );
 
   return [
     {
@@ -243,10 +248,11 @@ function buildPrioritySections(
       ),
     },
     {
-      title: "At-Risk Clients",
-      description: "Clients or leads with higher workflow risk.",
-      count: atRiskClients.length,
-      clients: atRiskClients,
+      title: "Clients Needing Attention",
+      description:
+        "Clients with one or more open workflow issues.",
+      count: clientsWithActiveRisks.length,
+      clients: clientsWithActiveRisks,
     },
   ];
 }
@@ -397,8 +403,15 @@ function WorkspaceDashboard({
         workflowTasks,
         proposals,
         invoices,
+        riskSignals,
       ),
-    [invoices, proposals, records, workflowTasks],
+    [
+      invoices,
+      proposals,
+      records,
+      riskSignals,
+      workflowTasks,
+    ],
   );
   const activePrioritySections = prioritySections.filter(
     (section) => section.count > 0,
@@ -410,7 +423,8 @@ function WorkspaceDashboard({
     recordsStatus === "loading" ||
     workflowTasksStatus === "loading" ||
     proposalsStatus === "loading" ||
-    invoicesStatus === "loading";
+    invoicesStatus === "loading" ||
+    riskSignalsStatus === "loading";
 
   const selectedRecord =
     filteredRecords.find((record) => record.id === selectedRecordId) ||
@@ -1756,7 +1770,7 @@ function WorkspaceDashboard({
             </h2>
             <p className="mt-3 max-w-3xl leading-7 text-[#5F6862]">
               Review follow-ups, approvals, payments, delivery
-              blockers, and client risks before moving into
+              blockers, and workflow issues before moving into
               individual records.
             </p>
           </section>
@@ -1775,10 +1789,9 @@ function WorkspaceDashboard({
                         Attention now
                       </h3>
                       <p className="text-sm font-semibold text-[#5F6862]">
-                        {activePrioritySections.length} active
                         {activePrioritySections.length === 1
-                          ? " category"
-                          : " categories"}
+                          ? "1 category needs attention"
+                          : `${activePrioritySections.length} categories need attention`}
                       </p>
                     </div>
 

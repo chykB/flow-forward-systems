@@ -2,22 +2,29 @@ import type {
   ClientWorkflowRecord,
   PriorityLevel,
   ProposalRecord,
-  RiskLevel,
 } from "@/lib/client-workflow-types";
+
+export type ProposalWorkflowUpdates = Partial<
+  Pick<
+    ClientWorkflowRecord,
+    | "lifecycleStage"
+    | "clientType"
+    | "returningClientStatus"
+    | "nextAction"
+    | "nextFollowUpAt"
+    | "onboardingStatus"
+    | "priority"
+    | "estimatedValue"
+  >
+>;
 
 export type ProposalWorkflowRecommendation = {
   title: string;
   reason: string;
-  updates: Partial<ClientWorkflowRecord>;
+  updates: ProposalWorkflowUpdates;
 };
 
 const priorityRank: Record<PriorityLevel, number> = {
-  Low: 1,
-  Medium: 2,
-  High: 3,
-};
-
-const riskRank: Record<RiskLevel, number> = {
   Low: 1,
   Medium: 2,
   High: 3,
@@ -28,15 +35,6 @@ function raisePriority(
   recommended: PriorityLevel,
 ) {
   return priorityRank[current] >= priorityRank[recommended]
-    ? current
-    : recommended;
-}
-
-function raiseRisk(
-  current: RiskLevel,
-  recommended: RiskLevel,
-) {
-  return riskRank[current] >= riskRank[recommended]
     ? current
     : recommended;
 }
@@ -243,7 +241,6 @@ export function getProposalWorkflowRecommendation(
         "Renew the proposal or close the opportunity.",
       nextFollowUpAt: today,
       priority: raisePriority(record.priority, "High"),
-      riskLevel: raiseRisk(record.riskLevel, "Medium"),
       ...estimatedValueUpdate(proposal),
     },
   };

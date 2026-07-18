@@ -130,7 +130,7 @@ export function WorkspaceHealthQueue({
           Fix the highest-impact workflow issues first
         </h2>
         <p className="mt-3 leading-7 text-[#5F6862]">
-          Review active client risks in priority order, then open
+          Review open workflow issues in priority order, then open
           the affected workflow to complete the recommended step.
         </p>
       </div>
@@ -157,7 +157,7 @@ export function WorkspaceHealthQueue({
               }
             />
             <SummaryMetric
-              label="Active issues"
+              label="Open issues"
               value={summary.activeRiskCount}
             />
             <SummaryMetric
@@ -173,17 +173,18 @@ export function WorkspaceHealthQueue({
           <div className="mt-7">
             <div>
               <h3 className="text-xl font-bold text-[#17201C]">
-                Fix-It Queue
+                Clients needing action
               </h3>
               <p className="mt-2 text-sm leading-6 text-[#5F6862]">
-                Clients with the most severe issues appear first.
-                Each client&apos;s issues are ordered by severity.
+                Clients with the most severe open issues appear
+                first. Each client&apos;s issues are ordered by
+                severity.
               </p>
             </div>
 
             {queueGroups.length === 0 ? (
               <p className="mt-4 rounded-md bg-[#EDF3EF] p-4 text-[#5F6862]">
-                No active workflow issues need attention.
+                No open workflow issues need attention.
               </p>
             ) : (
               <div className="mt-4 grid gap-4">
@@ -205,7 +206,7 @@ export function WorkspaceHealthQueue({
                       </div>
 
                       <span className="w-fit shrink-0 rounded-md bg-[#EDF3EF] px-3 py-2 text-sm font-bold text-[#174F42]">
-                        {signals.length} active{" "}
+                        {signals.length} open{" "}
                         {signals.length === 1 ? "issue" : "issues"}
                       </span>
                     </div>

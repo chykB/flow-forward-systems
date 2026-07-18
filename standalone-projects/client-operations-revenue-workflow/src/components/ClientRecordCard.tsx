@@ -1,4 +1,8 @@
 import { CalendarDays, UserRound } from "lucide-react";
+import {
+  getLifecycleStageLabel,
+  getRelationshipConcernLabel,
+} from "@/lib/client-workflow-display";
 import type { ClientWorkflowRecord } from "@/lib/client-workflow-types";
 
 type ClientRecordCardProps = {
@@ -50,12 +54,14 @@ export function ClientRecordCard({
             record.riskLevel,
           )}`}
         >
-          {record.riskLevel} risk
+          {getRelationshipConcernLabel(record.riskLevel)}
         </span>
       </div>
 
       <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-sm text-[#5F6862]">
-        <span>{record.lifecycleStage}</span>
+        <span>
+          {getLifecycleStageLabel(record.lifecycleStage)}
+        </span>
         <span className="inline-flex min-w-0 items-center gap-1.5">
           <UserRound aria-hidden="true" className="size-4 shrink-0" />
           <span className="break-words">{record.assignedTo}</span>

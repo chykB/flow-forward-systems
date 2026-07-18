@@ -3,6 +3,7 @@ import type {
   LifecycleStage,
   RiskLevel,
 } from "@/lib/client-workflow-types";
+import { getLifecycleStageLabel } from "@/lib/client-workflow-display";
 import type { RecordFilters } from "@/lib/record-filters";
 
 type RecordFiltersBarProps = {
@@ -104,7 +105,9 @@ export function RecordFiltersBar({
           >
             {lifecycleStages.map((stage) => (
               <option key={stage} value={stage}>
-                {stage}
+                {stage === "All"
+                  ? stage
+                  : getLifecycleStageLabel(stage)}
               </option>
             ))}
           </select>
@@ -112,7 +115,7 @@ export function RecordFiltersBar({
 
         <div className="grid gap-2">
           <label className="font-bold" htmlFor="risk-filter">
-            Risk
+            Relationship concern
           </label>
           <select
             className="rounded-md border border-[#D9DED8] bg-white px-4 py-3 outline-none focus:border-[#174F42]"

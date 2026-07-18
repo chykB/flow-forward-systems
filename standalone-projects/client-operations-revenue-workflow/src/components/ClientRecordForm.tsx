@@ -9,6 +9,7 @@ import type {
   ReturningClientStatus,
   RiskLevel,
 } from "@/lib/client-workflow-types";
+import { getLifecycleStageLabel } from "@/lib/client-workflow-display";
 
 type ClientRecordFormProps = {
   onAddRecord: (record: ClientWorkflowRecord) => void;
@@ -364,7 +365,7 @@ export function ClientRecordForm({ onAddRecord }: ClientRecordFormProps) {
           >
             {lifecycleStages.map((stage) => (
               <option key={stage} value={stage}>
-                {stage === "Won client" ? "Engagement confirmed" : stage}
+                {getLifecycleStageLabel(stage)}
               </option>
             ))}
           </select>
@@ -406,7 +407,7 @@ export function ClientRecordForm({ onAddRecord }: ClientRecordFormProps) {
 
         <div className="grid gap-2">
           <label className="font-bold" htmlFor="record-risk">
-            Risk
+            Relationship concern
           </label>
           <select
             className="rounded-md border border-[#D9DED8] bg-white px-4 py-3 outline-none focus:border-[#174F42]"
