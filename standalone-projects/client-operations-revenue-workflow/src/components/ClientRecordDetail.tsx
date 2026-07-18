@@ -140,13 +140,48 @@ function DetailRow({
   value: string;
 }) {
   return (
-    <div className="rounded-md bg-[#EDF3EF] p-4">
+    <div className="min-w-0 border-b border-[#D9DED8] py-3">
       <p className="text-sm font-bold text-[#17201C]">{label}</p>
-      <p className="mt-1 leading-7 text-[#5F6862]">
+      <p className="mt-1 break-words leading-7 text-[#5F6862]">
         {value || "Not provided"}
       </p>
     </div>
   );
+}
+
+function ContextItem({
+  className = "",
+  label,
+  value,
+}: {
+  className?: string;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className={`min-w-0 ${className}`}>
+      <dt className="text-sm font-bold text-[#5F6862]">
+        {label}
+      </dt>
+      <dd className="mt-1 break-words leading-7 text-[#17201C]">
+        {value || "Not provided"}
+      </dd>
+    </div>
+  );
+}
+
+function getRiskClasses(
+  riskLevel: ClientWorkflowRecord["riskLevel"],
+) {
+  if (riskLevel === "High") {
+    return "bg-red-50 text-red-700";
+  }
+
+  if (riskLevel === "Medium") {
+    return "bg-amber-50 text-amber-800";
+  }
+
+  return "bg-[#EDF3EF] text-[#174F42]";
 }
 
 export function ClientRecordDetail({
@@ -209,27 +244,48 @@ export function ClientRecordDetail({
 
   return (
     <section className="rounded-lg border border-[#D9DED8] bg-white p-5">
-      <div className="border-b border-[#D9DED8] pb-5">
-        <p className="text-sm font-bold uppercase tracking-[0.18em] text-[#5F6862]">
-          Selected Record
-        </p>
-        <h2 className="mt-3 text-2xl font-bold">
-          {record.name}
-        </h2>
-        <p className="mt-1 text-[#5F6862]">
-          {record.businessName}
-        </p>
+      <div className="flex flex-col gap-4 border-b border-[#D9DED8] pb-5 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-sm font-bold uppercase tracking-[0.16em] text-[#5F6862]">
+            Selected record
+          </p>
+          <h2 className="mt-3 break-words text-2xl font-bold">
+            {record.name}
+          </h2>
+          <p className="mt-1 break-words text-[#5F6862]">
+            {record.businessName || "No business name"}
+          </p>
+        </div>
+
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <span className="rounded-md bg-[#EDF3EF] px-3 py-2 text-sm font-bold text-[#174F42]">
+            {record.workflowHealthScore}/100 health
+          </span>
+          <span
+            className={`rounded-md px-3 py-2 text-sm font-bold ${getRiskClasses(
+              record.riskLevel,
+            )}`}
+          >
+            {record.riskLevel} risk
+          </span>
+        </div>
       </div>
 
-      <div className="mt-5 flex gap-2 overflow-x-auto border-b border-[#D9DED8] pb-3">
+      <div
+        aria-label="Client record sections"
+        className="mt-5 flex gap-2 overflow-x-auto border-b border-[#D9DED8] pb-3 lg:flex-wrap lg:overflow-visible"
+        role="tablist"
+      >
         {detailTabs.map((tab) => (
           <button
+            aria-selected={activeTab === tab.key}
             className={`shrink-0 rounded-md px-4 py-2 text-sm font-bold ${
               activeTab === tab.key
                 ? "bg-[#174F42] text-white"
                 : "bg-[#EDF3EF] text-[#17201C] hover:bg-[#D9DED8]"
             }`}
             key={tab.key}
+            role="tab"
             type="button"
             onClick={() => onTabChange(tab.key)}
           >
@@ -257,23 +313,49 @@ export function ClientRecordDetail({
               label="Owner"
               value={record.assignedTo}
             />
-            <DetailRow
-              label="Onboarding"
-              value={record.onboardingStatus}
-            />
-            <DetailRow
-              label="Delivery"
-              value={record.deliveryStatus}
-            />
-            <DetailRow
-              label="Approval"
-              value={record.approvalStatus}
-            />
-            <DetailRow
-              label="Payment"
-              value={record.paymentStatus}
-            />
           </div>
+
+          <section className="mt-8 border-t border-[#D9DED8] pt-6">
+            <h3 className="text-lg font-bold text-[#17201C]">
+              Client context
+            </h3>
+            <dl className="mt-4 grid gap-x-6 gap-y-5 md:grid-cols-2">
+              <ContextItem
+                label="Lead or client status"
+                value={record.clientType}
+              />
+              <ContextItem
+                label="Interest"
+                value={record.interest}
+              />
+              <ContextItem
+                label="Email"
+                value={record.email}
+              />
+              <ContextItem
+                label="Phone"
+                value={record.phone}
+              />
+              {record.clientType === "Returning client" ||
+              record.clientType === "Past client" ? (
+                <ContextItem
+                  label="Returning client status"
+                  value={record.returningClientStatus}
+                />
+              ) : null}
+              {record.lastProjectDate ? (
+                <ContextItem
+                  label="Last project date"
+                  value={record.lastProjectDate}
+                />
+              ) : null}
+              <ContextItem
+                className="md:col-span-2"
+                label="Client note"
+                value={record.message}
+              />
+            </dl>
+          </section>
 
           <RecordStatusControls
             record={record}

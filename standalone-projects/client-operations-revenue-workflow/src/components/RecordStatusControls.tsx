@@ -67,8 +67,8 @@ export function RecordStatusControls({
   record,
 }: RecordStatusControlsProps) {
   return (
-    <div className="mt-6 rounded-md border border-[#D9DED8] bg-[#F7F8F6] p-4">
-      <h3 className="font-bold">Update Workflow Status</h3>
+    <section className="mt-8 border-t border-[#D9DED8] pt-6">
+      <h3 className="text-lg font-bold">Update workflow status</h3>
       <p className="mt-2 text-sm leading-6 text-[#5F6862]">
         Update the record as the client workflow changes. Each update is added
         to the activity history.
@@ -282,6 +282,6 @@ export function RecordStatusControls({
           </select>
         </div>
       </div>
-    </div>
+    </section>
   );
 }

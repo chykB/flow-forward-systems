@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { Plus, X } from "lucide-react";
 import { ClientRecordCard } from "@/components/ClientRecordCard";
 import {
   ClientRecordDetail,
@@ -85,6 +86,7 @@ import {
   filterRecords,
   getRecordOwners,
   initialRecordFilters,
+  type RecordFilters,
 } from "@/lib/record-filters";
 import {
   reconcileClientRiskSignals,
@@ -264,6 +266,29 @@ function getWorkspaceViewFromHash(): WorkspaceView {
     : "today";
 }
 
+function getSelectedRecordStorageKey(workspaceId: string) {
+  return `client-operations:selected-record:${workspaceId}`;
+}
+
+function getPersistedSelectedRecordId(workspaceId: string) {
+  return window.localStorage.getItem(
+    getSelectedRecordStorageKey(workspaceId),
+  );
+}
+
+function persistSelectedRecordId(
+  workspaceId: string,
+  recordId: string | undefined,
+) {
+  const storageKey = getSelectedRecordStorageKey(workspaceId);
+
+  if (recordId) {
+    window.localStorage.setItem(storageKey, recordId);
+  } else {
+    window.localStorage.removeItem(storageKey);
+  }
+}
+
 
 type WorkspaceDashboardProps = {
   onSignOut: () => void;
@@ -350,9 +375,8 @@ function WorkspaceDashboard({
 ] = useState<string | null>(null);
   const [recordFilters, setRecordFilters] = useState(initialRecordFilters);
   const [isAddRecordOpen, setIsAddRecordOpen] = useState(false);
-  const [selectedRecordId, setSelectedRecordId] = useState<string | undefined>(
-    records[0]?.id,
-  );
+  const [selectedRecordId, setSelectedRecordId] =
+    useState<string>();
   const [selectedDetailTab, setSelectedDetailTab] =
   useState<DetailTab>("overview");
   const [activeWorkspaceView, setActiveWorkspaceView] =
@@ -467,28 +491,48 @@ function WorkspaceDashboard({
     navigateWorkspaceView(view);
   }
 
-  function selectClientRecord(recordId: string) {
+  function rememberSelectedRecord(recordId: string | undefined) {
     setSelectedRecordId(recordId);
+    persistSelectedRecordId(workspaceId, recordId);
+  }
+
+  function changeRecordFilters(nextFilters: RecordFilters) {
+    const nextVisibleRecords = filterRecords(records, nextFilters);
+
+    setRecordFilters(nextFilters);
+
+    if (
+      nextVisibleRecords.length > 0 &&
+      !nextVisibleRecords.some(
+        (record) => record.id === selectedRecordId,
+      )
+    ) {
+      rememberSelectedRecord(nextVisibleRecords[0].id);
+    }
+  }
+
+  function selectClientRecord(recordId: string) {
+    rememberSelectedRecord(recordId);
     setSelectedDetailTab("overview");
   }
 
   function openClientRecord(recordId: string) {
     setRecordFilters(initialRecordFilters);
-    setSelectedRecordId(recordId);
+    rememberSelectedRecord(recordId);
     setSelectedDetailTab("overview");
     navigateWorkspaceView("client-records");
   }
 
   function reviewClientWorkflow(recordId: string) {
     setRecordFilters(initialRecordFilters);
-    setSelectedRecordId(recordId);
+    rememberSelectedRecord(recordId);
     setSelectedDetailTab("workflow-health");
     navigateWorkspaceView("client-records");
   }
 
   function openClientActivity(recordId: string) {
     setRecordFilters(initialRecordFilters);
-    setSelectedRecordId(recordId);
+    rememberSelectedRecord(recordId);
     setSelectedDetailTab("activity");
     navigateWorkspaceView("client-records");
   }
@@ -549,10 +593,21 @@ function WorkspaceDashboard({
           (record) =>
             reconciledRecords.get(record.id) ?? record,
         );
+        const persistedRecordId =
+          getPersistedSelectedRecordId(workspaceId);
+        const nextSelectedRecordId = currentRecords.some(
+          (record) => record.id === persistedRecordId,
+        )
+          ? persistedRecordId ?? undefined
+          : currentRecords[0]?.id;
 
         setRecords(currentRecords);
         setRiskSignals(loadedRiskSignals);
-        setSelectedRecordId(currentRecords[0]?.id);
+        setSelectedRecordId(nextSelectedRecordId);
+        persistSelectedRecordId(
+          workspaceId,
+          nextSelectedRecordId,
+        );
         setRecordsStatus("ready");
 
         if (failedReconciliations > 0) {
@@ -838,7 +893,7 @@ function WorkspaceDashboard({
       });
 
       setRecordFilters(initialRecordFilters);
-      setSelectedRecordId(savedRecord.id);
+      rememberSelectedRecord(savedRecord.id);
       setSelectedDetailTab("overview");
       setIsAddRecordOpen(false);
       setRecordsMessage("");
@@ -1797,60 +1852,53 @@ function WorkspaceDashboard({
 
       {activeWorkspaceView === "client-records" ? (
         <div id="client-records">
-          <section id="workspace">
-            <div className="flex flex-col gap-4 rounded-lg border border-[#D9DED8] bg-white p-5 md:flex-row md:items-center md:justify-between">
-              <div>
+          <section id="records">
+            <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
+              <div className="max-w-3xl">
                 <p className="text-sm font-bold uppercase tracking-[0.16em] text-[#5F6862]">
                   Client Records
                 </p>
-                <h2 className="mt-3 text-2xl font-bold">
-                  Manage leads and client work
+                <h2 className="mt-3 text-3xl font-bold">
+                  Leads and clients in progress
                 </h2>
-                <p className="mt-2 leading-7 text-[#5F6862]">
-                  Add leads or clients, then track next actions,
-                  work items, handoff notes, and activity history.
+                <p className="mt-3 leading-7 text-[#5F6862]">
+                  Select a record to review workflow status, work
+                  items, handoff notes, and activity history.
                 </p>
               </div>
 
               <button
-                className="rounded-md bg-[#174F42] px-5 py-3 font-bold text-white hover:bg-[#1F6F5B]"
+                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-md bg-[#174F42] px-5 py-3 font-bold text-white hover:bg-[#1F6F5B] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#174F42]"
                 onClick={() =>
                   setIsAddRecordOpen((isOpen) => !isOpen)
                 }
                 type="button"
               >
+                {isAddRecordOpen ? (
+                  <X aria-hidden="true" className="size-5" />
+                ) : (
+                  <Plus aria-hidden="true" className="size-5" />
+                )}
                 {isAddRecordOpen
-                  ? "Close Form"
-                  : "Add Lead Or Client"}
+                  ? "Close form"
+                  : "Add lead or client"}
               </button>
             </div>
 
             {isAddRecordOpen ? (
-              <div className="mt-5">
+              <div className="mt-6">
                 <ClientRecordForm onAddRecord={addRecord} />
               </div>
             ) : null}
-          </section>
-
-          <section className="pt-9" id="records">
-            <div className="max-w-3xl">
-              <p className="text-sm font-bold uppercase tracking-[0.16em] text-[#5F6862]">
-                Client Workflow Records
-              </p>
-              <h2 className="mt-3 text-3xl font-bold">
-                Leads and clients in progress
-              </h2>
-              <p className="mt-3 leading-7 text-[#5F6862]">
-                Select a record to review workflow status, work
-                items, handoff notes, and activity history.
-              </p>
-            </div>
 
             {records.length > 0 ? (
               <div className="mt-7">
                 <RecordFiltersBar
                   filters={recordFilters}
-                  onChange={setRecordFilters}
+                  onChange={changeRecordFilters}
+                  onReset={() =>
+                    changeRecordFilters(initialRecordFilters)
+                  }
                   owners={recordOwners}
                 />
               </div>
@@ -1888,96 +1936,133 @@ function WorkspaceDashboard({
                   Add First Lead Or Client
                 </button>
               </div>
+            ) : filteredRecords.length === 0 ? (
+              <p className="mt-6 rounded-md border border-[#D9DED8] bg-white p-5 text-[#5F6862]">
+                No records match the current filters.
+              </p>
             ) : (
-              <div className="mt-6 grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-                <div className="grid content-start gap-4">
-                  {filteredRecords.map((record) => (
-                    <ClientRecordCard
-                      isSelected={
-                        record.id === selectedRecord?.id
+              <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(18rem,22rem)_minmax(0,1fr)] lg:items-start">
+                <div className="min-w-0 lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto lg:pr-1">
+                  <div className="lg:hidden">
+                    <label
+                      className="font-bold text-[#17201C]"
+                      htmlFor="mobile-client-record"
+                    >
+                      Client
+                    </label>
+                    <select
+                      className="mt-2 w-full rounded-md border border-[#D9DED8] bg-white px-4 py-3 outline-none focus:border-[#174F42]"
+                      id="mobile-client-record"
+                      onChange={(event) =>
+                        selectClientRecord(event.target.value)
                       }
-                      key={record.id}
-                      onSelect={() =>
-                        selectClientRecord(record.id)
-                      }
-                      record={record}
-                    />
-                  ))}
+                      value={selectedRecord?.id ?? ""}
+                    >
+                      {filteredRecords.map((record) => (
+                        <option key={record.id} value={record.id}>
+                          {record.name}
+                          {record.businessName
+                            ? ` | ${record.businessName}`
+                            : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-                  {filteredRecords.length === 0 ? (
-                    <p className="rounded-lg border border-[#D9DED8] bg-white p-5 text-[#5F6862]">
-                      No records match the current filters.
-                    </p>
-                  ) : null}
+                  <div className="hidden content-start gap-3 lg:grid">
+                    <div className="flex items-baseline justify-between gap-3 px-1">
+                      <h3 className="font-bold text-[#17201C]">
+                        Clients
+                      </h3>
+                      <p className="text-sm text-[#5F6862]">
+                        {filteredRecords.length}
+                      </p>
+                    </div>
+
+                    {filteredRecords.map((record) => (
+                      <ClientRecordCard
+                        isSelected={
+                          record.id === selectedRecord?.id
+                        }
+                        key={record.id}
+                        onSelect={() =>
+                          selectClientRecord(record.id)
+                        }
+                        record={record}
+                      />
+                    ))}
+                  </div>
                 </div>
 
                 {selectedRecord ? (
-                  <ClientRecordDetail
-                    activeTab={selectedDetailTab}
-                    activityMessage={activityLogsMessage}
-                    activityLogs={activityLogs}
-                    handoffMessage={handoffNotesMessage}
-                    handoffNotes={handoffNotes}
-                    invoiceMessage={invoicesMessage}
-                    invoices={selectedRecordInvoices}
-                    isActivityLoading={
-                      activityLogsStatus === "loading"
-                    }
-                    isApplyingInvoiceRecommendation={
-                      isApplyingInvoiceRecommendation
-                    }
-                    isApplyingProposalRecommendation={
-                      isApplyingProposalRecommendation
-                    }
-                    isHandoffLoading={
-                      handoffNotesStatus === "loading"
-                    }
-                    isHandoffSaving={isSavingHandoffNote}
-                    isInvoiceLoading={
-                      invoicesStatus === "loading"
-                    }
-                    isInvoiceSaving={isSavingInvoice}
-                    isProposalLoading={
-                      proposalsStatus === "loading"
-                    }
-                    isProposalSaving={isSavingProposal}
-                    isRiskSignalSaving={isSavingRiskSignal}
-                    isRiskSignalsLoading={
-                      riskSignalsStatus === "loading"
-                    }
-                    isTaskSaving={isSavingWorkflowTask}
-                    isTasksLoading={
-                      workflowTasksStatus === "loading"
-                    }
-                    onAddHandoffNote={addHandoffNote}
-                    onAddInvoice={addInvoice}
-                    onAddProposal={addProposal}
-                    onAddTask={addWorkflowTask}
-                    onApplyInvoiceRecommendation={
-                      applyInvoiceRecommendation
-                    }
-                    onApplyProposalRecommendation={
-                      applyProposalRecommendation
-                    }
-                    onTabChange={setSelectedDetailTab}
-                    onUpdateInvoice={saveInvoiceUpdates}
-                    onUpdateProposal={saveProposalUpdates}
-                    onUpdateRecord={updateSelectedRecord}
-                    onUpdateRiskSignalStatus={
-                      saveRiskSignalStatus
-                    }
-                    onUpdateTaskStatus={
-                      saveWorkflowTaskStatus
-                    }
-                    proposalMessage={proposalsMessage}
-                    proposals={selectedRecordProposals}
-                    record={selectedRecord}
-                    riskSignalMessage={riskSignalsMessage}
-                    riskSignals={selectedRecordRiskSignals}
-                    tasks={workflowTasks}
-                    tasksMessage={workflowTasksMessage}
-                    updatingTaskId={updatingWorkflowTaskId}
-                  />
+                  <div className="min-w-0">
+                    <ClientRecordDetail
+                      activeTab={selectedDetailTab}
+                      activityMessage={activityLogsMessage}
+                      activityLogs={activityLogs}
+                      handoffMessage={handoffNotesMessage}
+                      handoffNotes={handoffNotes}
+                      invoiceMessage={invoicesMessage}
+                      invoices={selectedRecordInvoices}
+                      isActivityLoading={
+                        activityLogsStatus === "loading"
+                      }
+                      isApplyingInvoiceRecommendation={
+                        isApplyingInvoiceRecommendation
+                      }
+                      isApplyingProposalRecommendation={
+                        isApplyingProposalRecommendation
+                      }
+                      isHandoffLoading={
+                        handoffNotesStatus === "loading"
+                      }
+                      isHandoffSaving={isSavingHandoffNote}
+                      isInvoiceLoading={
+                        invoicesStatus === "loading"
+                      }
+                      isInvoiceSaving={isSavingInvoice}
+                      isProposalLoading={
+                        proposalsStatus === "loading"
+                      }
+                      isProposalSaving={isSavingProposal}
+                      isRiskSignalSaving={isSavingRiskSignal}
+                      isRiskSignalsLoading={
+                        riskSignalsStatus === "loading"
+                      }
+                      isTaskSaving={isSavingWorkflowTask}
+                      isTasksLoading={
+                        workflowTasksStatus === "loading"
+                      }
+                      onAddHandoffNote={addHandoffNote}
+                      onAddInvoice={addInvoice}
+                      onAddProposal={addProposal}
+                      onAddTask={addWorkflowTask}
+                      onApplyInvoiceRecommendation={
+                        applyInvoiceRecommendation
+                      }
+                      onApplyProposalRecommendation={
+                        applyProposalRecommendation
+                      }
+                      onTabChange={setSelectedDetailTab}
+                      onUpdateInvoice={saveInvoiceUpdates}
+                      onUpdateProposal={saveProposalUpdates}
+                      onUpdateRecord={updateSelectedRecord}
+                      onUpdateRiskSignalStatus={
+                        saveRiskSignalStatus
+                      }
+                      onUpdateTaskStatus={
+                        saveWorkflowTaskStatus
+                      }
+                      proposalMessage={proposalsMessage}
+                      proposals={selectedRecordProposals}
+                      record={selectedRecord}
+                      riskSignalMessage={riskSignalsMessage}
+                      riskSignals={selectedRecordRiskSignals}
+                      tasks={workflowTasks}
+                      tasksMessage={workflowTasksMessage}
+                      updatingTaskId={updatingWorkflowTaskId}
+                    />
+                  </div>
                 ) : null}
               </div>
             )}
