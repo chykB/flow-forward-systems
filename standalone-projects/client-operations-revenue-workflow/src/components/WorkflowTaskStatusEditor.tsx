@@ -7,7 +7,7 @@ import type {
 } from "@/lib/client-workflow-types";
 import type {
   WorkflowTaskStatusUpdate,
-} from "@/lib/supabase/workflow-tasks";
+} from "@/lib/application/workspace-api";
 
 type WorkflowTaskStatusEditorProps = {
   isSaving: boolean;

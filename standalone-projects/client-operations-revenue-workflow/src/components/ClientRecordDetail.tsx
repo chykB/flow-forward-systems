@@ -17,7 +17,7 @@ import { RiskSignalPanel } from "@/components/RiskSignalPanel";
 import { WorkflowTaskStatusEditor } from "@/components/WorkflowTaskStatusEditor";
 import type {
   WorkflowTaskStatusUpdate,
-} from "@/lib/supabase/workflow-tasks";
+} from "@/lib/application/workspace-api";
 import type {
   InvoiceWorkflowRecommendation as InvoiceRecommendationData,
 } from "@/lib/invoice-workflow";
@@ -46,7 +46,7 @@ import type {
 } from "@/lib/supabase/handoff-notes";
 import type {
   NewWorkflowTask,
-} from "@/lib/supabase/workflow-tasks";
+} from "@/lib/application/workspace-api";
 
 export type DetailTab =
   | "overview"

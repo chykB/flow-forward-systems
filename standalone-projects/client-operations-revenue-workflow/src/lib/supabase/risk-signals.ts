@@ -117,6 +117,42 @@ type RiskSignalReconciliationRpcResult = {
   changed: boolean;
 };
 
+export type RiskSignalReconciliationResult = {
+  clientRecord: ReturnType<
+    typeof mapClientWorkflowRecordRow
+  >;
+  riskSignals: RiskSignal[];
+  workflowHealthScore: number;
+  changed: boolean;
+};
+
+export function mapRiskSignalReconciliationResult(
+  data: unknown,
+): RiskSignalReconciliationResult {
+  const result =
+    data as RiskSignalReconciliationRpcResult | null;
+
+  if (
+    !result?.clientRecord ||
+    !Array.isArray(result.riskSignals) ||
+    typeof result.workflowHealthScore !== "number" ||
+    typeof result.changed !== "boolean"
+  ) {
+    throw new Error(
+      "The workflow risk review returned an invalid response.",
+    );
+  }
+
+  return {
+    clientRecord: mapClientWorkflowRecordRow(
+      result.clientRecord,
+    ),
+    riskSignals: result.riskSignals.map(mapRiskSignalRow),
+    workflowHealthScore: result.workflowHealthScore,
+    changed: result.changed,
+  };
+}
+
 export async function reconcileClientRiskSignals(
   supabase: SupabaseClient,
   workspaceId: string,
@@ -141,26 +177,5 @@ export async function reconcileClientRiskSignals(
     throw new Error(error.message);
   }
 
-  const result =
-    data as RiskSignalReconciliationRpcResult | null;
-
-  if (
-    !result?.clientRecord ||
-    !Array.isArray(result.riskSignals) ||
-    typeof result.workflowHealthScore !== "number" ||
-    typeof result.changed !== "boolean"
-  ) {
-    throw new Error(
-      "The workflow risk review returned an invalid response.",
-    );
-  }
-
-  return {
-    clientRecord: mapClientWorkflowRecordRow(
-      result.clientRecord,
-    ),
-    riskSignals: result.riskSignals.map(mapRiskSignalRow),
-    workflowHealthScore: result.workflowHealthScore,
-    changed: result.changed,
-  };
+  return mapRiskSignalReconciliationResult(data);
 }

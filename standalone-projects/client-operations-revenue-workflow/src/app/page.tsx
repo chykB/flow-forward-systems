@@ -24,6 +24,12 @@ import { PriorityCard } from "@/components/PriorityCard";
 import { PrioritySummaryRow } from "@/components/PrioritySummaryRow";
 import { RecordFiltersBar } from "@/components/RecordFiltersBar";
 import { WorkspaceGate } from "@/components/WorkspaceGate";
+import {
+  createOperationRequestId,
+  createWorkspaceApplicationApi,
+  type NewWorkflowTask,
+  type WorkflowTaskStatusUpdate,
+} from "@/lib/application/workspace-api";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser-client";
 import { getProposalsNeedingAction } from "@/lib/proposal-dashboard";
 import {
@@ -105,15 +111,6 @@ import {
   getWorkspaceHandoffNotes,
   type NewHandoffNote,
 } from "@/lib/supabase/handoff-notes";
-import {
-  createWorkflowTask,
-  getWorkspaceWorkflowTasks,
-  updateWorkflowTaskStatus,
-  type NewWorkflowTask,
-  type WorkflowTaskStatusUpdate,
-} from "@/lib/supabase/workflow-tasks";
-
-
 function getRelatedClientRecords(
   records: ClientWorkflowRecord[],
   relatedItems: Array<{
@@ -311,6 +308,10 @@ function WorkspaceDashboard({
   workspaceName,
 }: WorkspaceDashboardProps) {
   const supabase = useMemo(() => createBrowserSupabaseClient(), []);
+  const workspaceApi = useMemo(
+    () => createWorkspaceApplicationApi(supabase, workspaceId),
+    [supabase, workspaceId],
+  );
   const isSavingRecordRef = useRef(false);
   const updatingWorkflowTaskIdsRef =
   useRef(new Set<string>());
@@ -786,10 +787,7 @@ function WorkspaceDashboard({
 
       try {
         const workspaceWorkflowTasks =
-          await getWorkspaceWorkflowTasks(
-            supabase,
-            workspaceId,
-          );
+          await workspaceApi.workItems.list();
 
         if (!isMounted) {
           return;
@@ -819,7 +817,7 @@ function WorkspaceDashboard({
     return () => {
       isMounted = false;
     };
-  }, [recordsStatus, supabase, workspaceId]);
+  }, [recordsStatus, workspaceApi]);
 
   useEffect(() => {
     let isMounted = true;
@@ -990,28 +988,21 @@ function WorkspaceDashboard({
     setWorkflowTasksMessage("");
 
     try {
-      const savedTask = await createWorkflowTask(
-        supabase,
-        workspaceId,
+      const result = await workspaceApi.workItems.create({
+        commandId: createOperationRequestId(),
         task,
-      );
+      });
+      const savedTask = result.workItem;
 
       setWorkflowTasks((currentTasks) => [
         savedTask,
         ...currentTasks,
       ]);
 
-      await refreshRiskSignalsAfterChange(
-        savedTask.clientWorkflowRecordId,
-      );
-
-      await recordActivity({
-        clientWorkflowRecordId:
-          savedTask.clientWorkflowRecordId,
-        actionType: "Work item added",
-        note: `${savedTask.title} was added as a ${savedTask.type.toLowerCase()} work item.`,
-        createdAt: savedTask.createdAt,
-      });
+      applyRiskReconciliation(result.reconciliation);
+      setRiskSignalsStatus("ready");
+      setRiskSignalsMessage("");
+      await refreshActivityHistory();
     } catch (error) {
       const taskError =
         error instanceof Error
@@ -1056,12 +1047,14 @@ function WorkspaceDashboard({
     setWorkflowTasksMessage("");
 
     try {
-      const savedTask = await updateWorkflowTaskStatus(
-        supabase,
-        workspaceId,
-        workflowTaskId,
-        update,
-      );
+      const result =
+        await workspaceApi.workItems.updateStatus({
+          commandId: createOperationRequestId(),
+          workItemId: workflowTaskId,
+          expectedStatus: previousTask.status,
+          update,
+        });
+      const savedTask = result.workItem;
 
       setWorkflowTasks((currentTasks) =>
         currentTasks.map((task) =>
@@ -1069,17 +1062,10 @@ function WorkspaceDashboard({
         ),
       );
 
-      await refreshRiskSignalsAfterChange(
-        savedTask.clientWorkflowRecordId,
-      );
-
-      await recordActivity({
-        clientWorkflowRecordId:
-          savedTask.clientWorkflowRecordId,
-        actionType: "Work item status updated",
-        note: `${savedTask.title} changed from ${previousTask.status} to ${savedTask.status}.`,
-        createdAt: savedTask.updatedAt,
-      });
+      applyRiskReconciliation(result.reconciliation);
+      setRiskSignalsStatus("ready");
+      setRiskSignalsMessage("");
+      await refreshActivityHistory();
     } catch (error) {
       const taskError =
         error instanceof Error

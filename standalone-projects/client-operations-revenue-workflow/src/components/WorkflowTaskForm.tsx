@@ -8,7 +8,7 @@ import type {
 } from "@/lib/client-workflow-types";
 import type {
   NewWorkflowTask,
-} from "@/lib/supabase/workflow-tasks";
+} from "@/lib/application/workspace-api";
 
 type WorkflowTaskFormProps = {
   clientWorkflowRecordId: string;
