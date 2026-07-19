@@ -3,9 +3,11 @@
 import { useState } from "react";
 import type { ClientWorkflowRecord } from "@/lib/client-workflow-types";
 
-
 type NextActionFormProps = {
-  onUpdateRecord: (updates: Partial<ClientWorkflowRecord>, note: string) => void;
+  onUpdateRecord: (
+    updates: Partial<ClientWorkflowRecord>,
+    note: string,
+  ) => void;
   record: ClientWorkflowRecord;
 };
 
@@ -40,7 +42,11 @@ function FieldError({ message }: { message?: string }) {
     return null;
   }
 
-  return <p className="text-sm font-semibold text-red-700">{message}</p>;
+  return (
+    <p className="text-sm font-semibold text-red-700">
+      {message}
+    </p>
+  );
 }
 
 function ensureSentenceEnding(value: string) {
@@ -49,6 +55,37 @@ function ensureSentenceEnding(value: string) {
   return /[.!?]$/.test(trimmedValue)
     ? trimmedValue
     : `${trimmedValue}.`;
+}
+
+function buildActivityNote(
+  record: ClientWorkflowRecord,
+  values: FormValues,
+) {
+  const changes: string[] = [];
+
+  if (values.nextAction !== record.nextAction) {
+    changes.push(
+      `Next action changed to: ${ensureSentenceEnding(
+        values.nextAction,
+      )}`,
+    );
+  }
+
+  if (values.nextFollowUpAt !== record.nextFollowUpAt) {
+    changes.push(
+      `Follow-up date changed from ${record.nextFollowUpAt} ` +
+        `to ${values.nextFollowUpAt}.`,
+    );
+  }
+
+  if (values.assignedTo !== record.assignedTo) {
+    changes.push(
+      `Owner changed from ${record.assignedTo} ` +
+        `to ${values.assignedTo}.`,
+    );
+  }
+
+  return changes.join(" ");
 }
 
 export function NextActionForm({
@@ -84,16 +121,15 @@ export function NextActionForm({
       return;
     }
 
-    const nextAction = values.nextAction.trim();
+    const nextValues = {
+      nextAction: values.nextAction.trim(),
+      nextFollowUpAt: values.nextFollowUpAt,
+      assignedTo: values.assignedTo.trim(),
+    };
+
     onUpdateRecord(
-      {
-        nextAction,
-        nextFollowUpAt: values.nextFollowUpAt,
-        assignedTo: values.assignedTo.trim(),
-      },
-      `Next action updated to: ${ensureSentenceEnding(
-        nextAction,
-      )}`,
+      nextValues,
+      buildActivityNote(record, nextValues),
     );
   }
 
@@ -117,7 +153,9 @@ export function NextActionForm({
             className="rounded-md border border-[#D9DED8] bg-white px-4 py-3 outline-none focus:border-[#174F42]"
             id="next-action"
             value={values.nextAction}
-            onChange={(event) => updateField("nextAction", event.target.value)}
+            onChange={(event) =>
+              updateField("nextAction", event.target.value)
+            }
           />
           <FieldError message={errors.nextAction} />
         </div>
@@ -147,7 +185,9 @@ export function NextActionForm({
               className="rounded-md border border-[#D9DED8] bg-white px-4 py-3 outline-none focus:border-[#174F42]"
               id="next-owner"
               value={values.assignedTo}
-              onChange={(event) => updateField("assignedTo", event.target.value)}
+              onChange={(event) =>
+                updateField("assignedTo", event.target.value)
+              }
             />
             <FieldError message={errors.assignedTo} />
           </div>

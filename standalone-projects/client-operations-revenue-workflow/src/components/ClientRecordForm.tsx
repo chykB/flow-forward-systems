@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import type {
+  NewClientWorkflowRecord,
+} from "@/lib/application/workspace-api";
+import type {
   ClientType,
-  ClientWorkflowRecord,
   LifecycleStage,
   PriorityLevel,
   ReturningClientStatus,
@@ -12,7 +14,7 @@ import type {
 import { getLifecycleStageLabel } from "@/lib/client-workflow-display";
 
 type ClientRecordFormProps = {
-  onAddRecord: (record: ClientWorkflowRecord) => void;
+  onAddRecord: (record: NewClientWorkflowRecord) => void;
 };
 
 type FormValues = {
@@ -180,10 +182,7 @@ export function ClientRecordForm({ onAddRecord }: ClientRecordFormProps) {
       return;
     }
 
-    const now = new Date().toISOString();
-
     onAddRecord({
-      id: `record-${Date.now()}`,
       name: values.name.trim(),
       email: values.email.trim(),
       phone: "",
@@ -201,13 +200,10 @@ export function ClientRecordForm({ onAddRecord }: ClientRecordFormProps) {
       deliveryStatus: "Not started",
       approvalStatus: "Not needed",
       paymentStatus: "Not needed",
-      createdAt: now,
-      updatedAt: now,
       clientType: values.clientType,
       returningClientStatus: values.returningClientStatus,
       lastProjectDate: "",
       estimatedValue: 0,
-      workflowHealthScore: 75,
     });
 
     setValues(initialValues);

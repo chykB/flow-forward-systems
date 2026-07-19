@@ -27,6 +27,8 @@ import { WorkspaceGate } from "@/components/WorkspaceGate";
 import {
   createOperationRequestId,
   createWorkspaceApplicationApi,
+  type ClientWorkflowRecordUpdates,
+  type NewClientWorkflowRecord,
   type NewWorkflowTask,
   type WorkflowTaskStatusUpdate,
 } from "@/lib/application/workspace-api";
@@ -61,11 +63,6 @@ import type {
   NewProposalRecord,
   ProposalRecordUpdates,
 } from "@/lib/supabase/proposal-records";
-import {
-  createClientWorkflowRecord,
-  getClientWorkflowRecords,
-  updateClientWorkflowRecord,
-} from "@/lib/supabase/client-workflow-records";
 import type {
   ActivityLog,
   ClientWorkflowRecord,
@@ -582,10 +579,8 @@ function WorkspaceDashboard({
       setRiskSignalsMessage("");
 
       try {
-        const workspaceRecords = await getClientWorkflowRecords(
-          supabase,
-          workspaceId,
-        );
+        const workspaceRecords =
+          await workspaceApi.clientRecords.list();
 
         const reconciliationResults = await Promise.allSettled(
           workspaceRecords.map((record) =>
@@ -676,7 +671,7 @@ function WorkspaceDashboard({
     return () => {
       isMounted = false;
     };
-  }, [supabase, workspaceId]);
+  }, [supabase, workspaceApi, workspaceId]);
 
     useEffect(() => {
     if (recordsStatus !== "ready") {
@@ -900,29 +895,22 @@ function WorkspaceDashboard({
     };
   }, [supabase, workspaceId]);
 
-  async function addRecord(record: ClientWorkflowRecord) {
-    const now = new Date().toISOString();
-
+  async function addRecord(record: NewClientWorkflowRecord) {
     try {
-      const savedRecord = await createClientWorkflowRecord(
-        supabase,
-        workspaceId,
+      const result = await workspaceApi.clientRecords.create({
+        commandId: createOperationRequestId(),
         record,
-      );
+      });
+      const savedRecord = result.clientRecord;
 
       setRecords((currentRecords) => [
         savedRecord,
         ...currentRecords,
       ]);
-
-      await refreshRiskSignalsAfterChange(savedRecord.id);
-
-      await recordActivity({
-        clientWorkflowRecordId: savedRecord.id,
-        actionType: "Record created",
-        note: `${savedRecord.name} was added to the workflow with next action: ${savedRecord.nextAction}.`,
-        createdAt: now,
-      });
+      applyRiskReconciliation(result.reconciliation);
+      setRiskSignalsStatus("ready");
+      setRiskSignalsMessage("");
+      await refreshActivityHistory();
 
       setRecordFilters(initialRecordFilters);
       rememberSelectedRecord(savedRecord.id);
@@ -1087,7 +1075,7 @@ function WorkspaceDashboard({
   }
 
   function updateSelectedRecord(
-    updates: Partial<ClientWorkflowRecord>,
+    updates: ClientWorkflowRecordUpdates,
     note: string,
   ) {
     void saveSelectedRecordUpdates(updates, note);
@@ -1277,7 +1265,7 @@ function WorkspaceDashboard({
     }
   }
   async function saveSelectedRecordUpdates(
-    updates: Partial<ClientWorkflowRecord>,
+    updates: ClientWorkflowRecordUpdates,
     note: string,
   ) {
     if (!selectedRecord) {
@@ -1316,25 +1304,24 @@ function WorkspaceDashboard({
     );
 
     try {
-      const savedRecord = await updateClientWorkflowRecord(
-        supabase,
-        workspaceId,
-        selectedRecord.id,
+      const result = await workspaceApi.clientRecords.update({
+        commandId: createOperationRequestId(),
+        clientRecordId: selectedRecord.id,
+        expectedUpdatedAt: previousRecord.updatedAt,
         updates,
-      );
+        activityNote: note,
+      });
+      const savedRecord = result.clientRecord;
 
       setRecords((currentRecords) =>
         currentRecords.map((record) =>
           record.id === savedRecord.id ? savedRecord : record,
         ),
       );
-      await refreshRiskSignalsAfterChange(savedRecord.id);
-      await recordActivity({
-        clientWorkflowRecordId: savedRecord.id,
-        actionType: "Workflow status updated",
-        note,
-        createdAt: now,
-      });
+      applyRiskReconciliation(result.reconciliation);
+      setRiskSignalsStatus("ready");
+      setRiskSignalsMessage("");
+      await refreshActivityHistory();
 
       setRecordsMessage("");
       return true;
