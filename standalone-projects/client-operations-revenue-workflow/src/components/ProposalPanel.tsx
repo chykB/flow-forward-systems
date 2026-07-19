@@ -21,7 +21,7 @@ import {
 import type {
   NewProposalRecord,
   ProposalRecordUpdates,
-} from "@/lib/supabase/proposal-records";
+} from "@/lib/application/workspace-api";
 
 type ProposalPanelProps = {
   clientWorkflowRecordId: string;
@@ -439,6 +439,7 @@ function ProposalEditor({
             id={`proposal-notes-${proposal.id}`}
             className="min-h-24 rounded-md border border-[#D9DED8] px-4 py-3 text-[#17201C]"
             disabled={isSaving}
+            maxLength={1000}
             value={notes}
             onChange={(event) => {
               setNotes(event.target.value);

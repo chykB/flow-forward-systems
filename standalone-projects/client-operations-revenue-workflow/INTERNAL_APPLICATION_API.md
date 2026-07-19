@@ -2,7 +2,7 @@
 
 Status: Active technical contract
 
-Implemented slices: Work items, client records, and handoff notes
+Implemented slices: Work items, client records, handoff notes, and proposals
 
 Public API status: None of the interfaces or database functions in this document are a versioned customer API.
 
@@ -22,7 +22,7 @@ The manual and rules-based product remains fully operational without an AI provi
 
 ### Application contracts
 
-`src/lib/application/workspace-api.ts` defines UI-facing query and command types. Callers depend on this module instead of importing record, work-item, or handoff-note mutation adapters directly.
+`src/lib/application/workspace-api.ts` defines UI-facing query and command types. Callers depend on this module instead of importing record, work-item, handoff-note, or proposal mutation adapters directly.
 
 `WorkspaceApplicationApi` currently exposes:
 
@@ -32,6 +32,11 @@ The manual and rules-based product remains fully operational without an AI provi
 
 - `handoffNotes.list()`
 - `handoffNotes.create(command)`
+
+- `proposals.list()`
+- `proposals.create(command)`
+- `proposals.update(command)`
+- `proposals.applyRecommendation(command)`
 
 - `workItems.list()`
 - `workItems.create(command)`
@@ -43,21 +48,25 @@ Each command returns the saved entity. Commands that can change deterministic wo
 
 `src/lib/supabase/*` maps database rows and performs narrow Supabase calls. These modules are implementation details. They do not define product authorization or multi-step workflow behavior.
 
-For client records, work items, and handoff notes, direct browser insert, update, and delete privileges are revoked. Reads remain protected by existing workspace RLS. Internal recommendation functions continue to perform their scoped record updates as privileged database transactions.
+For client records, work items, handoff notes, and proposals, direct browser insert, update, and delete privileges are revoked. Reads remain protected by existing workspace RLS. The legacy Proposal recommendation function is no longer directly executable by authenticated callers; the Proposal recommendation command wraps it with explicit authorization, validation, idempotency, reconciliation, and Activity ownership.
 
 ### Atomic database commands
 
-The implemented migrations add five authenticated `security definer` functions:
+The implemented migrations add eight authenticated `security definer` command functions:
 
 - `command_create_client_workflow_record`
 - `command_update_client_workflow_record`
 
 - `command_create_handoff_note`
 
+- `command_create_proposal_record`
+- `command_update_proposal_record`
+- `command_apply_proposal_workflow_recommendation`
+
 - `command_create_workflow_task`
 - `command_update_workflow_task_status`
 
-Each function explicitly verifies that `auth.uid()` owns the workspace, validates its input, and performs the write with its durable Activity entry before committing. Commands that can change deterministic workflow conditions also reconcile risk signals and Workflow Health. Creating a context-only handoff note does not change risk or health.
+Each function explicitly verifies that `auth.uid()` owns the workspace, validates its input, and performs the write with its durable Activity entry before committing. Commands that can change deterministic workflow conditions also reconcile risk signals and Workflow Health. Creating a context-only handoff note does not change risk or health. Proposal recommendation application wraps the older scoped transaction so authenticated callers cannot bypass the command contract.
 
 These database functions are internal implementation details. Granting `authenticated` execution does not make them a supported external API.
 
@@ -67,7 +76,7 @@ These database functions are internal implementation details. Granting `authenti
 
 - A signed-in actor is required.
 - The actor must own the supplied workspace.
-- The referenced client record, work item, or handoff note must belong to that workspace.
+- The referenced client record, work item, handoff note, or Proposal must belong to that workspace.
 - Authorization is checked inside each privileged function because `security definer` functions do not rely on table RLS for their own statements.
 
 ### Validation
@@ -98,9 +107,18 @@ The work-item status command additionally validates the expected current status 
 
 Handoff-note creation validates the exact writable field set, client identifier, title, context, and owner. IDs, timestamps, workspace ownership, and other protected fields cannot be supplied.
 
+Proposal creation and update validate:
+
+- the exact writable field set, excluding IDs, timestamps, workspace ownership, and recommendation markers;
+- title, amount, currency, status, date, and decision-note requirements;
+- the referenced Client Record and workspace relationship;
+- the final merged Proposal state for partial updates.
+
+Proposal recommendation application accepts only the workflow fields produced by the deterministic recommendation engine. Relationship concern cannot be changed by a Proposal recommendation. The command verifies the expected Proposal status before applying the recommendation.
+
 ### Optimistic concurrency
 
-Work-item status updates include `expectedStatus`. Client-record updates include `expectedUpdatedAt`. The database refreshes the Client Record token with wall-clock time on every update, including multiple updates within one transaction. If another command changes the entity first, the command returns a conflict instead of overwriting newer data.
+Work-item status updates include `expectedStatus`. Client-record and Proposal updates include `expectedUpdatedAt`. The database refreshes those concurrency tokens with wall-clock time on every update, including multiple updates within one transaction. Proposal recommendation application includes `expectedStatus`. If another command changes an entity first, the command returns a conflict instead of overwriting newer data.
 
 ### Idempotency
 
@@ -117,6 +135,8 @@ Creating a client record writes exactly one `Record created` Activity entry. Upd
 Creating a work item writes exactly one `Work item added` Activity entry. Updating a status writes exactly one `Work item status updated` entry.
 
 Creating a handoff note writes exactly one `Handoff note added` Activity entry in the same transaction. It does not recalculate Workflow Health because recording delegation context does not itself create or resolve a workflow issue.
+
+Creating or updating a Proposal writes exactly one user-facing Proposal Activity entry and reconciles Proposal risks in the same transaction. Applying a Proposal recommendation writes exactly one `Proposal next step applied` entry when the recommendation is newly applied. An idempotent replay creates no duplicate Proposal, recommendation, risk, health, or Activity effects.
 
 Risk reconciliation remains deterministic and may also write `Workflow risk review updated` when active issues or Workflow Health change. The task, risk state, score, and Activity records commit or roll back together.
 
@@ -141,14 +161,14 @@ User-facing errors include the command or query request ID. Console diagnostics 
 | Client records | workspace records | none directly | create/update + reconciliation + Activity | Implemented in second slice |
 | Work items | workspace work items | none directly | create/status update + reconciliation + Activity | Implemented in first slice |
 | Handoff notes | workspace notes | none directly | create + Activity | Implemented in third slice |
-| Proposals | workspace/client proposals | create/update + reconciliation + Activity | apply recommendation transaction | Existing RPC retained; application facade pending |
+| Proposals | workspace/client proposals | none directly | create/update/recommendation + reconciliation + Activity | Implemented in fourth slice |
 | Invoices | workspace/client invoices | create/update + reconciliation + Activity | apply recommendation transaction | Existing RPC retained; application facade pending |
 | Risk signals | workspace risk history | review status | reconciliation | Existing guarded RPC retained; application facade pending |
-| Activity | workspace history | direct inserts from legacy flows | command-owned audit writes | Client-record, work-item, and handoff-note audit implemented; other flows pending |
+| Activity | workspace history | direct inserts from legacy flows | command-owned audit writes | Client-record, work-item, handoff-note, and Proposal audit implemented; other flows pending |
 
 ## Assistant Eligibility
 
-The client-record, work-item, and handoff-note commands are structurally suitable for a future protected assistant tool, but they are not exposed to an assistant yet. Assistant enablement also requires:
+The client-record, work-item, handoff-note, and Proposal commands are structurally suitable for a future protected assistant tool, but they are not exposed to an assistant yet. Assistant enablement also requires:
 
 - explicit per-tool policy and plan entitlements;
 - user confirmation for consequential changes;
@@ -161,6 +181,6 @@ The assistant should use the same application command contract as the manual UI 
 
 ## Next Slices
 
-1. Move proposal and invoice create/update flows behind the application facade; retain their existing atomic recommendation RPCs.
+1. Move Invoice create/update/recommendation flows behind the application facade.
 2. Move risk review status changes behind a command that performs reconciliation in the same transaction.
 3. Add a protected server tool layer only after the manual command surface is complete and tested.

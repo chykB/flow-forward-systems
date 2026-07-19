@@ -1,13 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ProposalRecord } from "@/lib/client-workflow-types";
-import type { ProposalWorkflowUpdates } from "@/lib/proposal-workflow";
 
-import {
-  mapClientWorkflowRecordRow,
-  type ClientWorkflowRecordRow,
-} from "@/lib/supabase/client-workflow-records";
-
-type ProposalRecordRow = {
+export type ProposalRecordRow = {
   id: string;
   workspace_id: string;
   client_workflow_record_id: string;
@@ -27,23 +21,9 @@ type ProposalRecordRow = {
   updated_at: string;
 };
 
-export type NewProposalRecord = Omit<
-  ProposalRecord,
-  | "id"
-  | "createdAt"
-  | "updatedAt"
-  | "workflowActionAppliedStatus"
-  | "workflowActionAppliedAt"
->;
-
-export type ProposalRecordUpdates = Partial<
-  Omit<
-    ProposalRecord,
-    "id" | "clientWorkflowRecordId" | "createdAt" | "updatedAt"
-  >
->;
-
-function mapProposalRow(row: ProposalRecordRow): ProposalRecord {
+export function mapProposalRow(
+  row: ProposalRecordRow,
+): ProposalRecord {
   return {
     id: row.id,
     clientWorkflowRecordId: row.client_workflow_record_id,
@@ -102,170 +82,4 @@ export async function getClientProposalRecords(
   }
 
   return (data as ProposalRecordRow[]).map(mapProposalRow);
-}
-
-export async function createProposalRecord(
-  supabase: SupabaseClient,
-  workspaceId: string,
-  proposal: NewProposalRecord,
-) {
-  const { data, error } = await supabase
-    .from("proposal_records")
-    .insert({
-      workspace_id: workspaceId,
-      client_workflow_record_id: proposal.clientWorkflowRecordId,
-      title: proposal.title,
-      amount: proposal.amount,
-      currency: proposal.currency,
-      status: proposal.status,
-      sent_at: proposal.sentAt || null,
-      expires_at: proposal.expiresAt || null,
-      accepted_at: proposal.acceptedAt || null,
-      rejected_at: proposal.rejectedAt || null,
-      revision_requested_at: proposal.revisionRequestedAt || null,
-      notes: proposal.notes,
-    })
-    .select("*")
-    .single();
-
-  if (error) {
-    console.error("Supabase proposal insert failed", error);
-    throw new Error(error.message);
-  }
-
-  return mapProposalRow(data as ProposalRecordRow);
-}
-
-function buildProposalUpdatePayload(updates: ProposalRecordUpdates) {
-  const payload: Record<string, string | number | null> = {};
-
-  if (updates.title !== undefined) {
-    payload.title = updates.title;
-  }
-
-  if (updates.amount !== undefined) {
-    payload.amount = updates.amount;
-  }
-
-  if (updates.currency !== undefined) {
-    payload.currency = updates.currency;
-  }
-
-  if (updates.status !== undefined) {
-    payload.status = updates.status;
-  }
-
-  if (updates.sentAt !== undefined) {
-    payload.sent_at = updates.sentAt || null;
-  }
-
-  if (updates.expiresAt !== undefined) {
-    payload.expires_at = updates.expiresAt || null;
-  }
-
-  if (updates.acceptedAt !== undefined) {
-    payload.accepted_at = updates.acceptedAt || null;
-  }
-
-  if (updates.rejectedAt !== undefined) {
-    payload.rejected_at = updates.rejectedAt || null;
-  }
-
-  if (updates.revisionRequestedAt !== undefined) {
-    payload.revision_requested_at =
-      updates.revisionRequestedAt || null;
-  }
-
-  if (updates.notes !== undefined) {
-    payload.notes = updates.notes;
-  }
-  if (updates.workflowActionAppliedStatus !== undefined) {
-    payload.workflow_action_applied_status =
-      updates.workflowActionAppliedStatus || null;
-  }
-
-  if (updates.workflowActionAppliedAt !== undefined) {
-    payload.workflow_action_applied_at =
-      updates.workflowActionAppliedAt || null;
-  }
-
-  return payload;
-}
-
-export async function updateProposalRecord(
-  supabase: SupabaseClient,
-  workspaceId: string,
-  proposalId: string,
-  updates: ProposalRecordUpdates,
-) {
-  const payload = buildProposalUpdatePayload(updates);
-
-  if (Object.keys(payload).length === 0) {
-    throw new Error("No proposal changes were provided.");
-  }
-
-  const { data, error } = await supabase
-    .from("proposal_records")
-    .update(payload)
-    .eq("workspace_id", workspaceId)
-    .eq("id", proposalId)
-    .select("*")
-    .single();
-
-  if (error) {
-    console.error("Supabase proposal update failed", error);
-    throw new Error(error.message);
-  }
-
-  return mapProposalRow(data as ProposalRecordRow);
-
-}
-type ProposalWorkflowRpcResult = {
-  clientRecord: ClientWorkflowRecordRow;
-  proposal: ProposalRecordRow;
-  alreadyApplied: boolean;
-};
-
-export async function applyProposalWorkflowRecommendationTransaction(
-  supabase: SupabaseClient,
-  workspaceId: string,
-  proposal: ProposalRecord,
-  updates: ProposalWorkflowUpdates,
-) {
-  const { data, error } = await supabase.rpc(
-    "apply_proposal_workflow_recommendation",
-    {
-      p_workspace_id: workspaceId,
-      p_proposal_id: proposal.id,
-      p_client_workflow_record_id:
-        proposal.clientWorkflowRecordId,
-      p_expected_proposal_status: proposal.status,
-      p_updates: updates,
-    },
-  );
-
-  if (error) {
-    console.error(
-      "Supabase proposal workflow transaction failed",
-      error,
-    );
-
-    throw new Error(error.message);
-  }
-
-  const result = data as ProposalWorkflowRpcResult | null;
-
-  if (!result?.clientRecord || !result.proposal) {
-    throw new Error(
-      "The proposal workflow update returned an invalid response.",
-    );
-  }
-
-  return {
-    clientRecord: mapClientWorkflowRecordRow(
-      result.clientRecord,
-    ),
-    proposal: mapProposalRow(result.proposal),
-    alreadyApplied: result.alreadyApplied,
-  };
 }

@@ -2,9 +2,13 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   ClientWorkflowRecord,
   HandoffNote,
+  ProposalRecord,
   WorkflowTask,
 } from "@/lib/client-workflow-types";
 import { getLocalDateKey } from "@/lib/date-key";
+import type {
+  ProposalWorkflowUpdates,
+} from "@/lib/proposal-workflow";
 import {
   mapRiskSignalReconciliationResult,
   type RiskSignalReconciliationResult,
@@ -19,6 +23,11 @@ import {
   mapHandoffNoteRow,
   type HandoffNoteRow,
 } from "@/lib/supabase/handoff-notes";
+import {
+  getWorkspaceProposalRecords,
+  mapProposalRow,
+  type ProposalRecordRow,
+} from "@/lib/supabase/proposal-records";
 import {
   getWorkspaceWorkflowTasks,
   mapWorkflowTaskRow,
@@ -46,6 +55,27 @@ export type ClientWorkflowRecordUpdates = Partial<
 export type NewHandoffNote = Omit<
   HandoffNote,
   "id" | "createdAt"
+>;
+
+export type NewProposalRecord = Omit<
+  ProposalRecord,
+  | "id"
+  | "createdAt"
+  | "updatedAt"
+  | "workflowActionAppliedStatus"
+  | "workflowActionAppliedAt"
+>;
+
+export type ProposalRecordUpdates = Partial<
+  Omit<
+    ProposalRecord,
+    | "id"
+    | "clientWorkflowRecordId"
+    | "createdAt"
+    | "updatedAt"
+    | "workflowActionAppliedStatus"
+    | "workflowActionAppliedAt"
+  >
 >;
 
 export type WorkspaceApiErrorCode =
@@ -90,9 +120,44 @@ export type HandoffNoteCommandResult = {
   handoffNote: HandoffNote;
 };
 
+export type ProposalCommandResult = {
+  requestId: string;
+  proposal: ProposalRecord;
+  reconciliation: RiskSignalReconciliationResult;
+};
+
+export type ProposalRecommendationCommandResult =
+  ProposalCommandResult & {
+    clientRecord: ClientWorkflowRecord;
+    alreadyApplied: boolean;
+  };
+
 export type CreateHandoffNoteCommand = {
   commandId: string;
   note: NewHandoffNote;
+};
+
+export type CreateProposalCommand = {
+  commandId: string;
+  proposal: NewProposalRecord;
+  evaluationDate?: Date;
+};
+
+export type UpdateProposalCommand = {
+  commandId: string;
+  proposalId: string;
+  expectedUpdatedAt: string;
+  updates: ProposalRecordUpdates;
+  evaluationDate?: Date;
+};
+
+export type ApplyProposalRecommendationCommand = {
+  commandId: string;
+  proposalId: string;
+  clientWorkflowRecordId: string;
+  expectedStatus: ProposalRecord["status"];
+  updates: ProposalWorkflowUpdates;
+  evaluationDate?: Date;
 };
 
 export type CreateClientRecordCommand = {
@@ -140,6 +205,18 @@ export type WorkspaceApplicationApi = {
       command: CreateHandoffNoteCommand,
     ) => Promise<HandoffNoteCommandResult>;
   };
+  proposals: {
+    list: () => Promise<ProposalRecord[]>;
+    create: (
+      command: CreateProposalCommand,
+    ) => Promise<ProposalCommandResult>;
+    update: (
+      command: UpdateProposalCommand,
+    ) => Promise<ProposalCommandResult>;
+    applyRecommendation: (
+      command: ApplyProposalRecommendationCommand,
+    ) => Promise<ProposalRecommendationCommandResult>;
+  };
   workItems: {
     list: () => Promise<WorkflowTask[]>;
     create: (
@@ -173,6 +250,18 @@ type HandoffNoteCommandRpcResult = {
   handoffNote: HandoffNoteRow;
 };
 
+type ProposalCommandRpcResult = {
+  requestId: string;
+  proposal: ProposalRecordRow;
+  reconciliation: unknown;
+};
+
+type ProposalRecommendationCommandRpcResult =
+  ProposalCommandRpcResult & {
+    clientRecord: ClientWorkflowRecordRow;
+    alreadyApplied: boolean;
+  };
+
 const workflowStatuses = new Set<WorkflowTask["status"]>([
   "Not started",
   "In progress",
@@ -196,6 +285,15 @@ const taskCriticalities = new Set<
   "High",
   "Medium",
   "Low",
+]);
+const proposalStatuses = new Set<ProposalRecord["status"]>([
+  "Not needed",
+  "Draft needed",
+  "Sent",
+  "Revision requested",
+  "Accepted",
+  "Rejected",
+  "Expired",
 ]);
 const lifecycleStages = new Set<
   ClientWorkflowRecord["lifecycleStage"]
@@ -267,6 +365,45 @@ const handoffNoteFields = new Set<keyof NewHandoffNote>([
   "title",
   "note",
   "owner",
+]);
+const proposalFields = new Set<keyof NewProposalRecord>([
+  "clientWorkflowRecordId",
+  "title",
+  "amount",
+  "currency",
+  "status",
+  "sentAt",
+  "expiresAt",
+  "acceptedAt",
+  "rejectedAt",
+  "revisionRequestedAt",
+  "notes",
+]);
+const mutableProposalFields = new Set<
+  keyof ProposalRecordUpdates
+>([
+  "title",
+  "amount",
+  "currency",
+  "status",
+  "sentAt",
+  "expiresAt",
+  "acceptedAt",
+  "rejectedAt",
+  "revisionRequestedAt",
+  "notes",
+]);
+const proposalWorkflowFields = new Set<
+  keyof ProposalWorkflowUpdates
+>([
+  "lifecycleStage",
+  "clientType",
+  "returningClientStatus",
+  "nextAction",
+  "nextFollowUpAt",
+  "onboardingStatus",
+  "priority",
+  "estimatedValue",
 ]);
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -439,6 +576,69 @@ function mapHandoffNoteCommandResult(
   return {
     requestId: result.requestId,
     handoffNote: mapHandoffNoteRow(result.handoffNote),
+  };
+}
+
+function mapProposalCommandResult(
+  data: unknown,
+  expectedRequestId: string,
+): ProposalCommandResult {
+  const result = data as ProposalCommandRpcResult | null;
+
+  if (
+    !result?.requestId ||
+    result.requestId !== expectedRequestId ||
+    !result.proposal ||
+    !result.reconciliation
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_response",
+      "The proposal operation returned an invalid response.",
+      expectedRequestId,
+    );
+  }
+
+  return {
+    requestId: result.requestId,
+    proposal: mapProposalRow(result.proposal),
+    reconciliation: mapRiskSignalReconciliationResult(
+      result.reconciliation,
+    ),
+  };
+}
+
+function mapProposalRecommendationCommandResult(
+  data: unknown,
+  expectedRequestId: string,
+): ProposalRecommendationCommandResult {
+  const result =
+    data as ProposalRecommendationCommandRpcResult | null;
+
+  if (
+    !result?.requestId ||
+    result.requestId !== expectedRequestId ||
+    !result.proposal ||
+    !result.clientRecord ||
+    typeof result.alreadyApplied !== "boolean" ||
+    !result.reconciliation
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_response",
+      "The proposal recommendation returned an invalid response.",
+      expectedRequestId,
+    );
+  }
+
+  return {
+    requestId: result.requestId,
+    proposal: mapProposalRow(result.proposal),
+    clientRecord: mapClientWorkflowRecordRow(
+      result.clientRecord,
+    ),
+    alreadyApplied: result.alreadyApplied,
+    reconciliation: mapRiskSignalReconciliationResult(
+      result.reconciliation,
+    ),
   };
 }
 
@@ -905,6 +1105,552 @@ function validateCreateHandoffNoteCommand(
   );
 }
 
+function assertProposalDate(
+  value: string,
+  label: string,
+  requestId: string,
+) {
+  if (value && !dateKeyPattern.test(value)) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      `${label} is invalid.`,
+      requestId,
+    );
+  }
+}
+
+function validateProposalValues(
+  proposal: NewProposalRecord,
+  requestId: string,
+) {
+  if (
+    typeof proposal.clientWorkflowRecordId !== "string" ||
+    typeof proposal.title !== "string" ||
+    typeof proposal.amount !== "number" ||
+    typeof proposal.currency !== "string" ||
+    typeof proposal.status !== "string" ||
+    typeof proposal.sentAt !== "string" ||
+    typeof proposal.expiresAt !== "string" ||
+    typeof proposal.acceptedAt !== "string" ||
+    typeof proposal.rejectedAt !== "string" ||
+    typeof proposal.revisionRequestedAt !== "string" ||
+    typeof proposal.notes !== "string"
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Proposal fields use an invalid value type.",
+      requestId,
+    );
+  }
+
+  assertUuid(
+    proposal.clientWorkflowRecordId,
+    "The client record identifier",
+    requestId,
+  );
+  assertMinimumText(
+    proposal.title,
+    2,
+    "Enter a proposal or quote title.",
+    requestId,
+  );
+  assertMaximumText(
+    proposal.title,
+    160,
+    "Keep the proposal title under 160 characters.",
+    requestId,
+  );
+
+  if (
+    !Number.isFinite(proposal.amount) ||
+    proposal.amount < 0 ||
+    proposal.amount >= 10_000_000_000
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Enter a valid proposal amount.",
+      requestId,
+    );
+  }
+
+  if (!/^[A-Za-z]{3}$/.test(proposal.currency.trim())) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Use a three-letter currency code.",
+      requestId,
+    );
+  }
+
+  if (!proposalStatuses.has(proposal.status)) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Choose a valid proposal status.",
+      requestId,
+    );
+  }
+
+  assertProposalDate(proposal.sentAt, "The sent date", requestId);
+  assertProposalDate(
+    proposal.expiresAt,
+    "The expiry date",
+    requestId,
+  );
+  assertProposalDate(
+    proposal.acceptedAt,
+    "The acceptance date",
+    requestId,
+  );
+  assertProposalDate(
+    proposal.rejectedAt,
+    "The rejection date",
+    requestId,
+  );
+  assertProposalDate(
+    proposal.revisionRequestedAt,
+    "The revision request date",
+    requestId,
+  );
+
+  if (
+    (proposal.status === "Sent" ||
+      proposal.status === "Accepted") &&
+    proposal.amount <= 0
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Enter the proposed amount.",
+      requestId,
+    );
+  }
+
+  const requiredDate =
+    proposal.status === "Sent"
+      ? proposal.sentAt
+      : proposal.status === "Revision requested"
+        ? proposal.revisionRequestedAt
+        : proposal.status === "Accepted"
+          ? proposal.acceptedAt
+          : proposal.status === "Rejected"
+            ? proposal.rejectedAt
+            : proposal.status === "Expired"
+              ? proposal.expiresAt
+              : "valid";
+
+  if (!requiredDate) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Enter the date required for this proposal status.",
+      requestId,
+    );
+  }
+
+  if (
+    (proposal.status === "Revision requested" ||
+      proposal.status === "Rejected") &&
+    proposal.notes.trim().length < 5
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Add a short note explaining this decision.",
+      requestId,
+    );
+  }
+
+  assertMaximumText(
+    proposal.notes,
+    1000,
+    "Keep proposal notes under 1,000 characters.",
+    requestId,
+  );
+}
+
+function normalizeProposalValues<
+  T extends NewProposalRecord | ProposalRecordUpdates,
+>(
+  values: T,
+) {
+  return Object.fromEntries(
+    Object.entries(values).map(([field, value]) => [
+      field,
+      typeof value === "string"
+        ? field === "currency"
+          ? value.trim().toUpperCase()
+          : value.trim()
+        : value,
+    ]),
+  ) as T;
+}
+
+function validateCreateProposalCommand(
+  workspaceId: string,
+  command: CreateProposalCommand,
+) {
+  assertRequestId(command.commandId);
+  assertUuid(
+    workspaceId,
+    "The workspace identifier",
+    command.commandId,
+  );
+
+  if (
+    !command.proposal ||
+    typeof command.proposal !== "object" ||
+    Array.isArray(command.proposal)
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Proposal details are required.",
+      command.commandId,
+    );
+  }
+
+  const suppliedFields = Object.keys(
+    command.proposal,
+  ) as Array<keyof NewProposalRecord>;
+
+  if (
+    suppliedFields.length !== proposalFields.size ||
+    suppliedFields.some((field) => !proposalFields.has(field))
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Proposal details are incomplete or contain a protected field.",
+      command.commandId,
+    );
+  }
+
+  validateProposalValues(command.proposal, command.commandId);
+}
+
+function validateUpdateProposalCommand(
+  workspaceId: string,
+  command: UpdateProposalCommand,
+) {
+  assertRequestId(command.commandId);
+  assertUuid(
+    workspaceId,
+    "The workspace identifier",
+    command.commandId,
+  );
+  assertUuid(
+    command.proposalId,
+    "The proposal identifier",
+    command.commandId,
+  );
+
+  if (
+    !timestampPattern.test(command.expectedUpdatedAt) ||
+    Number.isNaN(Date.parse(command.expectedUpdatedAt))
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "The expected proposal version is invalid.",
+      command.commandId,
+    );
+  }
+
+  if (
+    !command.updates ||
+    typeof command.updates !== "object" ||
+    Array.isArray(command.updates)
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Proposal changes are required.",
+      command.commandId,
+    );
+  }
+
+  const fields = Object.keys(command.updates) as Array<
+    keyof ProposalRecordUpdates
+  >;
+
+  if (
+    fields.length === 0 ||
+    fields.some((field) => !mutableProposalFields.has(field))
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Proposal changes are empty or contain a protected field.",
+      command.commandId,
+    );
+  }
+
+  if (command.updates.title !== undefined) {
+    if (typeof command.updates.title !== "string") {
+      throw new WorkspaceApiError(
+        "invalid_request",
+        "The proposal title must be text.",
+        command.commandId,
+      );
+    }
+    assertMinimumText(
+      command.updates.title,
+      2,
+      "Enter a proposal or quote title.",
+      command.commandId,
+    );
+    assertMaximumText(
+      command.updates.title,
+      160,
+      "Keep the proposal title under 160 characters.",
+      command.commandId,
+    );
+  }
+
+  if (
+    command.updates.amount !== undefined &&
+    (typeof command.updates.amount !== "number" ||
+      !Number.isFinite(command.updates.amount) ||
+      command.updates.amount < 0 ||
+      command.updates.amount >= 10_000_000_000)
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Enter a valid proposal amount.",
+      command.commandId,
+    );
+  }
+
+  if (
+    command.updates.currency !== undefined &&
+    (typeof command.updates.currency !== "string" ||
+      !/^[A-Za-z]{3}$/.test(command.updates.currency.trim()))
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Use a three-letter currency code.",
+      command.commandId,
+    );
+  }
+
+  if (
+    command.updates.status !== undefined &&
+    (typeof command.updates.status !== "string" ||
+      !proposalStatuses.has(command.updates.status))
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Choose a valid proposal status.",
+      command.commandId,
+    );
+  }
+
+  const dateUpdates: Array<
+    [keyof ProposalRecordUpdates, string]
+  > = [
+    ["sentAt", "The sent date"],
+    ["expiresAt", "The expiry date"],
+    ["acceptedAt", "The acceptance date"],
+    ["rejectedAt", "The rejection date"],
+    ["revisionRequestedAt", "The revision request date"],
+  ];
+
+  for (const [field, label] of dateUpdates) {
+    const value = command.updates[field];
+
+    if (value !== undefined) {
+      if (typeof value !== "string") {
+        throw new WorkspaceApiError(
+          "invalid_request",
+          `${label} must be text.`,
+          command.commandId,
+        );
+      }
+      assertProposalDate(value, label, command.commandId);
+    }
+  }
+
+  if (command.updates.notes !== undefined) {
+    if (typeof command.updates.notes !== "string") {
+      throw new WorkspaceApiError(
+        "invalid_request",
+        "Proposal notes must be text.",
+        command.commandId,
+      );
+    }
+    assertMaximumText(
+      command.updates.notes,
+      1000,
+      "Keep proposal notes under 1,000 characters.",
+      command.commandId,
+    );
+  }
+}
+
+function validateProposalWorkflowUpdates(
+  command: ApplyProposalRecommendationCommand,
+) {
+  const { commandId, updates } = command;
+
+  if (!updates || typeof updates !== "object" || Array.isArray(updates)) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Proposal workflow changes are required.",
+      commandId,
+    );
+  }
+
+  const fields = Object.keys(updates) as Array<
+    keyof ProposalWorkflowUpdates
+  >;
+
+  if (
+    fields.length === 0 ||
+    fields.some((field) => !proposalWorkflowFields.has(field))
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Proposal workflow changes contain an unsupported field.",
+      commandId,
+    );
+  }
+
+  if (
+    updates.lifecycleStage !== undefined &&
+    (typeof updates.lifecycleStage !== "string" ||
+      !lifecycleStages.has(updates.lifecycleStage))
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Choose a valid workflow stage.",
+      commandId,
+    );
+  }
+
+  if (
+    updates.clientType !== undefined &&
+    (typeof updates.clientType !== "string" ||
+      !clientTypes.has(updates.clientType))
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Choose a valid client type.",
+      commandId,
+    );
+  }
+
+  if (
+    updates.returningClientStatus !== undefined &&
+    (typeof updates.returningClientStatus !== "string" ||
+      !returningClientStatuses.has(updates.returningClientStatus))
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Choose a valid returning-client status.",
+      commandId,
+    );
+  }
+
+  if (updates.nextAction !== undefined) {
+    if (typeof updates.nextAction !== "string") {
+      throw new WorkspaceApiError(
+        "invalid_request",
+        "The recommended next action must be text.",
+        commandId,
+      );
+    }
+    assertMinimumText(
+      updates.nextAction,
+      5,
+      "Enter the recommended next action.",
+      commandId,
+    );
+  }
+
+  if (
+    updates.nextFollowUpAt !== undefined &&
+    (typeof updates.nextFollowUpAt !== "string" ||
+      !dateKeyPattern.test(updates.nextFollowUpAt))
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Choose a valid follow-up date.",
+      commandId,
+    );
+  }
+
+  if (
+    updates.onboardingStatus !== undefined &&
+    (typeof updates.onboardingStatus !== "string" ||
+      !workflowStatuses.has(updates.onboardingStatus))
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Choose a valid onboarding status.",
+      commandId,
+    );
+  }
+
+  if (
+    updates.priority !== undefined &&
+    (typeof updates.priority !== "string" ||
+      !priorities.has(updates.priority))
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Choose a valid priority.",
+      commandId,
+    );
+  }
+
+  if (
+    updates.estimatedValue !== undefined &&
+    (typeof updates.estimatedValue !== "number" ||
+      !Number.isFinite(updates.estimatedValue) ||
+      updates.estimatedValue < 0)
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Enter a valid estimated value.",
+      commandId,
+    );
+  }
+}
+
+function normalizeProposalWorkflowUpdates(
+  updates: ProposalWorkflowUpdates,
+) {
+  return Object.fromEntries(
+    Object.entries(updates).map(([field, value]) => [
+      field,
+      typeof value === "string" ? value.trim() : value,
+    ]),
+  ) as ProposalWorkflowUpdates;
+}
+
+function validateApplyProposalRecommendationCommand(
+  workspaceId: string,
+  command: ApplyProposalRecommendationCommand,
+) {
+  assertRequestId(command.commandId);
+  assertUuid(
+    workspaceId,
+    "The workspace identifier",
+    command.commandId,
+  );
+  assertUuid(
+    command.proposalId,
+    "The proposal identifier",
+    command.commandId,
+  );
+  assertUuid(
+    command.clientWorkflowRecordId,
+    "The client record identifier",
+    command.commandId,
+  );
+
+  if (!proposalStatuses.has(command.expectedStatus)) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Choose a valid expected proposal status.",
+      command.commandId,
+    );
+  }
+
+  validateProposalWorkflowUpdates(command);
+}
+
 function validateStatusCommand(
   workspaceId: string,
   command: UpdateWorkItemStatusCommand,
@@ -1130,6 +1876,158 @@ export function createWorkspaceApplicationApi(
             error,
             commandId,
             "The handoff note could not be saved.",
+          );
+        }
+      },
+    },
+    proposals: {
+      async list() {
+        const requestId = createOperationRequestId();
+
+        try {
+          assertUuid(
+            workspaceId,
+            "The workspace identifier",
+            requestId,
+          );
+          return await getWorkspaceProposalRecords(
+            supabase,
+            workspaceId,
+          );
+        } catch (error) {
+          console.error(
+            "Workspace API proposal query failed",
+            { requestId, error },
+          );
+          throw mapOperationError(
+            error,
+            requestId,
+            "Proposals and quotes could not be loaded.",
+          );
+        }
+      },
+
+      async create(command) {
+        validateCreateProposalCommand(workspaceId, command);
+
+        try {
+          const { data, error } = await supabase.rpc(
+            "command_create_proposal_record",
+            {
+              p_workspace_id: workspaceId,
+              p_proposal: normalizeProposalValues(
+                command.proposal,
+              ),
+              p_evaluation_date: getLocalDateKey(
+                command.evaluationDate ?? new Date(),
+              ),
+              p_idempotency_key: command.commandId,
+            },
+          );
+
+          if (error) {
+            throw error;
+          }
+
+          return mapProposalCommandResult(
+            data,
+            command.commandId,
+          );
+        } catch (error) {
+          console.error(
+            "Workspace API proposal create failed",
+            { requestId: command.commandId, error },
+          );
+          throw mapOperationError(
+            error,
+            command.commandId,
+            "The proposal could not be saved.",
+          );
+        }
+      },
+
+      async update(command) {
+        validateUpdateProposalCommand(workspaceId, command);
+
+        try {
+          const { data, error } = await supabase.rpc(
+            "command_update_proposal_record",
+            {
+              p_workspace_id: workspaceId,
+              p_proposal_id: command.proposalId,
+              p_expected_updated_at: command.expectedUpdatedAt,
+              p_updates: normalizeProposalValues(command.updates),
+              p_evaluation_date: getLocalDateKey(
+                command.evaluationDate ?? new Date(),
+              ),
+              p_idempotency_key: command.commandId,
+            },
+          );
+
+          if (error) {
+            throw error;
+          }
+
+          return mapProposalCommandResult(
+            data,
+            command.commandId,
+          );
+        } catch (error) {
+          console.error(
+            "Workspace API proposal update failed",
+            { requestId: command.commandId, error },
+          );
+          throw mapOperationError(
+            error,
+            command.commandId,
+            "The proposal could not be updated.",
+          );
+        }
+      },
+
+      async applyRecommendation(command) {
+        validateApplyProposalRecommendationCommand(
+          workspaceId,
+          command,
+        );
+
+        try {
+          const { data, error } = await supabase.rpc(
+            "command_apply_proposal_workflow_recommendation",
+            {
+              p_workspace_id: workspaceId,
+              p_proposal_id: command.proposalId,
+              p_client_workflow_record_id:
+                command.clientWorkflowRecordId,
+              p_expected_proposal_status:
+                command.expectedStatus,
+              p_updates: normalizeProposalWorkflowUpdates(
+                command.updates,
+              ),
+              p_evaluation_date: getLocalDateKey(
+                command.evaluationDate ?? new Date(),
+              ),
+              p_idempotency_key: command.commandId,
+            },
+          );
+
+          if (error) {
+            throw error;
+          }
+
+          return mapProposalRecommendationCommandResult(
+            data,
+            command.commandId,
+          );
+        } catch (error) {
+          console.error(
+            "Workspace API proposal recommendation failed",
+            { requestId: command.commandId, error },
+          );
+          throw mapOperationError(
+            error,
+            command.commandId,
+            "The recommended proposal step could not be applied.",
           );
         }
       },

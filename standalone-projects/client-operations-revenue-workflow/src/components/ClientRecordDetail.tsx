@@ -41,8 +41,6 @@ import type {
 import type {
   NewProposalRecord,
   ProposalRecordUpdates,
-} from "@/lib/supabase/proposal-records";
-import type {
   NewWorkflowTask,
 } from "@/lib/application/workspace-api";
 

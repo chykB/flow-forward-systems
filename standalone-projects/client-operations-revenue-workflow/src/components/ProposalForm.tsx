@@ -6,7 +6,7 @@ import {
   getTodayDateInputValue,
   newProposalStatusOptions,
 } from "@/lib/proposal-options";
-import type { NewProposalRecord } from "@/lib/supabase/proposal-records";
+import type { NewProposalRecord } from "@/lib/application/workspace-api";
 
 type ProposalFormProps = {
   clientWorkflowRecordId: string;
@@ -245,6 +245,7 @@ export function ProposalForm({
         <input
           id="proposal-title"
           className="rounded-md border border-[#D9DED8] px-4 py-3 text-[#17201C]"
+          maxLength={160}
           value={values.title}
           onChange={(event) =>
             updateField("title", event.target.value)
@@ -414,6 +415,7 @@ export function ProposalForm({
         <textarea
           id="proposal-notes"
           className="min-h-28 rounded-md border border-[#D9DED8] px-4 py-3 text-[#17201C]"
+          maxLength={1000}
           value={values.notes}
           onChange={(event) =>
             updateField("notes", event.target.value)

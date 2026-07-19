@@ -30,7 +30,9 @@ import {
   type ClientWorkflowRecordUpdates,
   type NewClientWorkflowRecord,
   type NewHandoffNote,
+  type NewProposalRecord,
   type NewWorkflowTask,
+  type ProposalRecordUpdates,
   type WorkflowTaskStatusUpdate,
 } from "@/lib/application/workspace-api";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser-client";
@@ -54,16 +56,6 @@ import {
 import type {
   ProposalWorkflowRecommendation as ProposalWorkflowRecommendationData,
 } from "@/lib/proposal-workflow";
-import {
-  applyProposalWorkflowRecommendationTransaction,
-  createProposalRecord,
-  getWorkspaceProposalRecords,
-  updateProposalRecord,
-} from "@/lib/supabase/proposal-records";
-import type {
-  NewProposalRecord,
-  ProposalRecordUpdates,
-} from "@/lib/supabase/proposal-records";
 import type {
   ActivityLog,
   ClientWorkflowRecord,
@@ -101,9 +93,6 @@ import {
 import {
   getInvoiceStatusLabel,
 } from "@/lib/invoice-options";
-import {
-  getProposalStatusLabel,
-} from "@/lib/proposal-options";
 function getRelatedClientRecords(
   records: ClientWorkflowRecord[],
   relatedItems: Array<{
@@ -815,10 +804,8 @@ function WorkspaceDashboard({
       setProposalsMessage("");
 
       try {
-        const workspaceProposals = await getWorkspaceProposalRecords(
-          supabase,
-          workspaceId,
-        );
+        const workspaceProposals =
+          await workspaceApi.proposals.list();
 
         if (!isMounted) {
           return;
@@ -845,7 +832,7 @@ function WorkspaceDashboard({
     return () => {
       isMounted = false;
     };
-  }, [supabase, workspaceId]);
+  }, [workspaceApi]);
 
   useEffect(() => {
     let isMounted = true;
@@ -1339,26 +1326,20 @@ function WorkspaceDashboard({
     setProposalsMessage("");
 
     try {
-      const savedProposal = await createProposalRecord(
-        supabase,
-        workspaceId,
+      const result = await workspaceApi.proposals.create({
+        commandId: createOperationRequestId(),
         proposal,
-      );
+      });
+      const savedProposal = result.proposal;
 
       setProposals((currentProposals) => [
         savedProposal,
         ...currentProposals,
       ]);
-      await refreshRiskSignalsAfterChange(
-        savedProposal.clientWorkflowRecordId,
-      );
-
-      await recordActivity({
-        clientWorkflowRecordId:
-          savedProposal.clientWorkflowRecordId,
-        actionType: "Proposal or quote added",
-        note: `${savedProposal.title} was added with status: ${getProposalStatusLabel(savedProposal.status)}.`,
-      });
+      applyRiskReconciliation(result.reconciliation);
+      setRiskSignalsStatus("ready");
+      setRiskSignalsMessage("");
+      await refreshActivityHistory();
     } catch (error) {
       const proposalError =
         error instanceof Error
@@ -1581,16 +1562,23 @@ function WorkspaceDashboard({
       (proposal) => proposal.id === proposalId,
     );
 
+    if (!previousProposal) {
+      throw new Error(
+        "The proposal is no longer available. Refresh and try again.",
+      );
+    }
+
     setIsSavingProposal(true);
     setProposalsMessage("");
 
     try {
-      const savedProposal = await updateProposalRecord(
-        supabase,
-        workspaceId,
+      const result = await workspaceApi.proposals.update({
+        commandId: createOperationRequestId(),
         proposalId,
+        expectedUpdatedAt: previousProposal.updatedAt,
         updates,
-      );
+      });
+      const savedProposal = result.proposal;
 
       setProposals((currentProposals) =>
         currentProposals.map((proposal) =>
@@ -1599,30 +1587,10 @@ function WorkspaceDashboard({
             : proposal,
         ),
       );
-      await refreshRiskSignalsAfterChange(
-        savedProposal.clientWorkflowRecordId,
-      );
-      const statusChanged =
-        previousProposal?.status !== savedProposal.status;
-
-      await recordActivity({
-        clientWorkflowRecordId:
-          savedProposal.clientWorkflowRecordId,
-        actionType: statusChanged
-          ? "Proposal status updated"
-          : "Proposal updated",
-          note: statusChanged
-          ? `${savedProposal.title} changed from ${
-              previousProposal
-                ? getProposalStatusLabel(
-                    previousProposal.status,
-                  )
-                : "its previous status"
-            } to ${getProposalStatusLabel(
-              savedProposal.status,
-            )}.`
-          : `${savedProposal.title} details were updated.`,
-      });
+      applyRiskReconciliation(result.reconciliation);
+      setRiskSignalsStatus("ready");
+      setRiskSignalsMessage("");
+      await refreshActivityHistory();
     } catch (error) {
       const proposalError =
         error instanceof Error
@@ -1659,12 +1627,14 @@ function WorkspaceDashboard({
 
     try {
       const result =
-        await applyProposalWorkflowRecommendationTransaction(
-          supabase,
-          workspaceId,
-          proposal,
-          recommendation.updates,
-        );
+        await workspaceApi.proposals.applyRecommendation({
+          commandId: createOperationRequestId(),
+          proposalId: proposal.id,
+          clientWorkflowRecordId:
+            proposal.clientWorkflowRecordId,
+          expectedStatus: proposal.status,
+          updates: recommendation.updates,
+        });
 
       setRecords((currentRecords) =>
         currentRecords.map((record) =>
@@ -1681,21 +1651,10 @@ function WorkspaceDashboard({
             : currentProposal,
         ),
       );
-      await refreshRiskSignalsAfterChange(
-        result.proposal.clientWorkflowRecordId,
-      );
-
-      if (!result.alreadyApplied) {
-        await recordActivity({
-          clientWorkflowRecordId:
-            result.clientRecord.id,
-          actionType: "Proposal next step applied",
-          note: `${recommendation.title} was applied to the client workflow.`,
-          createdAt:
-            result.proposal.workflowActionAppliedAt ||
-            new Date().toISOString(),
-        });
-      }
+      applyRiskReconciliation(result.reconciliation);
+      setRiskSignalsStatus("ready");
+      setRiskSignalsMessage("");
+      await refreshActivityHistory();
     } catch (error) {
       const applicationError =
         error instanceof Error
