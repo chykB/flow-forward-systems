@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   ClientWorkflowRecord,
+  HandoffNote,
   WorkflowTask,
 } from "@/lib/client-workflow-types";
 import { getLocalDateKey } from "@/lib/date-key";
@@ -13,6 +14,11 @@ import {
   mapClientWorkflowRecordRow,
   type ClientWorkflowRecordRow,
 } from "@/lib/supabase/client-workflow-records";
+import {
+  getWorkspaceHandoffNotes,
+  mapHandoffNoteRow,
+  type HandoffNoteRow,
+} from "@/lib/supabase/handoff-notes";
 import {
   getWorkspaceWorkflowTasks,
   mapWorkflowTaskRow,
@@ -35,6 +41,11 @@ export type NewClientWorkflowRecord = Omit<
 
 export type ClientWorkflowRecordUpdates = Partial<
   NewClientWorkflowRecord
+>;
+
+export type NewHandoffNote = Omit<
+  HandoffNote,
+  "id" | "createdAt"
 >;
 
 export type WorkspaceApiErrorCode =
@@ -72,6 +83,16 @@ export type ClientRecordCommandResult = {
   requestId: string;
   clientRecord: ClientWorkflowRecord;
   reconciliation: RiskSignalReconciliationResult;
+};
+
+export type HandoffNoteCommandResult = {
+  requestId: string;
+  handoffNote: HandoffNote;
+};
+
+export type CreateHandoffNoteCommand = {
+  commandId: string;
+  note: NewHandoffNote;
 };
 
 export type CreateClientRecordCommand = {
@@ -113,6 +134,12 @@ export type WorkspaceApplicationApi = {
       command: UpdateClientRecordCommand,
     ) => Promise<ClientRecordCommandResult>;
   };
+  handoffNotes: {
+    list: () => Promise<HandoffNote[]>;
+    create: (
+      command: CreateHandoffNoteCommand,
+    ) => Promise<HandoffNoteCommandResult>;
+  };
   workItems: {
     list: () => Promise<WorkflowTask[]>;
     create: (
@@ -139,6 +166,11 @@ type ClientRecordCommandRpcResult = {
   requestId: string;
   clientRecord: ClientWorkflowRecordRow;
   reconciliation: unknown;
+};
+
+type HandoffNoteCommandRpcResult = {
+  requestId: string;
+  handoffNote: HandoffNoteRow;
 };
 
 const workflowStatuses = new Set<WorkflowTask["status"]>([
@@ -230,6 +262,12 @@ const mutableClientRecordFields = new Set<
   "lastProjectDate",
   "estimatedValue",
 ]);
+const handoffNoteFields = new Set<keyof NewHandoffNote>([
+  "clientWorkflowRecordId",
+  "title",
+  "note",
+  "owner",
+]);
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const dateKeyPattern = /^\d{4}-\d{2}-\d{2}$/;
@@ -284,7 +322,7 @@ function mapOperationError(
   if (code === "P0002") {
     return new WorkspaceApiError(
       "not_found",
-      "The requested client record or work item is no longer available.",
+      "The requested workspace record is no longer available.",
       requestId,
       { cause: error },
     );
@@ -380,6 +418,30 @@ function mapClientRecordCommandResult(
   };
 }
 
+function mapHandoffNoteCommandResult(
+  data: unknown,
+  expectedRequestId: string,
+): HandoffNoteCommandResult {
+  const result = data as HandoffNoteCommandRpcResult | null;
+
+  if (
+    !result?.requestId ||
+    result.requestId !== expectedRequestId ||
+    !result.handoffNote
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_response",
+      "The handoff note operation returned an invalid response.",
+      expectedRequestId,
+    );
+  }
+
+  return {
+    requestId: result.requestId,
+    handoffNote: mapHandoffNoteRow(result.handoffNote),
+  };
+}
+
 function assertMinimumText(
   value: string,
   minimumLength: number,
@@ -387,6 +449,21 @@ function assertMinimumText(
   requestId: string,
 ) {
   if (value.trim().length < minimumLength) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      message,
+      requestId,
+    );
+  }
+}
+
+function assertMaximumText(
+  value: string,
+  maximumLength: number,
+  message: string,
+  requestId: string,
+) {
+  if (value.trim().length > maximumLength) {
     throw new WorkspaceApiError(
       "invalid_request",
       message,
@@ -737,6 +814,97 @@ function validateCreateCommand(
   }
 }
 
+function validateCreateHandoffNoteCommand(
+  workspaceId: string,
+  command: CreateHandoffNoteCommand,
+) {
+  const { commandId, note } = command;
+
+  assertRequestId(commandId);
+  assertUuid(workspaceId, "The workspace identifier", commandId);
+
+  if (!note || typeof note !== "object" || Array.isArray(note)) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Handoff note details are required.",
+      commandId,
+    );
+  }
+
+  const suppliedFields = Object.keys(note) as Array<
+    keyof NewHandoffNote
+  >;
+
+  if (
+    suppliedFields.length !== handoffNoteFields.size ||
+    suppliedFields.some(
+      (field) => !handoffNoteFields.has(field),
+    )
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Handoff note details are incomplete or contain a protected field.",
+      commandId,
+    );
+  }
+
+  if (
+    typeof note.clientWorkflowRecordId !== "string" ||
+    typeof note.title !== "string" ||
+    typeof note.note !== "string" ||
+    typeof note.owner !== "string"
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Handoff note fields must use text values.",
+      commandId,
+    );
+  }
+
+  assertUuid(
+    note.clientWorkflowRecordId,
+    "The client record identifier",
+    commandId,
+  );
+
+  assertMinimumText(
+    note.title,
+    3,
+    "Enter a short note title.",
+    commandId,
+  );
+  assertMaximumText(
+    note.title,
+    200,
+    "Keep the note title under 200 characters.",
+    commandId,
+  );
+  assertMinimumText(
+    note.note,
+    10,
+    "Add the handoff context.",
+    commandId,
+  );
+  assertMaximumText(
+    note.note,
+    5000,
+    "Keep the handoff context under 5,000 characters.",
+    commandId,
+  );
+  assertMinimumText(
+    note.owner,
+    2,
+    "Enter who owns this note.",
+    commandId,
+  );
+  assertMaximumText(
+    note.owner,
+    200,
+    "Keep the owner under 200 characters.",
+    commandId,
+  );
+}
+
 function validateStatusCommand(
   workspaceId: string,
   command: UpdateWorkItemStatusCommand,
@@ -890,6 +1058,78 @@ export function createWorkspaceApplicationApi(
             error,
             command.commandId,
             "The client record could not be updated.",
+          );
+        }
+      },
+    },
+    handoffNotes: {
+      async list() {
+        const requestId = createOperationRequestId();
+
+        try {
+          assertUuid(
+            workspaceId,
+            "The workspace identifier",
+            requestId,
+          );
+          return await getWorkspaceHandoffNotes(
+            supabase,
+            workspaceId,
+          );
+        } catch (error) {
+          console.error(
+            "Workspace API handoff note query failed",
+            { requestId, error },
+          );
+          throw mapOperationError(
+            error,
+            requestId,
+            "Handoff notes could not be loaded.",
+          );
+        }
+      },
+
+      async create(command) {
+        validateCreateHandoffNoteCommand(
+          workspaceId,
+          command,
+        );
+
+        const { commandId, note } = command;
+
+        try {
+          const { data, error } = await supabase.rpc(
+            "command_create_handoff_note",
+            {
+              p_workspace_id: workspaceId,
+              p_note: {
+                clientWorkflowRecordId:
+                  note.clientWorkflowRecordId,
+                title: note.title.trim(),
+                note: note.note.trim(),
+                owner: note.owner.trim(),
+              },
+              p_idempotency_key: commandId,
+            },
+          );
+
+          if (error) {
+            throw error;
+          }
+
+          return mapHandoffNoteCommandResult(
+            data,
+            commandId,
+          );
+        } catch (error) {
+          console.error(
+            "Workspace API handoff note create failed",
+            { requestId: commandId, error },
+          );
+          throw mapOperationError(
+            error,
+            commandId,
+            "The handoff note could not be saved.",
           );
         }
       },

@@ -29,6 +29,7 @@ import {
   createWorkspaceApplicationApi,
   type ClientWorkflowRecordUpdates,
   type NewClientWorkflowRecord,
+  type NewHandoffNote,
   type NewWorkflowTask,
   type WorkflowTaskStatusUpdate,
 } from "@/lib/application/workspace-api";
@@ -103,11 +104,6 @@ import {
 import {
   getProposalStatusLabel,
 } from "@/lib/proposal-options";
-import {
-  createHandoffNote,
-  getWorkspaceHandoffNotes,
-  type NewHandoffNote,
-} from "@/lib/supabase/handoff-notes";
 function getRelatedClientRecords(
   records: ClientWorkflowRecord[],
   relatedItems: Array<{
@@ -734,10 +730,7 @@ function WorkspaceDashboard({
 
       try {
         const workspaceHandoffNotes =
-          await getWorkspaceHandoffNotes(
-            supabase,
-            workspaceId,
-          );
+          await workspaceApi.handoffNotes.list();
 
         if (!isMounted) {
           return;
@@ -767,7 +760,7 @@ function WorkspaceDashboard({
     return () => {
       isMounted = false;
     };
-  }, [recordsStatus, supabase, workspaceId]);
+  }, [recordsStatus, workspaceApi]);
 
   useEffect(() => {
     if (recordsStatus !== "ready") {
@@ -938,24 +931,18 @@ function WorkspaceDashboard({
     setHandoffNotesMessage("");
 
     try {
-      const savedHandoffNote = await createHandoffNote(
-        supabase,
-        workspaceId,
-        handoffNote,
-      );
+      const result = await workspaceApi.handoffNotes.create({
+        commandId: createOperationRequestId(),
+        note: handoffNote,
+      });
+      const savedHandoffNote = result.handoffNote;
 
       setHandoffNotes((currentNotes) => [
         savedHandoffNote,
         ...currentNotes,
       ]);
 
-      await recordActivity({
-        clientWorkflowRecordId:
-          savedHandoffNote.clientWorkflowRecordId,
-        actionType: "Handoff note added",
-        note: `${savedHandoffNote.title} was added for delegation context.`,
-        createdAt: savedHandoffNote.createdAt,
-      });
+      await refreshActivityHistory();
     } catch (error) {
       const handoffError =
         error instanceof Error

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type {
   NewHandoffNote,
-} from "@/lib/supabase/handoff-notes";
+} from "@/lib/application/workspace-api";
 
 type HandoffNoteFormProps = {
   clientWorkflowRecordId: string;
@@ -138,6 +138,7 @@ export function HandoffNoteForm({
           <input
             className="rounded-md border border-[#D9DED8] bg-white px-4 py-3 outline-none focus:border-[#174F42]"
             id="handoff-title"
+            maxLength={200}
             value={values.title}
             onChange={(event) =>
               updateField("title", event.target.value)
@@ -156,6 +157,7 @@ export function HandoffNoteForm({
           <textarea
             className="min-h-24 rounded-md border border-[#D9DED8] bg-white px-4 py-3 outline-none focus:border-[#174F42]"
             id="handoff-note"
+            maxLength={5000}
             value={values.note}
             onChange={(event) =>
               updateField("note", event.target.value)
@@ -174,6 +176,7 @@ export function HandoffNoteForm({
           <input
             className="rounded-md border border-[#D9DED8] bg-white px-4 py-3 outline-none focus:border-[#174F42]"
             id="handoff-owner"
+            maxLength={200}
             placeholder="Example: Founder, VA, assistant"
             value={values.owner}
             onChange={(event) =>

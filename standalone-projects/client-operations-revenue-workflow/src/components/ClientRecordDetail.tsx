@@ -16,6 +16,7 @@ import type { NewInvoiceRecord, InvoiceRecordUpdates } from "@/lib/supabase/invo
 import { RiskSignalPanel } from "@/components/RiskSignalPanel";
 import { WorkflowTaskStatusEditor } from "@/components/WorkflowTaskStatusEditor";
 import type {
+  NewHandoffNote,
   WorkflowTaskStatusUpdate,
 } from "@/lib/application/workspace-api";
 import type {
@@ -41,9 +42,6 @@ import type {
   NewProposalRecord,
   ProposalRecordUpdates,
 } from "@/lib/supabase/proposal-records";
-import type {
-  NewHandoffNote,
-} from "@/lib/supabase/handoff-notes";
 import type {
   NewWorkflowTask,
 } from "@/lib/application/workspace-api";
