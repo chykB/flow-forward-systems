@@ -46,7 +46,6 @@ export type NewWorkflowTask = Omit<
   WorkflowTask,
   | "id"
   | "clientEngagementId"
-  | "phase"
   | "createdAt"
   | "updatedAt"
 >;
@@ -219,7 +218,6 @@ export type UpdateClientRecordCommand = {
 export type CreateWorkItemCommand = {
   commandId: string;
   clientEngagementId: string;
-  phase: WorkItemPhase;
   task: NewWorkflowTask;
   evaluationDate?: Date;
 };
@@ -333,13 +331,19 @@ type ProposalRecommendationCommandRpcResult =
     alreadyApplied: boolean;
   };
 
-const workflowStatuses = new Set<WorkflowTask["status"]>([
+const engagementWorkflowStatuses = new Set<
+  WorkflowTask["status"]
+>([
   "Not started",
   "In progress",
   "Waiting",
   "Blocked",
   "Complete",
   "Not needed",
+]);
+const workItemStatuses = new Set<WorkflowTask["status"]>([
+  "Planned",
+  ...engagementWorkflowStatuses,
 ]);
 const workflowTaskTypes = new Set<WorkflowTask["type"]>([
   "Follow-up",
@@ -927,10 +931,10 @@ function validateClientRecordValues(
   }
 
   if (
-    !workflowStatuses.has(record.onboardingStatus) ||
-    !workflowStatuses.has(record.deliveryStatus) ||
-    !workflowStatuses.has(record.approvalStatus) ||
-    !workflowStatuses.has(record.paymentStatus)
+    !engagementWorkflowStatuses.has(record.onboardingStatus) ||
+    !engagementWorkflowStatuses.has(record.deliveryStatus) ||
+    !engagementWorkflowStatuses.has(record.approvalStatus) ||
+    !engagementWorkflowStatuses.has(record.paymentStatus)
   ) {
     throw new WorkspaceApiError(
       "invalid_request",
@@ -1172,7 +1176,11 @@ function validateEngagementValues(
       status !== undefined,
   );
 
-  if (statuses.some((status) => !workflowStatuses.has(status))) {
+  if (
+    statuses.some(
+      (status) => !engagementWorkflowStatuses.has(status),
+    )
+  ) {
     throw new WorkspaceApiError(
       "invalid_request",
       "Choose valid engagement workflow statuses.",
@@ -1357,7 +1365,7 @@ function validateCreateCommand(
     );
   }
 
-  if (!workItemPhases.has(command.phase)) {
+  if (!workItemPhases.has(task.phase)) {
     throw new WorkspaceApiError(
       "invalid_request",
       "Choose a valid work item phase.",
@@ -1365,7 +1373,7 @@ function validateCreateCommand(
     );
   }
 
-  if (!workflowStatuses.has(task.status)) {
+  if (!workItemStatuses.has(task.status)) {
     throw new WorkspaceApiError(
       "invalid_request",
       "Choose a valid work item status.",
@@ -1956,7 +1964,9 @@ function validateProposalWorkflowUpdates(
   if (
     updates.onboardingStatus !== undefined &&
     (typeof updates.onboardingStatus !== "string" ||
-      !workflowStatuses.has(updates.onboardingStatus))
+      !engagementWorkflowStatuses.has(
+        updates.onboardingStatus,
+      ))
   ) {
     throw new WorkspaceApiError(
       "invalid_request",
@@ -2061,8 +2071,8 @@ function validateStatusCommand(
   );
 
   if (
-    !workflowStatuses.has(command.expectedStatus) ||
-    !workflowStatuses.has(command.update.status)
+    !workItemStatuses.has(command.expectedStatus) ||
+    !workItemStatuses.has(command.update.status)
   ) {
     throw new WorkspaceApiError(
       "invalid_request",
@@ -2619,7 +2629,7 @@ export function createWorkspaceApplicationApi(
               p_due_date: task.dueDate,
               p_status: task.status,
               p_criticality: task.criticality,
-              p_phase: command.phase,
+              p_phase: task.phase,
               p_evaluation_date: getLocalDateKey(
                 command.evaluationDate ?? new Date(),
               ),

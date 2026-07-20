@@ -17,12 +17,19 @@ type WorkflowTaskStatusEditorProps = {
   task: WorkflowTask;
 };
 
-const workflowStatuses: WorkflowStatus[] = [
+const activeWorkflowStatuses: WorkflowStatus[] = [
   "Not started",
   "In progress",
   "Waiting",
   "Blocked",
   "Complete",
+  "Not needed",
+];
+
+const plannedWorkflowStatuses: WorkflowStatus[] = [
+  "Planned",
+  "Not started",
+  "In progress",
   "Not needed",
 ];
 
@@ -34,6 +41,10 @@ export function WorkflowTaskStatusEditor({
   const [selectedStatus, setSelectedStatus] =
     useState<WorkflowStatus>(task.status);
   const [message, setMessage] = useState("");
+  const workflowStatuses =
+    task.status === "Planned"
+      ? plannedWorkflowStatuses
+      : activeWorkflowStatuses;
 
   async function saveStatus() {
     setMessage("");

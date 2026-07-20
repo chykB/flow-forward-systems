@@ -4,6 +4,7 @@ import { useState } from "react";
 import type {
   TaskCriticality,
   TaskType,
+  WorkItemPhase,
   WorkflowStatus,
 } from "@/lib/client-workflow-types";
 import type {
@@ -19,6 +20,7 @@ type WorkflowTaskFormProps = {
 type FormValues = {
   title: string;
   type: TaskType;
+  phase: WorkItemPhase;
   owner: string;
   dueDate: string;
   status: WorkflowStatus;
@@ -37,12 +39,23 @@ const taskTypes: TaskType[] = [
 ];
 
 const statuses: WorkflowStatus[] = [
+  "Planned",
   "Not started",
   "In progress",
   "Waiting",
   "Blocked",
   "Complete",
   "Not needed",
+];
+
+const phases: WorkItemPhase[] = [
+  "Lead",
+  "Proposal",
+  "Onboarding",
+  "Delivery",
+  "Approval",
+  "Payment",
+  "Handoff",
 ];
 
 const criticalityLevels: TaskCriticality[] = [
@@ -55,6 +68,7 @@ const criticalityLevels: TaskCriticality[] = [
 const initialValues: FormValues = {
   title: "",
   type: "Follow-up",
+  phase: "Lead",
   owner: "",
   dueDate: "",
   status: "Not started",
@@ -127,6 +141,7 @@ export function WorkflowTaskForm({
         clientWorkflowRecordId,
         title: values.title.trim(),
         type: values.type,
+        phase: values.phase,
         owner: values.owner.trim(),
         dueDate: values.dueDate,
         status: values.status,
@@ -205,6 +220,29 @@ payment, or handoff.
               onChange={(event) => updateField("owner", event.target.value)}
             />
             <FieldError message={errors.owner} />
+          </div>
+
+          <div className="grid gap-2">
+            <label className="font-bold" htmlFor="task-phase">
+              Workflow phase
+            </label>
+            <select
+              className="rounded-md border border-[#D9DED8] bg-white px-4 py-3 outline-none focus:border-[#174F42]"
+              id="task-phase"
+              value={values.phase}
+              onChange={(event) =>
+                updateField(
+                  "phase",
+                  event.target.value as WorkItemPhase,
+                )
+              }
+            >
+              {phases.map((phase) => (
+                <option key={phase} value={phase}>
+                  {phase}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="grid gap-2">

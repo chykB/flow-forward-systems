@@ -5,6 +5,10 @@ import {
   mapClientWorkflowRecordRow,
   type ClientWorkflowRecordRow,
 } from "@/lib/supabase/client-workflow-records";
+import {
+  mapClientEngagementRow,
+  type ClientEngagementRow,
+} from "@/lib/supabase/client-engagements";
 
 export type RiskSignalRow = {
   id: string;
@@ -114,6 +118,7 @@ export async function updateRiskSignalStatus(
 
 type RiskSignalReconciliationRpcResult = {
   clientRecord: ClientWorkflowRecordRow;
+  clientEngagement: ClientEngagementRow;
   riskSignals: RiskSignalRow[];
   workflowHealthScore: number;
   changed: boolean;
@@ -122,6 +127,9 @@ type RiskSignalReconciliationRpcResult = {
 export type RiskSignalReconciliationResult = {
   clientRecord: ReturnType<
     typeof mapClientWorkflowRecordRow
+  >;
+  clientEngagement: ReturnType<
+    typeof mapClientEngagementRow
   >;
   riskSignals: RiskSignal[];
   workflowHealthScore: number;
@@ -136,6 +144,7 @@ export function mapRiskSignalReconciliationResult(
 
   if (
     !result?.clientRecord ||
+    !result.clientEngagement ||
     !Array.isArray(result.riskSignals) ||
     typeof result.workflowHealthScore !== "number" ||
     typeof result.changed !== "boolean"
@@ -149,6 +158,9 @@ export function mapRiskSignalReconciliationResult(
     clientRecord: mapClientWorkflowRecordRow(
       result.clientRecord,
     ),
+    clientEngagement: mapClientEngagementRow(
+      result.clientEngagement,
+    ),
     riskSignals: result.riskSignals.map(mapRiskSignalRow),
     workflowHealthScore: result.workflowHealthScore,
     changed: result.changed,
@@ -159,17 +171,39 @@ export async function reconcileClientRiskSignals(
   supabase: SupabaseClient,
   workspaceId: string,
   clientWorkflowRecordId: string,
+  clientEngagementIdOrDate?: string | Date,
   currentDate = new Date(),
 ) {
-  const { data, error } = await supabase.rpc(
-    "reconcile_client_risk_signals",
-    {
-      p_workspace_id: workspaceId,
-      p_client_workflow_record_id:
-        clientWorkflowRecordId,
-      p_evaluation_date: getLocalDateKey(currentDate),
-    },
-  );
+  const clientEngagementId =
+    typeof clientEngagementIdOrDate === "string"
+      ? clientEngagementIdOrDate
+      : undefined;
+  const evaluationDate =
+    clientEngagementIdOrDate instanceof Date
+      ? clientEngagementIdOrDate
+      : currentDate;
+  const { data, error } = clientEngagementId
+    ? await supabase.rpc(
+        "reconcile_client_engagement_risk_signals",
+        {
+          p_workspace_id: workspaceId,
+          p_client_engagement_id: clientEngagementId,
+          p_evaluation_date: getLocalDateKey(
+            evaluationDate,
+          ),
+        },
+      )
+    : await supabase.rpc(
+        "reconcile_client_risk_signals",
+        {
+          p_workspace_id: workspaceId,
+          p_client_workflow_record_id:
+            clientWorkflowRecordId,
+          p_evaluation_date: getLocalDateKey(
+            evaluationDate,
+          ),
+        },
+      );
 
   if (error) {
     console.error(

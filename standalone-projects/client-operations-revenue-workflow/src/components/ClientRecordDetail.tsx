@@ -17,6 +17,9 @@ import { RiskSignalPanel } from "@/components/RiskSignalPanel";
 import { WorkflowTaskStatusEditor } from "@/components/WorkflowTaskStatusEditor";
 import type {
   NewHandoffNote,
+  NewProposalRecord,
+  NewWorkflowTask,
+  ProposalRecordUpdates,
   WorkflowTaskStatusUpdate,
 } from "@/lib/application/workspace-api";
 import type {
@@ -38,11 +41,6 @@ import type {
 import type {
   RiskSignalStatusUpdate,
 } from "@/lib/supabase/risk-signals";
-import type {
-  NewProposalRecord,
-  ProposalRecordUpdates,
-  NewWorkflowTask,
-} from "@/lib/application/workspace-api";
 
 export type DetailTab =
   | "overview"
@@ -470,7 +468,7 @@ export function ClientRecordDetail({
                       <div>
                         <p className="font-bold">{task.title}</p>
                         <p className="mt-1 text-sm text-[#5F6862]">
-                          {task.type} | {task.owner}
+                          {task.phase} phase | {task.type} | {task.owner}
                         </p>
                       </div>
                       <p className="text-sm font-bold text-[#174F42]">

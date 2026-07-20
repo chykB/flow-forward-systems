@@ -1,10 +1,10 @@
-import { getOverdueFollowUps } from "@/lib/dashboard";
 import {
   getDisputedInvoices,
   getOverdueInvoices,
 } from "@/lib/invoice-dashboard";
 import { getLocalDateKey } from "@/lib/date-key";
 import type {
+  ClientEngagement,
   ClientWorkflowRecord,
   InvoiceRecord,
   ProposalRecord,
@@ -15,6 +15,7 @@ import type {
 export type RiskSignalCandidate = Pick<
   RiskSignal,
   | "clientWorkflowRecordId"
+  | "clientEngagementId"
   | "signalKey"
   | "sourceType"
   | "sourceRecordId"
@@ -26,6 +27,7 @@ export type RiskSignalCandidate = Pick<
 
 type RiskEngineInput = {
   record: ClientWorkflowRecord;
+  engagement: ClientEngagement;
   proposals: ProposalRecord[];
   invoices: InvoiceRecord[];
   tasks: WorkflowTask[];
@@ -48,23 +50,31 @@ const healthPenalty: Record<RiskSignal["severity"], number> = {
 
 function getFollowUpCandidate(
   record: ClientWorkflowRecord,
+  engagement: ClientEngagement,
   currentDate: Date,
 ): RiskSignalCandidate[] {
-  if (getOverdueFollowUps([record], currentDate).length === 0) {
+  if (
+    engagement.nextFollowUpAt >= getLocalDateKey(currentDate) ||
+    engagement.engagementStatus !== "Active" ||
+    engagement.lifecycleStage === "Completed" ||
+    engagement.lifecycleStage === "Lost or inactive"
+  ) {
     return [];
   }
 
   return [
     {
       clientWorkflowRecordId: record.id,
-      signalKey: "client_record:overdue_follow_up",
+      clientEngagementId: engagement.id,
+      signalKey:
+        `client_engagement:${engagement.id}:overdue_follow_up`,
       sourceType: "client_record",
       sourceRecordId: record.id,
       riskType: "overdue_follow_up",
       severity: "Medium",
       reason:
         `The scheduled client follow-up was due on ` +
-        `${record.nextFollowUpAt}.`,
+        `${engagement.nextFollowUpAt}.`,
       recommendedAction:
         `Complete the overdue follow-up for ${record.name} ` +
         "and set a new follow-up date.",
@@ -74,6 +84,7 @@ function getFollowUpCandidate(
 
 function getProposalCandidates(
   record: ClientWorkflowRecord,
+  engagement: ClientEngagement,
   proposals: ProposalRecord[],
   currentDate: Date,
 ): RiskSignalCandidate[] {
@@ -83,6 +94,7 @@ function getProposalCandidates(
     .filter(
       (proposal) =>
         proposal.clientWorkflowRecordId === record.id &&
+        proposal.clientEngagementId === engagement.id &&
         (
           proposal.status === "Expired" ||
           (
@@ -94,6 +106,7 @@ function getProposalCandidates(
     )
     .map((proposal) => ({
       clientWorkflowRecordId: record.id,
+      clientEngagementId: engagement.id,
       signalKey: `proposal:${proposal.id}:expired`,
       sourceType: "proposal" as const,
       sourceRecordId: proposal.id,
@@ -111,12 +124,14 @@ function getProposalCandidates(
 
 function getInvoiceCandidates(
   record: ClientWorkflowRecord,
+  engagement: ClientEngagement,
   invoices: InvoiceRecord[],
   currentDate: Date,
 ): RiskSignalCandidate[] {
   const clientInvoices = invoices.filter(
     (invoice) =>
-      invoice.clientWorkflowRecordId === record.id,
+      invoice.clientWorkflowRecordId === record.id &&
+      invoice.clientEngagementId === engagement.id,
   );
   const disputedInvoices = getDisputedInvoices(clientInvoices);
   const disputedIds = new Set(
@@ -133,6 +148,7 @@ function getInvoiceCandidates(
 
     return {
       clientWorkflowRecordId: record.id,
+      clientEngagementId: engagement.id,
       signalKey: `invoice:${invoice.id}:disputed`,
       sourceType: "invoice" as const,
       sourceRecordId: invoice.id,
@@ -151,6 +167,7 @@ function getInvoiceCandidates(
 
     return {
       clientWorkflowRecordId: record.id,
+      clientEngagementId: engagement.id,
       signalKey: `invoice:${invoice.id}:overdue`,
       sourceType: "invoice" as const,
       sourceRecordId: invoice.id,
@@ -170,17 +187,20 @@ function getInvoiceCandidates(
 
 function getBlockedDeliveryCandidates(
   record: ClientWorkflowRecord,
+  engagement: ClientEngagement,
   tasks: WorkflowTask[],
 ): RiskSignalCandidate[] {
   return tasks
     .filter(
       (task) =>
         task.clientWorkflowRecordId === record.id &&
+        task.clientEngagementId === engagement.id &&
         task.type === "Delivery" &&
         task.status === "Blocked",
     )
     .map((task) => ({
       clientWorkflowRecordId: record.id,
+      clientEngagementId: engagement.id,
       signalKey:
         `workflow_task:${task.id}:delivery_blocked`,
       sourceType: "workflow_task" as const,
@@ -197,6 +217,7 @@ function getBlockedDeliveryCandidates(
 
 function getOverdueDeliveryCandidates(
   record: ClientWorkflowRecord,
+  engagement: ClientEngagement,
   tasks: WorkflowTask[],
   currentDate: Date,
 ): RiskSignalCandidate[] {
@@ -206,6 +227,7 @@ function getOverdueDeliveryCandidates(
     .filter(
       (task) =>
         task.clientWorkflowRecordId === record.id &&
+        task.clientEngagementId === engagement.id &&
         task.type === "Delivery" &&
         task.dueDate < today &&
         (
@@ -216,6 +238,7 @@ function getOverdueDeliveryCandidates(
     )
     .map((task) => ({
       clientWorkflowRecordId: record.id,
+      clientEngagementId: engagement.id,
       signalKey:
         `workflow_task:${task.id}:delivery_delayed`,
       sourceType: "workflow_task" as const,
@@ -231,6 +254,7 @@ function getOverdueDeliveryCandidates(
 
 function getDelayedApprovalCandidates(
   record: ClientWorkflowRecord,
+  engagement: ClientEngagement,
   tasks: WorkflowTask[],
   currentDate: Date,
 ): RiskSignalCandidate[] {
@@ -240,6 +264,7 @@ function getDelayedApprovalCandidates(
     .filter(
       (task) =>
         task.clientWorkflowRecordId === record.id &&
+        task.clientEngagementId === engagement.id &&
         task.type === "Approval" &&
         (
           task.status === "Blocked" ||
@@ -255,6 +280,7 @@ function getDelayedApprovalCandidates(
     )
     .map((task) => ({
       clientWorkflowRecordId: record.id,
+      clientEngagementId: engagement.id,
       signalKey:
         `workflow_task:${task.id}:approval_delayed`,
       sourceType: "workflow_task" as const,
@@ -274,6 +300,7 @@ function getDelayedApprovalCandidates(
 
 function getDelayedHandoffCandidates(
   record: ClientWorkflowRecord,
+  engagement: ClientEngagement,
   tasks: WorkflowTask[],
   currentDate: Date,
 ): RiskSignalCandidate[] {
@@ -283,6 +310,7 @@ function getDelayedHandoffCandidates(
     .filter(
       (task) =>
         task.clientWorkflowRecordId === record.id &&
+        task.clientEngagementId === engagement.id &&
         task.type === "Handoff" &&
         (
           task.status === "Blocked" ||
@@ -298,6 +326,7 @@ function getDelayedHandoffCandidates(
     )
     .map((task) => ({
       clientWorkflowRecordId: record.id,
+      clientEngagementId: engagement.id,
       signalKey:
         `workflow_task:${task.id}:handoff_delayed`,
       sourceType: "workflow_task" as const,
@@ -317,6 +346,7 @@ function getDelayedHandoffCandidates(
 
 function getDelayedOnboardingCandidates(
   record: ClientWorkflowRecord,
+  engagement: ClientEngagement,
   tasks: WorkflowTask[],
   currentDate: Date,
 ): RiskSignalCandidate[] {
@@ -326,6 +356,7 @@ function getDelayedOnboardingCandidates(
     .filter(
       (task) =>
         task.clientWorkflowRecordId === record.id &&
+        task.clientEngagementId === engagement.id &&
         task.type === "Onboarding" &&
         (
           task.status === "Blocked" ||
@@ -341,6 +372,7 @@ function getDelayedOnboardingCandidates(
     )
     .map((task) => ({
       clientWorkflowRecordId: record.id,
+      clientEngagementId: engagement.id,
       signalKey:
         `workflow_task:${task.id}:onboarding_delayed`,
       sourceType: "workflow_task" as const,
@@ -360,17 +392,20 @@ function getDelayedOnboardingCandidates(
 
 function getBlockedPaymentCandidates(
   record: ClientWorkflowRecord,
+  engagement: ClientEngagement,
   tasks: WorkflowTask[],
 ): RiskSignalCandidate[] {
   return tasks
     .filter(
       (task) =>
         task.clientWorkflowRecordId === record.id &&
+        task.clientEngagementId === engagement.id &&
         task.type === "Payment" &&
         task.status === "Blocked",
     )
     .map((task) => ({
       clientWorkflowRecordId: record.id,
+      clientEngagementId: engagement.id,
       signalKey:
         `workflow_task:${task.id}:payment_blocked`,
       sourceType: "workflow_task" as const,
@@ -386,17 +421,20 @@ function getBlockedPaymentCandidates(
 
 function getBlockedFollowUpTaskCandidates(
   record: ClientWorkflowRecord,
+  engagement: ClientEngagement,
   tasks: WorkflowTask[],
 ): RiskSignalCandidate[] {
   return tasks
     .filter(
       (task) =>
         task.clientWorkflowRecordId === record.id &&
+        task.clientEngagementId === engagement.id &&
         task.type === "Follow-up" &&
         task.status === "Blocked",
     )
     .map((task) => ({
       clientWorkflowRecordId: record.id,
+      clientEngagementId: engagement.id,
       signalKey:
         `workflow_task:${task.id}:follow_up_blocked`,
       sourceType: "workflow_task" as const,
@@ -412,47 +450,67 @@ function getBlockedFollowUpTaskCandidates(
 
 export function getRiskSignalCandidates({
   record,
+  engagement,
   proposals,
   invoices,
   tasks,
   currentDate = new Date(),
 }: RiskEngineInput) {
   const candidates = [
-    ...getFollowUpCandidate(record, currentDate),
+    ...getFollowUpCandidate(
+      record,
+      engagement,
+      currentDate,
+    ),
     ...getProposalCandidates(
       record,
+      engagement,
       proposals,
       currentDate,
     ),
     ...getInvoiceCandidates(
       record,
+      engagement,
       invoices,
       currentDate,
     ),
-    ...getBlockedDeliveryCandidates(record, tasks),
+    ...getBlockedDeliveryCandidates(
+      record,
+      engagement,
+      tasks,
+    ),
     ...getOverdueDeliveryCandidates(
       record,
+      engagement,
       tasks,
       currentDate,
     ),
     ...getDelayedApprovalCandidates(
       record,
+      engagement,
       tasks,
       currentDate,
     ),
     ...getDelayedHandoffCandidates(
       record,
+      engagement,
       tasks,
       currentDate,
     ),
     ...getDelayedOnboardingCandidates(
       record,
+      engagement,
       tasks,
       currentDate,
     ),
-    ...getBlockedPaymentCandidates(record, tasks),
+    ...getBlockedPaymentCandidates(
+      record,
+      engagement,
+      tasks,
+    ),
     ...getBlockedFollowUpTaskCandidates(
       record,
+      engagement,
       tasks,
     ),
   ];
