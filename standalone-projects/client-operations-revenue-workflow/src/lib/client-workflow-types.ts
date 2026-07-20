@@ -14,6 +14,11 @@ export type LifecycleStage =
 
 export type PriorityLevel = "High" | "Medium" | "Low";
 
+export type EngagementStatus =
+  | "Active"
+  | "Completed"
+  | "Cancelled";
+
 export type RiskLevel = "High" | "Medium" | "Low";
 export type ClientType =
   | "Lead"
@@ -76,6 +81,7 @@ export type RiskSignalType =
   | "follow_up_blocked";
 
 export type WorkflowStatus =
+  | "Planned"
   | "Not started"
   | "In progress"
   | "Waiting"
@@ -93,9 +99,40 @@ export type TaskType =
 
 export type TaskCriticality = "Critical" | "High" | "Medium" | "Low";
 
+export type WorkItemPhase =
+  | "Lead"
+  | "Proposal"
+  | "Onboarding"
+  | "Delivery"
+  | "Approval"
+  | "Payment"
+  | "Handoff";
+
+export type ClientEngagement = {
+  id: string;
+  clientWorkflowRecordId: string;
+  title: string;
+  engagementStatus: EngagementStatus;
+  lifecycleStage: LifecycleStage;
+  priority: PriorityLevel;
+  estimatedValue: number;
+  workflowHealthScore: number;
+  nextAction: string;
+  nextFollowUpAt: string;
+  assignedTo: string;
+  onboardingStatus: WorkflowStatus;
+  deliveryStatus: WorkflowStatus;
+  approvalStatus: WorkflowStatus;
+  paymentStatus: WorkflowStatus;
+  isPrimary: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type ProposalRecord = {
   id: string;
   clientWorkflowRecordId: string;
+  clientEngagementId: string;
   title: string;
   amount: number;
   currency: string;
@@ -115,6 +152,7 @@ export type ProposalRecord = {
 export type InvoiceRecord = {
   id: string;
   clientWorkflowRecordId: string;
+  clientEngagementId: string;
   invoiceNumber: string;
   amount: number;
   currency: string;
@@ -140,6 +178,7 @@ export type InvoiceRecord = {
 export type RiskSignal = {
   id: string;
   clientWorkflowRecordId: string;
+  clientEngagementId: string;
   signalKey: string;
   sourceType: RiskSignalSourceType;
   sourceRecordId: string;
@@ -186,12 +225,14 @@ export type ClientWorkflowRecord = {
 export type WorkflowTask = {
   id: string;
   clientWorkflowRecordId: string;
+  clientEngagementId: string;
   title: string;
   type: TaskType;
   owner: string;
   dueDate: string;
   status: WorkflowStatus;
   criticality: TaskCriticality;
+  phase: WorkItemPhase;
   createdAt: string;
   updatedAt: string;
 };
@@ -199,6 +240,7 @@ export type WorkflowTask = {
 export type ActivityLog = {
   id: string;
   clientWorkflowRecordId: string;
+  clientEngagementId: string;
   actionType: string;
   note: string;
   createdAt: string;
@@ -207,6 +249,7 @@ export type ActivityLog = {
 export type HandoffNote = {
   id: string;
   clientWorkflowRecordId: string;
+  clientEngagementId: string;
   title: string;
   note: string;
   owner: string;

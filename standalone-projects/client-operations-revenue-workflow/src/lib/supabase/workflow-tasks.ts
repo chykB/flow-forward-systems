@@ -5,12 +5,14 @@ export type WorkflowTaskRow = {
   id: string;
   workspace_id: string;
   client_workflow_record_id: string;
+  client_engagement_id: string;
   title: string;
   type: WorkflowTask["type"];
   owner: string;
   due_date: string;
   status: WorkflowTask["status"];
   criticality: WorkflowTask["criticality"];
+  phase: WorkflowTask["phase"];
   created_at: string;
   updated_at: string;
 };
@@ -22,12 +24,14 @@ export function mapWorkflowTaskRow(
     id: row.id,
     clientWorkflowRecordId:
       row.client_workflow_record_id,
+    clientEngagementId: row.client_engagement_id,
     title: row.title,
     type: row.type,
     owner: row.owner,
     dueDate: row.due_date,
     status: row.status,
     criticality: row.criticality,
+    phase: row.phase,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

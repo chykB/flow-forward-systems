@@ -2,7 +2,7 @@
 
 Status: Active technical contract
 
-Implemented slices: Work items, client records, handoff notes, and proposals
+Implemented slices: Work items, client records, handoff notes, proposals, and engagement ownership
 
 Public API status: None of the interfaces or database functions in this document are a versioned customer API.
 
@@ -26,6 +26,10 @@ The manual and rules-based product remains fully operational without an AI provi
 
 `WorkspaceApplicationApi` currently exposes:
 
+- `engagements.list()`
+- `engagements.create(command)`
+- `engagements.update(command)`
+
 - `clientRecords.list()`
 - `clientRecords.create(command)`
 - `clientRecords.update(command)`
@@ -48,25 +52,38 @@ Each command returns the saved entity. Commands that can change deterministic wo
 
 `src/lib/supabase/*` maps database rows and performs narrow Supabase calls. These modules are implementation details. They do not define product authorization or multi-step workflow behavior.
 
-For client records, work items, handoff notes, and proposals, direct browser insert, update, and delete privileges are revoked. Reads remain protected by existing workspace RLS. The legacy Proposal recommendation function is no longer directly executable by authenticated callers; the Proposal recommendation command wraps it with explicit authorization, validation, idempotency, reconciliation, and Activity ownership.
+For client records, engagements, work items, handoff notes, and proposals, direct browser insert, update, and delete privileges are revoked. Reads remain protected by workspace RLS. New child writes carry an explicit engagement identifier. Legacy unscoped create and status functions are no longer executable by authenticated callers; engagement-scoped wrappers verify workspace, client, engagement, active state, idempotency replay context, and the current compatibility rollout guard before invoking the existing atomic operation.
 
 ### Atomic database commands
 
-The implemented migrations add eight authenticated `security definer` command functions:
+The implemented migrations expose authenticated `security definer` command functions for:
+
+- engagement create/update;
+- client-record create/update;
+- engagement-scoped handoff-note creation;
+- engagement-scoped Proposal create/update/recommendation;
+- engagement-scoped Work Item create/status update.
+
+The current function names are:
+
+- `command_create_client_engagement`
+- `command_update_client_engagement`
 
 - `command_create_client_workflow_record`
 - `command_update_client_workflow_record`
 
-- `command_create_handoff_note`
+- `command_create_engagement_handoff_note`
 
-- `command_create_proposal_record`
-- `command_update_proposal_record`
-- `command_apply_proposal_workflow_recommendation`
+- `command_create_engagement_proposal_record`
+- `command_update_engagement_proposal_record`
+- `command_apply_engagement_proposal_workflow_recommendation`
 
-- `command_create_workflow_task`
-- `command_update_workflow_task_status`
+- `command_create_engagement_workflow_task`
+- `command_update_engagement_workflow_task_status`
 
-Each function explicitly verifies that `auth.uid()` owns the workspace, validates its input, and performs the write with its durable Activity entry before committing. Commands that can change deterministic workflow conditions also reconcile risk signals and Workflow Health. Creating a context-only handoff note does not change risk or health. Proposal recommendation application wraps the older scoped transaction so authenticated callers cannot bypass the command contract.
+Each function explicitly verifies that `auth.uid()` owns the workspace, validates its input, and performs the write with its durable Activity entry before committing. Child operations verify that the engagement belongs to the supplied client and workspace. Commands that can change deterministic workflow conditions also reconcile risk signals and Workflow Health. Creating a context-only handoff note does not change risk or health.
+
+During the compatibility rollout, monitored Proposal and Work Item mutations are restricted to the primary engagement. This prevents the client-scoped risk reconciler from combining unrelated jobs before engagement-scoped reconciliation is installed. Additional engagements can already be created, updated, read, and receive handoff context. Their monitored child operations become available in the stage-aware reconciliation slice.
 
 These database functions are internal implementation details. Granting `authenticated` execution does not make them a supported external API.
 
@@ -82,6 +99,15 @@ These database functions are internal implementation details. Granting `authenti
 ### Validation
 
 Validation runs at both application and database boundaries. Database constraints remain the final safeguard.
+
+Engagement creation validates:
+
+- the exact writable field set and parent Client Record;
+- title, lifecycle stage, priority, estimated value, next action, follow-up date, owner, and summary statuses;
+- an Active initial state and a protected 100-point initial Workflow Health;
+- non-primary ownership so the compatibility engagement remains unique.
+
+Engagement updates accept only a whitelisted partial payload. IDs, workspace ownership, client ownership, primary status, engagement state, Workflow Health, and timestamps are protected. Primary-engagement updates continue to mirror the compatibility Client Record fields until the guided engagement UI replaces that read model.
 
 Client-record creation validates:
 
@@ -101,24 +127,28 @@ Work-item creation validates:
 - work-item type;
 - status;
 - criticality;
+- explicit engagement ownership and applicable phase;
 - risk evaluation date.
 
 The work-item status command additionally validates the expected current status and rejects no-op status changes.
 
 Handoff-note creation validates the exact writable field set, client identifier, title, context, and owner. IDs, timestamps, workspace ownership, and other protected fields cannot be supplied.
 
+The command additionally verifies engagement ownership and records both client and engagement identifiers on the note and Activity entry.
+
 Proposal creation and update validate:
 
 - the exact writable field set, excluding IDs, timestamps, workspace ownership, and recommendation markers;
 - title, amount, currency, status, date, and decision-note requirements;
 - the referenced Client Record and workspace relationship;
+- the referenced primary compatibility engagement during this rollout slice;
 - the final merged Proposal state for partial updates.
 
 Proposal recommendation application accepts only the workflow fields produced by the deterministic recommendation engine. Relationship concern cannot be changed by a Proposal recommendation. The command verifies the expected Proposal status before applying the recommendation.
 
 ### Optimistic concurrency
 
-Work-item status updates include `expectedStatus`. Client-record and Proposal updates include `expectedUpdatedAt`. The database refreshes those concurrency tokens with wall-clock time on every update, including multiple updates within one transaction. Proposal recommendation application includes `expectedStatus`. If another command changes an entity first, the command returns a conflict instead of overwriting newer data.
+Work-item status updates include `expectedStatus`. Client-record, engagement, and Proposal updates include `expectedUpdatedAt`. The database refreshes those concurrency tokens with wall-clock time on every update, including multiple updates within one transaction. Proposal recommendation application includes `expectedStatus`. If another command changes an entity first, the command returns a conflict instead of overwriting newer data.
 
 ### Idempotency
 
@@ -131,6 +161,8 @@ The idempotency ledger has RLS enabled and no direct `anon` or `authenticated` t
 ### Activity and workflow health
 
 Creating a client record writes exactly one `Record created` Activity entry. Updating it writes exactly one `Workflow status updated` entry using the user-facing note supplied by the typed UI operation. The action type, actor, workspace, record, and timestamp are command-owned.
+
+Creating an additional engagement writes exactly one `Engagement created` entry. Updating it writes exactly one `Engagement updated` entry. Both entries carry the engagement identifier.
 
 Creating a work item writes exactly one `Work item added` Activity entry. Updating a status writes exactly one `Work item status updated` entry.
 
@@ -158,17 +190,18 @@ User-facing errors include the command or query request ID. Console diagnostics 
 | Area | Reads | Ordinary writes | Privileged or atomic writes | Current boundary status |
 | --- | --- | --- | --- | --- |
 | Workspace | owned workspace lookup | create workspace | none | Persistence adapter; retain RLS |
+| Engagements | workspace engagements | none directly | create/update + Activity | Implemented; primary compatibility bridge active |
 | Client records | workspace records | none directly | create/update + reconciliation + Activity | Implemented in second slice |
-| Work items | workspace work items | none directly | create/status update + reconciliation + Activity | Implemented in first slice |
-| Handoff notes | workspace notes | none directly | create + Activity | Implemented in third slice |
-| Proposals | workspace/client proposals | none directly | create/update/recommendation + reconciliation + Activity | Implemented in fourth slice |
-| Invoices | workspace/client invoices | create/update + reconciliation + Activity | apply recommendation transaction | Existing RPC retained; application facade pending |
+| Work items | workspace work items | none directly | engagement-scoped create/status update + reconciliation + Activity | Primary engagement enabled; additional engagement monitoring pending |
+| Handoff notes | workspace notes | none directly | engagement-scoped create + Activity | Implemented for all Active engagements |
+| Proposals | workspace/client proposals | none directly | engagement-scoped create/update/recommendation + reconciliation + Activity | Primary engagement enabled; additional engagement monitoring pending |
+| Invoices | workspace/client invoices | engagement-owned create/update + reconciliation + Activity | apply recommendation transaction | Explicit primary engagement stored; command facade pending |
 | Risk signals | workspace risk history | review status | reconciliation | Existing guarded RPC retained; application facade pending |
 | Activity | workspace history | direct inserts from legacy flows | command-owned audit writes | Client-record, work-item, handoff-note, and Proposal audit implemented; other flows pending |
 
 ## Assistant Eligibility
 
-The client-record, work-item, handoff-note, and Proposal commands are structurally suitable for a future protected assistant tool, but they are not exposed to an assistant yet. Assistant enablement also requires:
+The engagement, client-record, work-item, handoff-note, and Proposal commands are structurally suitable for a future protected assistant tool, but they are not exposed to an assistant yet. Assistant enablement also requires:
 
 - explicit per-tool policy and plan entitlements;
 - user confirmation for consequential changes;
@@ -181,6 +214,9 @@ The assistant should use the same application command contract as the manual UI 
 
 ## Next Slices
 
-1. Move Invoice create/update/recommendation flows behind the application facade.
-2. Move risk review status changes behind a command that performs reconciliation in the same transaction.
-3. Add a protected server tool layer only after the manual command surface is complete and tested.
+1. Add engagement selection and creation to Client Records while keeping the primary compatibility engagement as the default.
+2. Add Planned Work Items and explicit early activation.
+3. Replace client-scoped risk reconciliation with engagement- and dependency-aware reconciliation, then remove the primary-only monitored-write guard.
+4. Move Invoice create/update/recommendation flows behind the application facade.
+5. Move risk review status changes behind an engagement-scoped command.
+6. Add a protected server tool layer only after the manual command surface is complete and tested.

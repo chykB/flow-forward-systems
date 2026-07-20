@@ -10,6 +10,7 @@ export type RiskSignalRow = {
   id: string;
   workspace_id: string;
   client_workflow_record_id: string;
+  client_engagement_id: string;
   signal_key: string;
   source_type: RiskSignal["sourceType"];
   source_record_id: string;
@@ -37,6 +38,7 @@ export function mapRiskSignalRow(
     id: row.id,
     clientWorkflowRecordId:
       row.client_workflow_record_id,
+    clientEngagementId: row.client_engagement_id,
     signalKey: row.signal_key,
     sourceType: row.source_type,
     sourceRecordId: row.source_record_id,

@@ -1,8 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
+  ClientEngagement,
   ClientWorkflowRecord,
   HandoffNote,
   ProposalRecord,
+  WorkItemPhase,
   WorkflowTask,
 } from "@/lib/client-workflow-types";
 import { getLocalDateKey } from "@/lib/date-key";
@@ -13,6 +15,12 @@ import {
   mapRiskSignalReconciliationResult,
   type RiskSignalReconciliationResult,
 } from "@/lib/supabase/risk-signals";
+import {
+  getPrimaryClientEngagement,
+  getWorkspaceClientEngagements,
+  mapClientEngagementRow,
+  type ClientEngagementRow,
+} from "@/lib/supabase/client-engagements";
 import {
   getClientWorkflowRecords,
   mapClientWorkflowRecordRow,
@@ -36,7 +44,11 @@ import {
 
 export type NewWorkflowTask = Omit<
   WorkflowTask,
-  "id" | "createdAt" | "updatedAt"
+  | "id"
+  | "clientEngagementId"
+  | "phase"
+  | "createdAt"
+  | "updatedAt"
 >;
 
 export type WorkflowTaskStatusUpdate = {
@@ -54,12 +66,13 @@ export type ClientWorkflowRecordUpdates = Partial<
 
 export type NewHandoffNote = Omit<
   HandoffNote,
-  "id" | "createdAt"
+  "id" | "clientEngagementId" | "createdAt"
 >;
 
 export type NewProposalRecord = Omit<
   ProposalRecord,
   | "id"
+  | "clientEngagementId"
   | "createdAt"
   | "updatedAt"
   | "workflowActionAppliedStatus"
@@ -71,10 +84,28 @@ export type ProposalRecordUpdates = Partial<
     ProposalRecord,
     | "id"
     | "clientWorkflowRecordId"
+    | "clientEngagementId"
     | "createdAt"
     | "updatedAt"
     | "workflowActionAppliedStatus"
     | "workflowActionAppliedAt"
+  >
+>;
+
+export type NewClientEngagement = Omit<
+  ClientEngagement,
+  | "id"
+  | "engagementStatus"
+  | "workflowHealthScore"
+  | "isPrimary"
+  | "createdAt"
+  | "updatedAt"
+>;
+
+export type ClientEngagementUpdates = Partial<
+  Omit<
+    NewClientEngagement,
+    "clientWorkflowRecordId"
   >
 >;
 
@@ -112,7 +143,13 @@ export type WorkItemCommandResult = {
 export type ClientRecordCommandResult = {
   requestId: string;
   clientRecord: ClientWorkflowRecord;
+  clientEngagement: ClientEngagement;
   reconciliation: RiskSignalReconciliationResult;
+};
+
+export type ClientEngagementCommandResult = {
+  requestId: string;
+  clientEngagement: ClientEngagement;
 };
 
 export type HandoffNoteCommandResult = {
@@ -134,17 +171,20 @@ export type ProposalRecommendationCommandResult =
 
 export type CreateHandoffNoteCommand = {
   commandId: string;
+  clientEngagementId: string;
   note: NewHandoffNote;
 };
 
 export type CreateProposalCommand = {
   commandId: string;
+  clientEngagementId: string;
   proposal: NewProposalRecord;
   evaluationDate?: Date;
 };
 
 export type UpdateProposalCommand = {
   commandId: string;
+  clientEngagementId: string;
   proposalId: string;
   expectedUpdatedAt: string;
   updates: ProposalRecordUpdates;
@@ -153,6 +193,7 @@ export type UpdateProposalCommand = {
 
 export type ApplyProposalRecommendationCommand = {
   commandId: string;
+  clientEngagementId: string;
   proposalId: string;
   clientWorkflowRecordId: string;
   expectedStatus: ProposalRecord["status"];
@@ -177,19 +218,44 @@ export type UpdateClientRecordCommand = {
 
 export type CreateWorkItemCommand = {
   commandId: string;
+  clientEngagementId: string;
+  phase: WorkItemPhase;
   task: NewWorkflowTask;
   evaluationDate?: Date;
 };
 
 export type UpdateWorkItemStatusCommand = {
   commandId: string;
+  clientEngagementId: string;
   workItemId: string;
   expectedStatus: WorkflowTask["status"];
   update: WorkflowTaskStatusUpdate;
   evaluationDate?: Date;
 };
 
+export type CreateClientEngagementCommand = {
+  commandId: string;
+  engagement: NewClientEngagement;
+};
+
+export type UpdateClientEngagementCommand = {
+  commandId: string;
+  clientEngagementId: string;
+  expectedUpdatedAt: string;
+  updates: ClientEngagementUpdates;
+  activityNote: string;
+};
+
 export type WorkspaceApplicationApi = {
+  engagements: {
+    list: () => Promise<ClientEngagement[]>;
+    create: (
+      command: CreateClientEngagementCommand,
+    ) => Promise<ClientEngagementCommandResult>;
+    update: (
+      command: UpdateClientEngagementCommand,
+    ) => Promise<ClientEngagementCommandResult>;
+  };
   clientRecords: {
     list: () => Promise<ClientWorkflowRecord[]>;
     create: (
@@ -245,6 +311,11 @@ type ClientRecordCommandRpcResult = {
   reconciliation: unknown;
 };
 
+type ClientEngagementCommandRpcResult = {
+  requestId: string;
+  clientEngagement: ClientEngagementRow;
+};
+
 type HandoffNoteCommandRpcResult = {
   requestId: string;
   handoffNote: HandoffNoteRow;
@@ -285,6 +356,15 @@ const taskCriticalities = new Set<
   "High",
   "Medium",
   "Low",
+]);
+const workItemPhases = new Set<WorkItemPhase>([
+  "Lead",
+  "Proposal",
+  "Onboarding",
+  "Delivery",
+  "Approval",
+  "Payment",
+  "Handoff",
 ]);
 const proposalStatuses = new Set<ProposalRecord["status"]>([
   "Not needed",
@@ -359,6 +439,37 @@ const mutableClientRecordFields = new Set<
   "returningClientStatus",
   "lastProjectDate",
   "estimatedValue",
+]);
+const engagementFields = new Set<
+  keyof NewClientEngagement
+>([
+  "clientWorkflowRecordId",
+  "title",
+  "lifecycleStage",
+  "priority",
+  "estimatedValue",
+  "nextAction",
+  "nextFollowUpAt",
+  "assignedTo",
+  "onboardingStatus",
+  "deliveryStatus",
+  "approvalStatus",
+  "paymentStatus",
+]);
+const mutableEngagementFields = new Set<
+  keyof ClientEngagementUpdates
+>([
+  "title",
+  "lifecycleStage",
+  "priority",
+  "estimatedValue",
+  "nextAction",
+  "nextFollowUpAt",
+  "assignedTo",
+  "onboardingStatus",
+  "deliveryStatus",
+  "approvalStatus",
+  "paymentStatus",
 ]);
 const handoffNoteFields = new Set<keyof NewHandoffNote>([
   "clientWorkflowRecordId",
@@ -528,6 +639,7 @@ function mapCommandResult(
 function mapClientRecordCommandResult(
   data: unknown,
   expectedRequestId: string,
+  clientEngagement: ClientEngagement,
 ): ClientRecordCommandResult {
   const result = data as ClientRecordCommandRpcResult | null;
 
@@ -549,8 +661,36 @@ function mapClientRecordCommandResult(
     clientRecord: mapClientWorkflowRecordRow(
       result.clientRecord,
     ),
+    clientEngagement,
     reconciliation: mapRiskSignalReconciliationResult(
       result.reconciliation,
+    ),
+  };
+}
+
+function mapClientEngagementCommandResult(
+  data: unknown,
+  expectedRequestId: string,
+): ClientEngagementCommandResult {
+  const result =
+    data as ClientEngagementCommandRpcResult | null;
+
+  if (
+    !result?.requestId ||
+    result.requestId !== expectedRequestId ||
+    !result.clientEngagement
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_response",
+      "The engagement operation returned an invalid response.",
+      expectedRequestId,
+    );
+  }
+
+  return {
+    requestId: result.requestId,
+    clientEngagement: mapClientEngagementRow(
+      result.clientEngagement,
     ),
   };
 }
@@ -914,6 +1054,221 @@ function normalizeClientRecordUpdates(
   ) as ClientWorkflowRecordUpdates;
 }
 
+function normalizeEngagementValues<
+  T extends NewClientEngagement | ClientEngagementUpdates,
+>(values: T) {
+  return Object.fromEntries(
+    Object.entries(values).map(([field, value]) => [
+      field,
+      typeof value === "string" ? value.trim() : value,
+    ]),
+  ) as T;
+}
+
+function validateEngagementValues(
+  values: NewClientEngagement | ClientEngagementUpdates,
+  requestId: string,
+) {
+  if (values.title !== undefined) {
+    if (typeof values.title !== "string") {
+      throw new WorkspaceApiError(
+        "invalid_request",
+        "The engagement title must be text.",
+        requestId,
+      );
+    }
+    assertMinimumText(
+      values.title,
+      2,
+      "Enter an engagement title.",
+      requestId,
+    );
+  }
+
+  if (
+    values.lifecycleStage !== undefined &&
+    !lifecycleStages.has(values.lifecycleStage)
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Choose a valid engagement stage.",
+      requestId,
+    );
+  }
+
+  if (
+    values.priority !== undefined &&
+    !priorities.has(values.priority)
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Choose a valid engagement priority.",
+      requestId,
+    );
+  }
+
+  if (
+    values.estimatedValue !== undefined &&
+    (!Number.isFinite(values.estimatedValue) ||
+      values.estimatedValue < 0)
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Enter a valid engagement value.",
+      requestId,
+    );
+  }
+
+  if (values.nextAction !== undefined) {
+    if (typeof values.nextAction !== "string") {
+      throw new WorkspaceApiError(
+        "invalid_request",
+        "The next action must be text.",
+        requestId,
+      );
+    }
+    assertMinimumText(
+      values.nextAction,
+      3,
+      "Enter the engagement next action.",
+      requestId,
+    );
+  }
+
+  if (
+    values.nextFollowUpAt !== undefined &&
+    !dateKeyPattern.test(values.nextFollowUpAt)
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Choose a valid engagement follow-up date.",
+      requestId,
+    );
+  }
+
+  if (values.assignedTo !== undefined) {
+    if (typeof values.assignedTo !== "string") {
+      throw new WorkspaceApiError(
+        "invalid_request",
+        "The engagement owner must be text.",
+        requestId,
+      );
+    }
+    assertMinimumText(
+      values.assignedTo,
+      2,
+      "Enter the engagement owner.",
+      requestId,
+    );
+  }
+
+  const statuses = [
+    values.onboardingStatus,
+    values.deliveryStatus,
+    values.approvalStatus,
+    values.paymentStatus,
+  ].filter(
+    (status): status is WorkflowTask["status"] =>
+      status !== undefined,
+  );
+
+  if (statuses.some((status) => !workflowStatuses.has(status))) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Choose valid engagement workflow statuses.",
+      requestId,
+    );
+  }
+}
+
+function validateCreateEngagementCommand(
+  workspaceId: string,
+  command: CreateClientEngagementCommand,
+) {
+  assertRequestId(command.commandId);
+  assertUuid(
+    workspaceId,
+    "The workspace identifier",
+    command.commandId,
+  );
+
+  const suppliedFields = Object.keys(
+    command.engagement,
+  ) as Array<keyof NewClientEngagement>;
+
+  if (
+    suppliedFields.length !== engagementFields.size ||
+    suppliedFields.some((field) => !engagementFields.has(field))
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Engagement details are incomplete or contain a protected field.",
+      command.commandId,
+    );
+  }
+
+  assertUuid(
+    command.engagement.clientWorkflowRecordId,
+    "The client record identifier",
+    command.commandId,
+  );
+  validateEngagementValues(
+    command.engagement,
+    command.commandId,
+  );
+}
+
+function validateUpdateEngagementCommand(
+  workspaceId: string,
+  command: UpdateClientEngagementCommand,
+) {
+  assertRequestId(command.commandId);
+  assertUuid(
+    workspaceId,
+    "The workspace identifier",
+    command.commandId,
+  );
+  assertUuid(
+    command.clientEngagementId,
+    "The engagement identifier",
+    command.commandId,
+  );
+
+  if (
+    !timestampPattern.test(command.expectedUpdatedAt) ||
+    Number.isNaN(Date.parse(command.expectedUpdatedAt))
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "The expected engagement version is invalid.",
+      command.commandId,
+    );
+  }
+
+  const fields = Object.keys(command.updates) as Array<
+    keyof ClientEngagementUpdates
+  >;
+
+  if (
+    fields.length === 0 ||
+    fields.some((field) => !mutableEngagementFields.has(field))
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Engagement changes are empty or contain a protected field.",
+      command.commandId,
+    );
+  }
+
+  assertMinimumText(
+    command.activityNote,
+    5,
+    "Describe the engagement change.",
+    command.commandId,
+  );
+  validateEngagementValues(command.updates, command.commandId);
+}
+
 function validateCreateClientRecordCommand(
   workspaceId: string,
   command: CreateClientRecordCommand,
@@ -951,6 +1306,11 @@ function validateCreateCommand(
 
   assertRequestId(commandId);
   assertUuid(workspaceId, "The workspace identifier", commandId);
+  assertUuid(
+    command.clientEngagementId,
+    "The engagement identifier",
+    commandId,
+  );
   assertUuid(
     task.clientWorkflowRecordId,
     "The client record identifier",
@@ -997,6 +1357,14 @@ function validateCreateCommand(
     );
   }
 
+  if (!workItemPhases.has(command.phase)) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Choose a valid work item phase.",
+      commandId,
+    );
+  }
+
   if (!workflowStatuses.has(task.status)) {
     throw new WorkspaceApiError(
       "invalid_request",
@@ -1022,6 +1390,11 @@ function validateCreateHandoffNoteCommand(
 
   assertRequestId(commandId);
   assertUuid(workspaceId, "The workspace identifier", commandId);
+  assertUuid(
+    command.clientEngagementId,
+    "The engagement identifier",
+    commandId,
+  );
 
   if (!note || typeof note !== "object" || Array.isArray(note)) {
     throw new WorkspaceApiError(
@@ -1291,6 +1664,11 @@ function validateCreateProposalCommand(
     "The workspace identifier",
     command.commandId,
   );
+  assertUuid(
+    command.clientEngagementId,
+    "The engagement identifier",
+    command.commandId,
+  );
 
   if (
     !command.proposal ||
@@ -1335,6 +1713,11 @@ function validateUpdateProposalCommand(
   assertUuid(
     command.proposalId,
     "The proposal identifier",
+    command.commandId,
+  );
+  assertUuid(
+    command.clientEngagementId,
+    "The engagement identifier",
     command.commandId,
   );
 
@@ -1635,6 +2018,11 @@ function validateApplyProposalRecommendationCommand(
     command.commandId,
   );
   assertUuid(
+    command.clientEngagementId,
+    "The engagement identifier",
+    command.commandId,
+  );
+  assertUuid(
     command.clientWorkflowRecordId,
     "The client record identifier",
     command.commandId,
@@ -1666,6 +2054,11 @@ function validateStatusCommand(
     "The work item identifier",
     command.commandId,
   );
+  assertUuid(
+    command.clientEngagementId,
+    "The engagement identifier",
+    command.commandId,
+  );
 
   if (
     !workflowStatuses.has(command.expectedStatus) ||
@@ -1692,6 +2085,116 @@ export function createWorkspaceApplicationApi(
   workspaceId: string,
 ): WorkspaceApplicationApi {
   return {
+    engagements: {
+      async list() {
+        const requestId = createOperationRequestId();
+
+        try {
+          assertUuid(
+            workspaceId,
+            "The workspace identifier",
+            requestId,
+          );
+          return await getWorkspaceClientEngagements(
+            supabase,
+            workspaceId,
+          );
+        } catch (error) {
+          console.error(
+            "Workspace API engagement query failed",
+            { requestId, error },
+          );
+          throw mapOperationError(
+            error,
+            requestId,
+            "Engagements could not be loaded.",
+          );
+        }
+      },
+
+      async create(command) {
+        validateCreateEngagementCommand(
+          workspaceId,
+          command,
+        );
+
+        try {
+          const { data, error } = await supabase.rpc(
+            "command_create_client_engagement",
+            {
+              p_workspace_id: workspaceId,
+              p_engagement: normalizeEngagementValues(
+                command.engagement,
+              ),
+              p_idempotency_key: command.commandId,
+            },
+          );
+
+          if (error) {
+            throw error;
+          }
+
+          return mapClientEngagementCommandResult(
+            data,
+            command.commandId,
+          );
+        } catch (error) {
+          console.error(
+            "Workspace API engagement create failed",
+            { requestId: command.commandId, error },
+          );
+          throw mapOperationError(
+            error,
+            command.commandId,
+            "The engagement could not be saved.",
+          );
+        }
+      },
+
+      async update(command) {
+        validateUpdateEngagementCommand(
+          workspaceId,
+          command,
+        );
+
+        try {
+          const { data, error } = await supabase.rpc(
+            "command_update_client_engagement",
+            {
+              p_workspace_id: workspaceId,
+              p_client_engagement_id:
+                command.clientEngagementId,
+              p_expected_updated_at:
+                command.expectedUpdatedAt,
+              p_updates: normalizeEngagementValues(
+                command.updates,
+              ),
+              p_activity_note: command.activityNote.trim(),
+              p_idempotency_key: command.commandId,
+            },
+          );
+
+          if (error) {
+            throw error;
+          }
+
+          return mapClientEngagementCommandResult(
+            data,
+            command.commandId,
+          );
+        } catch (error) {
+          console.error(
+            "Workspace API engagement update failed",
+            { requestId: command.commandId, error },
+          );
+          throw mapOperationError(
+            error,
+            command.commandId,
+            "The engagement could not be updated.",
+          );
+        }
+      },
+    },
     clientRecords: {
       async list() {
         const requestId = createOperationRequestId();
@@ -1744,9 +2247,30 @@ export function createWorkspaceApplicationApi(
             throw error;
           }
 
+          const rpcResult =
+            data as ClientRecordCommandRpcResult | null;
+          const clientWorkflowRecordId =
+            rpcResult?.clientRecord?.id;
+
+          if (!clientWorkflowRecordId) {
+            throw new WorkspaceApiError(
+              "invalid_response",
+              "The client record operation returned an invalid response.",
+              commandId,
+            );
+          }
+
+          const clientEngagement =
+            await getPrimaryClientEngagement(
+              supabase,
+              workspaceId,
+              clientWorkflowRecordId,
+            );
+
           return mapClientRecordCommandResult(
             data,
             commandId,
+            clientEngagement,
           );
         } catch (error) {
           console.error(
@@ -1791,9 +2315,17 @@ export function createWorkspaceApplicationApi(
             throw error;
           }
 
+          const clientEngagement =
+            await getPrimaryClientEngagement(
+              supabase,
+              workspaceId,
+              command.clientRecordId,
+            );
+
           return mapClientRecordCommandResult(
             data,
             command.commandId,
+            clientEngagement,
           );
         } catch (error) {
           console.error(
@@ -1845,9 +2377,11 @@ export function createWorkspaceApplicationApi(
 
         try {
           const { data, error } = await supabase.rpc(
-            "command_create_handoff_note",
+            "command_create_engagement_handoff_note",
             {
               p_workspace_id: workspaceId,
+              p_client_engagement_id:
+                command.clientEngagementId,
               p_note: {
                 clientWorkflowRecordId:
                   note.clientWorkflowRecordId,
@@ -1912,9 +2446,11 @@ export function createWorkspaceApplicationApi(
 
         try {
           const { data, error } = await supabase.rpc(
-            "command_create_proposal_record",
+            "command_create_engagement_proposal_record",
             {
               p_workspace_id: workspaceId,
+              p_client_engagement_id:
+                command.clientEngagementId,
               p_proposal: normalizeProposalValues(
                 command.proposal,
               ),
@@ -1951,9 +2487,11 @@ export function createWorkspaceApplicationApi(
 
         try {
           const { data, error } = await supabase.rpc(
-            "command_update_proposal_record",
+            "command_update_engagement_proposal_record",
             {
               p_workspace_id: workspaceId,
+              p_client_engagement_id:
+                command.clientEngagementId,
               p_proposal_id: command.proposalId,
               p_expected_updated_at: command.expectedUpdatedAt,
               p_updates: normalizeProposalValues(command.updates),
@@ -1993,9 +2531,11 @@ export function createWorkspaceApplicationApi(
 
         try {
           const { data, error } = await supabase.rpc(
-            "command_apply_proposal_workflow_recommendation",
+            "command_apply_engagement_proposal_workflow_recommendation",
             {
               p_workspace_id: workspaceId,
+              p_client_engagement_id:
+                command.clientEngagementId,
               p_proposal_id: command.proposalId,
               p_client_workflow_record_id:
                 command.clientWorkflowRecordId,
@@ -2066,9 +2606,11 @@ export function createWorkspaceApplicationApi(
 
         try {
           const { data, error } = await supabase.rpc(
-            "command_create_workflow_task",
+            "command_create_engagement_workflow_task",
             {
               p_workspace_id: workspaceId,
+              p_client_engagement_id:
+                command.clientEngagementId,
               p_client_workflow_record_id:
                 task.clientWorkflowRecordId,
               p_title: task.title.trim(),
@@ -2077,6 +2619,7 @@ export function createWorkspaceApplicationApi(
               p_due_date: task.dueDate,
               p_status: task.status,
               p_criticality: task.criticality,
+              p_phase: command.phase,
               p_evaluation_date: getLocalDateKey(
                 command.evaluationDate ?? new Date(),
               ),
@@ -2107,9 +2650,11 @@ export function createWorkspaceApplicationApi(
 
         try {
           const { data, error } = await supabase.rpc(
-            "command_update_workflow_task_status",
+            "command_update_engagement_workflow_task_status",
             {
               p_workspace_id: workspaceId,
+              p_client_engagement_id:
+                command.clientEngagementId,
               p_workflow_task_id: command.workItemId,
               p_expected_status: command.expectedStatus,
               p_status: command.update.status,

@@ -5,6 +5,7 @@ export type ProposalRecordRow = {
   id: string;
   workspace_id: string;
   client_workflow_record_id: string;
+  client_engagement_id: string;
   title: string;
   amount: number | string;
   currency: string;
@@ -27,6 +28,7 @@ export function mapProposalRow(
   return {
     id: row.id,
     clientWorkflowRecordId: row.client_workflow_record_id,
+    clientEngagementId: row.client_engagement_id,
     title: row.title,
     amount: Number(row.amount ?? 0),
     currency: row.currency,

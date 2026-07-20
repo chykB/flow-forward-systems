@@ -5,6 +5,7 @@ type ActivityLogRow = {
   id: string;
   workspace_id: string;
   client_workflow_record_id: string;
+  client_engagement_id: string;
   actor_id: string;
   action_type: string;
   note: string;
@@ -13,7 +14,10 @@ type ActivityLogRow = {
 
 export type NewActivityLog = Pick<
   ActivityLog,
-  "clientWorkflowRecordId" | "actionType" | "note"
+  | "clientWorkflowRecordId"
+  | "clientEngagementId"
+  | "actionType"
+  | "note"
 > & {
   createdAt?: string;
 };
@@ -25,6 +29,7 @@ function mapActivityLogRow(
     id: row.id,
     clientWorkflowRecordId:
       row.client_workflow_record_id,
+    clientEngagementId: row.client_engagement_id,
     actionType: row.action_type,
     note: row.note,
     createdAt: row.created_at,
@@ -92,6 +97,7 @@ export async function createActivityLog(
   const payload: {
     workspace_id: string;
     client_workflow_record_id: string;
+    client_engagement_id: string;
     actor_id: string;
     action_type: string;
     note: string;
@@ -100,6 +106,7 @@ export async function createActivityLog(
     workspace_id: workspaceId,
     client_workflow_record_id:
       activity.clientWorkflowRecordId,
+    client_engagement_id: activity.clientEngagementId,
     actor_id: user.id,
     action_type: actionType,
     note,

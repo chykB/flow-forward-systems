@@ -58,6 +58,7 @@ import type {
 } from "@/lib/proposal-workflow";
 import type {
   ActivityLog,
+  ClientEngagement,
   ClientWorkflowRecord,
   HandoffNote,
   LifecycleStage,
@@ -65,6 +66,7 @@ import type {
   WorkflowTask,
   InvoiceRecord,
   RiskSignal,
+  WorkItemPhase,
 } from "@/lib/client-workflow-types";
 import {
   getDisputedInvoices,
@@ -108,6 +110,42 @@ function getRelatedClientRecords(
   return records.filter((record) =>
     relatedRecordIds.has(record.id),
   );
+}
+
+function getCompatibilityWorkItemPhase(
+  lifecycleStage: LifecycleStage,
+): WorkItemPhase {
+  if (lifecycleStage === "Proposal sent") {
+    return "Proposal";
+  }
+
+  if (
+    lifecycleStage === "Won client" ||
+    lifecycleStage === "Onboarding"
+  ) {
+    return "Onboarding";
+  }
+
+  if (lifecycleStage === "In delivery") {
+    return "Delivery";
+  }
+
+  if (lifecycleStage === "Waiting for approval") {
+    return "Approval";
+  }
+
+  if (lifecycleStage === "Payment follow-up") {
+    return "Payment";
+  }
+
+  if (
+    lifecycleStage === "Completed" ||
+    lifecycleStage === "Lost or inactive"
+  ) {
+    return "Handoff";
+  }
+
+  return "Lead";
 }
 
 function buildPrioritySections(
@@ -298,6 +336,8 @@ function WorkspaceDashboard({
   const updatingWorkflowTaskIdsRef =
   useRef(new Set<string>());
   const [records, setRecords] = useState<ClientWorkflowRecord[]>([]);
+  const [engagements, setEngagements] =
+    useState<ClientEngagement[]>([]);
   const [riskSignals, setRiskSignals] = useState<RiskSignal[]>([]);
   const [riskSignalsStatus, setRiskSignalsStatus] = useState<
     "loading" | "ready" | "error"
@@ -414,25 +454,57 @@ function WorkspaceDashboard({
     filteredRecords[0] ||
     null;
 
+  const selectedEngagement = useMemo(
+    () =>
+      selectedRecord
+        ? engagements.find(
+            (engagement) =>
+              engagement.clientWorkflowRecordId ===
+                selectedRecord.id && engagement.isPrimary,
+          ) ?? null
+        : null,
+    [engagements, selectedRecord],
+  );
+
+  function getPrimaryEngagement(
+    clientWorkflowRecordId: string,
+  ) {
+    const engagement = engagements.find(
+      (candidate) =>
+        candidate.clientWorkflowRecordId ===
+          clientWorkflowRecordId && candidate.isPrimary,
+    );
+
+    if (!engagement) {
+      throw new Error(
+        "The client engagement could not be found. Refresh and try again.",
+      );
+    }
+
+    return engagement;
+  }
+
   const selectedRecordProposals = useMemo(
     () =>
       selectedRecord
         ? proposals.filter(
             (proposal) =>
-              proposal.clientWorkflowRecordId === selectedRecord.id,
+              proposal.clientEngagementId ===
+              selectedEngagement?.id,
           )
         : [],
-    [proposals, selectedRecord],
+    [proposals, selectedEngagement, selectedRecord],
   );
   const selectedRecordInvoices = useMemo(
     () =>
       selectedRecord
         ? invoices.filter(
             (invoice) =>
-              invoice.clientWorkflowRecordId === selectedRecord.id,
+              invoice.clientEngagementId ===
+              selectedEngagement?.id,
           )
         : [],
-    [invoices, selectedRecord],
+    [invoices, selectedEngagement, selectedRecord],
   );
 
   const selectedRecordRiskSignals = useMemo(
@@ -440,10 +512,44 @@ function WorkspaceDashboard({
       selectedRecord
         ? riskSignals.filter(
             (signal) =>
-              signal.clientWorkflowRecordId === selectedRecord.id,
+              signal.clientEngagementId ===
+              selectedEngagement?.id,
           )
         : [],
-    [riskSignals, selectedRecord],
+    [riskSignals, selectedEngagement, selectedRecord],
+  );
+
+  const selectedRecordTasks = useMemo(
+    () =>
+      selectedEngagement
+        ? workflowTasks.filter(
+            (task) =>
+              task.clientEngagementId === selectedEngagement.id,
+          )
+        : [],
+    [selectedEngagement, workflowTasks],
+  );
+
+  const selectedRecordActivityLogs = useMemo(
+    () =>
+      selectedEngagement
+        ? activityLogs.filter(
+            (log) =>
+              log.clientEngagementId === selectedEngagement.id,
+          )
+        : [],
+    [activityLogs, selectedEngagement],
+  );
+
+  const selectedRecordHandoffNotes = useMemo(
+    () =>
+      selectedEngagement
+        ? handoffNotes.filter(
+            (note) =>
+              note.clientEngagementId === selectedEngagement.id,
+          )
+        : [],
+    [handoffNotes, selectedEngagement],
   );
 
   useEffect(() => {
@@ -564,8 +670,11 @@ function WorkspaceDashboard({
       setRiskSignalsMessage("");
 
       try {
-        const workspaceRecords =
-          await workspaceApi.clientRecords.list();
+        const [workspaceRecords, workspaceEngagements] =
+          await Promise.all([
+            workspaceApi.clientRecords.list(),
+            workspaceApi.engagements.list(),
+          ]);
 
         const reconciliationResults = await Promise.allSettled(
           workspaceRecords.map((record) =>
@@ -617,6 +726,23 @@ function WorkspaceDashboard({
           : currentRecords[0]?.id;
 
         setRecords(currentRecords);
+        setEngagements(
+          workspaceEngagements.map((engagement) => {
+            const currentRecord = currentRecords.find(
+              (record) =>
+                record.id ===
+                engagement.clientWorkflowRecordId,
+            );
+
+            return engagement.isPrimary && currentRecord
+              ? {
+                  ...engagement,
+                  workflowHealthScore:
+                    currentRecord.workflowHealthScore,
+                }
+              : engagement;
+          }),
+        );
         setRiskSignals(loadedRiskSignals);
         setSelectedRecordId(nextSelectedRecordId);
         persistSelectedRecordId(
@@ -887,6 +1013,10 @@ function WorkspaceDashboard({
         savedRecord,
         ...currentRecords,
       ]);
+      setEngagements((currentEngagements) => [
+        result.clientEngagement,
+        ...currentEngagements,
+      ]);
       applyRiskReconciliation(result.reconciliation);
       setRiskSignalsStatus("ready");
       setRiskSignalsMessage("");
@@ -918,8 +1048,12 @@ function WorkspaceDashboard({
     setHandoffNotesMessage("");
 
     try {
+      const engagement = getPrimaryEngagement(
+        handoffNote.clientWorkflowRecordId,
+      );
       const result = await workspaceApi.handoffNotes.create({
         commandId: createOperationRequestId(),
+        clientEngagementId: engagement.id,
         note: handoffNote,
       });
       const savedHandoffNote = result.handoffNote;
@@ -950,8 +1084,15 @@ function WorkspaceDashboard({
     setWorkflowTasksMessage("");
 
     try {
+      const engagement = getPrimaryEngagement(
+        task.clientWorkflowRecordId,
+      );
       const result = await workspaceApi.workItems.create({
         commandId: createOperationRequestId(),
+        clientEngagementId: engagement.id,
+        phase: getCompatibilityWorkItemPhase(
+          engagement.lifecycleStage,
+        ),
         task,
       });
       const savedTask = result.workItem;
@@ -1012,6 +1153,8 @@ function WorkspaceDashboard({
       const result =
         await workspaceApi.workItems.updateStatus({
           commandId: createOperationRequestId(),
+          clientEngagementId:
+            previousTask.clientEngagementId,
           workItemId: workflowTaskId,
           expectedStatus: previousTask.status,
           update,
@@ -1117,6 +1260,18 @@ function WorkspaceDashboard({
         record.id === result.clientRecord.id
           ? result.clientRecord
           : record,
+      ),
+    );
+    setEngagements((currentEngagements) =>
+      currentEngagements.map((engagement) =>
+        engagement.clientWorkflowRecordId ===
+            result.clientRecord.id && engagement.isPrimary
+          ? {
+              ...engagement,
+              workflowHealthScore:
+                result.clientRecord.workflowHealthScore,
+            }
+          : engagement,
       ),
     );
 
@@ -1292,6 +1447,13 @@ function WorkspaceDashboard({
           record.id === savedRecord.id ? savedRecord : record,
         ),
       );
+      setEngagements((currentEngagements) =>
+        currentEngagements.map((engagement) =>
+          engagement.id === result.clientEngagement.id
+            ? result.clientEngagement
+            : engagement,
+        ),
+      );
       applyRiskReconciliation(result.reconciliation);
       setRiskSignalsStatus("ready");
       setRiskSignalsMessage("");
@@ -1326,8 +1488,12 @@ function WorkspaceDashboard({
     setProposalsMessage("");
 
     try {
+      const engagement = getPrimaryEngagement(
+        proposal.clientWorkflowRecordId,
+      );
       const result = await workspaceApi.proposals.create({
         commandId: createOperationRequestId(),
+        clientEngagementId: engagement.id,
         proposal,
       });
       const savedProposal = result.proposal;
@@ -1361,6 +1527,9 @@ function WorkspaceDashboard({
       const savedInvoice = await createInvoiceRecord(
         supabase,
         workspaceId,
+        getPrimaryEngagement(
+          invoice.clientWorkflowRecordId,
+        ).id,
         invoice,
       );
 
@@ -1383,6 +1552,8 @@ function WorkspaceDashboard({
         await recordActivity({
         clientWorkflowRecordId:
           savedInvoice.clientWorkflowRecordId,
+        clientEngagementId:
+          savedInvoice.clientEngagementId,
         actionType: "Invoice added",
         note: `${invoiceLabel} was added with status: ${getInvoiceStatusLabel(savedInvoice.status)}.`,
       });
@@ -1471,6 +1642,8 @@ function WorkspaceDashboard({
       await recordActivity({
         clientWorkflowRecordId:
           savedInvoice.clientWorkflowRecordId,
+        clientEngagementId:
+          savedInvoice.clientEngagementId,
         actionType,
         note: activityNote,
       });
@@ -1528,6 +1701,9 @@ function WorkspaceDashboard({
             : item,
         ),
       );
+      setEngagements(
+        await workspaceApi.engagements.list(),
+      );
       await refreshRiskSignalsAfterChange(
         result.invoice.clientWorkflowRecordId,
       );
@@ -1535,6 +1711,8 @@ function WorkspaceDashboard({
         await recordActivity({
           clientWorkflowRecordId:
             result.invoice.clientWorkflowRecordId,
+          clientEngagementId:
+            result.invoice.clientEngagementId,
           actionType: "Invoice payment step applied",
           note: `${recommendation.title} was applied to the client workflow.`,
         });
@@ -1574,6 +1752,8 @@ function WorkspaceDashboard({
     try {
       const result = await workspaceApi.proposals.update({
         commandId: createOperationRequestId(),
+        clientEngagementId:
+          previousProposal.clientEngagementId,
         proposalId,
         expectedUpdatedAt: previousProposal.updatedAt,
         updates,
@@ -1629,6 +1809,7 @@ function WorkspaceDashboard({
       const result =
         await workspaceApi.proposals.applyRecommendation({
           commandId: createOperationRequestId(),
+          clientEngagementId: proposal.clientEngagementId,
           proposalId: proposal.id,
           clientWorkflowRecordId:
             proposal.clientWorkflowRecordId,
@@ -1650,6 +1831,9 @@ function WorkspaceDashboard({
             ? result.proposal
             : currentProposal,
         ),
+      );
+      setEngagements(
+        await workspaceApi.engagements.list(),
       );
       applyRiskReconciliation(result.reconciliation);
       setRiskSignalsStatus("ready");
@@ -1958,9 +2142,9 @@ function WorkspaceDashboard({
                     <ClientRecordDetail
                       activeTab={selectedDetailTab}
                       activityMessage={activityLogsMessage}
-                      activityLogs={activityLogs}
+                      activityLogs={selectedRecordActivityLogs}
                       handoffMessage={handoffNotesMessage}
-                      handoffNotes={handoffNotes}
+                      handoffNotes={selectedRecordHandoffNotes}
                       invoiceMessage={invoicesMessage}
                       invoices={selectedRecordInvoices}
                       isActivityLoading={
@@ -2017,7 +2201,7 @@ function WorkspaceDashboard({
                       record={selectedRecord}
                       riskSignalMessage={riskSignalsMessage}
                       riskSignals={selectedRecordRiskSignals}
-                      tasks={workflowTasks}
+                      tasks={selectedRecordTasks}
                       tasksMessage={workflowTasksMessage}
                       updatingTaskId={updatingWorkflowTaskId}
                     />

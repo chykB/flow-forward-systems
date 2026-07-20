@@ -10,6 +10,7 @@ type InvoiceRecordRow = {
   id: string;
   workspace_id: string;
   client_workflow_record_id: string;
+  client_engagement_id: string;
   invoice_number: string | null;
   amount: number | string;
   currency: string;
@@ -37,6 +38,7 @@ type InvoiceRecordRow = {
 export type NewInvoiceRecord = Omit<
   InvoiceRecord,
   | "id"
+  | "clientEngagementId"
   | "createdAt"
   | "updatedAt"
   | "workflowActionAppliedStatus"
@@ -52,6 +54,7 @@ export type InvoiceRecordUpdates = Partial<
     InvoiceRecord,
     | "id"
     | "clientWorkflowRecordId"
+    | "clientEngagementId"
     | "createdAt"
     | "updatedAt"
     | "workflowActionAppliedStatus"
@@ -65,6 +68,7 @@ function mapInvoiceRow(row: InvoiceRecordRow): InvoiceRecord {
   return {
     id: row.id,
     clientWorkflowRecordId: row.client_workflow_record_id,
+    clientEngagementId: row.client_engagement_id,
     invoiceNumber: row.invoice_number ?? "",
     amount: Number(row.amount ?? 0),
     currency: row.currency,
@@ -131,6 +135,7 @@ export async function getClientInvoiceRecords(
 export async function createInvoiceRecord(
   supabase: SupabaseClient,
   workspaceId: string,
+  clientEngagementId: string,
   invoice: NewInvoiceRecord,
 ) {
   const { data, error } = await supabase
@@ -138,6 +143,7 @@ export async function createInvoiceRecord(
     .insert({
       workspace_id: workspaceId,
       client_workflow_record_id: invoice.clientWorkflowRecordId,
+      client_engagement_id: clientEngagementId,
       invoice_number: invoice.invoiceNumber || null,
       amount: invoice.amount,
       currency: invoice.currency,
