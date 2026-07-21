@@ -2,7 +2,7 @@
 
 Status: Active technical contract
 
-Implemented slices: Work items, client records, follow-up completion, handoff notes, proposals, engagement ownership, engagement-scoped risk, and sequential Work Item controls
+Implemented slices: Work items, client records, follow-up completion, handoff notes, proposals, invoices, engagement ownership, engagement-scoped risk, and sequential Work Item controls
 
 Public API status: None of the interfaces or database functions in this document are a versioned customer API.
 
@@ -22,7 +22,7 @@ The manual and rules-based product remains fully operational without an AI provi
 
 ### Application contracts
 
-`src/lib/application/workspace-api.ts` defines UI-facing query and command types. Callers depend on this module instead of importing record, work-item, handoff-note, or proposal mutation adapters directly.
+`src/lib/application/workspace-api.ts` defines UI-facing query and command types. Callers depend on this module instead of importing record, work-item, handoff-note, proposal, or invoice mutation adapters directly.
 
 `WorkspaceApplicationApi` currently exposes:
 
@@ -45,6 +45,11 @@ The manual and rules-based product remains fully operational without an AI provi
 - `proposals.update(command)`
 - `proposals.applyRecommendation(command)`
 
+- `invoices.list()`
+- `invoices.create(command)`
+- `invoices.update(command)`
+- `invoices.applyRecommendation(command)`
+
 - `workItems.list()`
 - `workItems.create(command)`
 - `workItems.updateStatus(command)`
@@ -55,7 +60,7 @@ Each command returns the saved entity. Commands that can change deterministic wo
 
 `src/lib/supabase/*` maps database rows and performs narrow Supabase calls. These modules are implementation details. They do not define product authorization or multi-step workflow behavior.
 
-For client records, engagements, work items, handoff notes, and proposals, direct browser insert, update, and delete privileges are revoked. Reads remain protected by workspace RLS. New child writes carry an explicit engagement identifier. Legacy unscoped create and status functions are no longer executable by authenticated callers; engagement-scoped wrappers verify workspace, client, engagement, active state, idempotency replay context, and the current compatibility rollout guard before invoking the existing atomic operation.
+For client records, engagements, work items, handoff notes, proposals, and invoices, direct browser insert, update, and delete privileges are revoked. Reads remain protected by workspace RLS. New child writes carry an explicit engagement identifier. Legacy unscoped create, update, status, and recommendation functions are no longer executable by authenticated callers; engagement-scoped commands verify workspace, client, engagement, active state, idempotency replay context, and the current compatibility rollout guard before performing the operation.
 
 ### Atomic database commands
 
@@ -66,6 +71,7 @@ The implemented migrations expose authenticated `security definer` command funct
 - client-record create/update;
 - engagement-scoped handoff-note creation;
 - engagement-scoped Proposal create/update/recommendation;
+- engagement-scoped Invoice create/update/recommendation;
 - engagement-scoped Work Item create/status update.
 
 The current function names are:
@@ -84,12 +90,16 @@ The current function names are:
 - `command_update_engagement_proposal_record`
 - `command_apply_engagement_proposal_workflow_recommendation`
 
+- `command_create_engagement_invoice_record`
+- `command_update_engagement_invoice_record`
+- `command_apply_engagement_invoice_workflow_recommendation`
+
 - `command_create_engagement_workflow_task`
 - `command_update_engagement_workflow_task_status`
 
 Each function explicitly verifies that `auth.uid()` owns the workspace, validates its input, and performs the write with its durable Activity entry before committing. Child operations verify that the engagement belongs to the supplied client and workspace. Commands that can change deterministic workflow conditions also reconcile risk signals and Workflow Health. Creating a context-only handoff note does not change risk or health.
 
-Proposal create/update and Work Item create/status operations are available for every Active engagement. Each operation carries explicit engagement context into deterministic reconciliation, so one job cannot change another job's risk or health. Proposal recommendation application remains primary-only until its workflow updates are moved from the compatibility Client Record to the selected engagement.
+Proposal and Invoice create/update operations and Work Item create/status operations are available for every Active engagement. Each operation carries explicit engagement context into deterministic reconciliation, so one job cannot change another job's risk or health. Proposal and Invoice recommendation application remain primary-only until their workflow updates are moved from the compatibility Client Record to the selected engagement.
 
 These database functions are internal implementation details. Granting `authenticated` execution does not make them a supported external API.
 
@@ -99,7 +109,7 @@ These database functions are internal implementation details. Granting `authenti
 
 - A signed-in actor is required.
 - The actor must own the supplied workspace.
-- The referenced client record, work item, handoff note, or Proposal must belong to that workspace.
+- The referenced client record, engagement, work item, handoff note, Proposal, or Invoice must belong to that workspace.
 - Authorization is checked inside each privileged function because `security definer` functions do not rely on table RLS for their own statements.
 
 ### Validation
@@ -154,9 +164,20 @@ Proposal creation and update validate:
 
 Proposal recommendation application accepts only the workflow fields produced by the deterministic recommendation engine. Relationship concern cannot be changed by a Proposal recommendation. The command verifies the expected Proposal status and remains restricted to the primary compatibility engagement until those workflow updates are engagement-owned.
 
+Invoice creation and update validate:
+
+- the exact writable field set, excluding IDs, timestamps, workspace ownership, dispute lifecycle timestamps, and recommendation markers;
+- invoice number, amount, currency, description, status, payment link, and date requirements;
+- dispute reason and resolution outcome requirements;
+- the referenced Client Record and workspace relationship;
+- an Active engagement that belongs to the referenced Client Record and workspace;
+- the final merged Invoice state for partial updates.
+
+Invoice recommendation application accepts only payment status, priority, next action, and next follow-up date. Relationship concern cannot be changed by an Invoice recommendation. The command verifies the expected Invoice status and remains restricted to the primary compatibility engagement until those workflow updates are engagement-owned.
+
 ### Optimistic concurrency
 
-Work-item status updates include `expectedStatus`. Client-record, engagement, follow-up completion, and Proposal updates include `expectedUpdatedAt`. The database refreshes those concurrency tokens with wall-clock time on every update, including multiple updates within one transaction. Proposal recommendation application includes `expectedStatus`. If another command changes an entity first, the command returns a conflict instead of overwriting newer data.
+Work-item status updates include `expectedStatus`. Client-record, engagement, follow-up completion, Proposal, and Invoice updates include `expectedUpdatedAt`. The database refreshes those concurrency tokens with wall-clock time on every update, including multiple updates within one transaction. Proposal and Invoice recommendation application include `expectedStatus`. If another command changes an entity first, the command returns a conflict instead of overwriting newer data.
 
 ### Idempotency
 
@@ -179,6 +200,8 @@ Creating active work writes exactly one `Work item added` Activity entry. Creati
 Creating a handoff note writes exactly one `Handoff note added` Activity entry in the same transaction. It does not recalculate Workflow Health because recording delegation context does not itself create or resolve a workflow issue.
 
 Creating or updating a Proposal writes exactly one user-facing Proposal Activity entry and reconciles Proposal risks in the same transaction. Applying a Proposal recommendation writes exactly one `Proposal next step applied` entry when the recommendation is newly applied. An idempotent replay creates no duplicate Proposal, recommendation, risk, health, or Activity effects.
+
+Creating or updating an Invoice writes exactly one user-facing Invoice Activity entry and reconciles payment risks in the same transaction. Dispute transitions record whether a dispute was opened or resolved while database triggers own its timestamps and resolution rules. Applying an Invoice recommendation writes exactly one `Invoice payment step applied` entry when the recommendation is newly applied. An idempotent replay creates no duplicate Invoice, dispute, recommendation, risk, health, or Activity effects.
 
 Risk reconciliation is engagement-scoped and deterministic. Each engagement owns its signals and score; only the primary engagement mirrors its score to the compatibility Client Record summary. An unresolved prerequisite suppresses duplicate downstream Work Item risk, while the root issue remains actionable. Reconciliation may write `Workflow risk review updated` for the affected engagement when active issues or Workflow Health change.
 
@@ -214,13 +237,13 @@ User-facing errors include the command or query request ID. Console diagnostics 
 | Work items | workspace work items | none directly | engagement-scoped create/status update + reconciliation + Activity | All Active engagements; Planned and stage guard implemented |
 | Handoff notes | workspace notes | none directly | engagement-scoped create + Activity | Implemented for all Active engagements |
 | Proposals | workspace/client proposals | none directly | engagement-scoped create/update/recommendation + reconciliation + Activity | Create/update enabled for all Active engagements; recommendation remains primary-only |
-| Invoices | workspace/client invoices | engagement-owned create/update + reconciliation + Activity | apply recommendation transaction | Explicit primary engagement stored; command facade pending |
+| Invoices | workspace/client invoices | none directly | engagement-scoped create/update/recommendation + reconciliation + Activity | Create/update enabled for all Active engagements; recommendation remains primary-only |
 | Risk signals | workspace risk history | review status | engagement reconciliation | Engagement score isolation and primary summary mirror implemented; review command facade pending |
-| Activity | workspace history | direct inserts from legacy flows | command-owned audit writes | Client-record, work-item, handoff-note, and Proposal audit implemented; other flows pending |
+| Activity | workspace history | direct inserts from legacy flows | command-owned audit writes | Client-record, work-item, handoff-note, Proposal, and Invoice audit implemented; other flows pending |
 
 ## Assistant Eligibility
 
-The engagement, follow-up, client-record, work-item, handoff-note, and Proposal commands are structurally suitable for a future protected assistant tool, but they are not exposed to an assistant yet. Assistant enablement also requires:
+The engagement, follow-up, client-record, work-item, handoff-note, Proposal, and Invoice commands are structurally suitable for a future protected assistant tool, but they are not exposed to an assistant yet. Assistant enablement also requires:
 
 - explicit per-tool policy and plan entitlements;
 - user confirmation for consequential changes;
@@ -236,6 +259,6 @@ The assistant should use the same application command contract as the manual UI 
 1. Add engagement selection and creation to Client Records while keeping the primary compatibility engagement as the default.
 2. Add dependency editing and a focused root-blocker view to the Work Item UI.
 3. Replace the primary-only Proposal recommendation with an engagement-owned recommendation update.
-4. Move Invoice create/update/recommendation flows behind the application facade.
+4. Replace the primary-only Invoice recommendation with an engagement-owned recommendation update.
 5. Move risk review status changes behind an engagement-scoped command.
 6. Add a protected server tool layer only after the manual command surface is complete and tested.

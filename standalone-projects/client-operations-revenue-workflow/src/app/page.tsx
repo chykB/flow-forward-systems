@@ -30,9 +30,11 @@ import {
   type CompleteFollowUpInput,
   type ClientEngagementUpdates,
   type ClientWorkflowRecordUpdates,
+  type InvoiceRecordUpdates,
   type NewClientEngagement,
   type NewClientWorkflowRecord,
   type NewHandoffNote,
+  type NewInvoiceRecord,
   type NewProposalRecord,
   type NewWorkflowTask,
   type ProposalRecordUpdates,
@@ -40,22 +42,10 @@ import {
 } from "@/lib/application/workspace-api";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser-client";
 import { getProposalsNeedingAction } from "@/lib/proposal-dashboard";
-import {
-  createActivityLog,
-  getWorkspaceActivityLogs,
-  type NewActivityLog,
-} from "@/lib/supabase/activity-logs";
+import { getWorkspaceActivityLogs } from "@/lib/supabase/activity-logs";
 import type {
   InvoiceWorkflowRecommendation as InvoiceRecommendationData,
 } from "@/lib/invoice-workflow";
-import {
-  applyInvoiceWorkflowRecommendationTransaction,
-  createInvoiceRecord,
-  getWorkspaceInvoiceRecords,
-  updateInvoiceRecord,
-  type InvoiceRecordUpdates,
-  type NewInvoiceRecord,
-} from "@/lib/supabase/invoice-records";
 import type {
   ProposalWorkflowRecommendation as ProposalWorkflowRecommendationData,
 } from "@/lib/proposal-workflow";
@@ -95,9 +85,6 @@ import {
   updateRiskSignalStatus,
   type RiskSignalStatusUpdate,
 } from "@/lib/supabase/risk-signals";
-import {
-  getInvoiceStatusLabel,
-} from "@/lib/invoice-options";
 function getRelatedClientRecords(
   records: ClientWorkflowRecord[],
   relatedItems: Array<{
@@ -1168,10 +1155,7 @@ function WorkspaceDashboard({
 
       try {
         const workspaceInvoices =
-          await getWorkspaceInvoiceRecords(
-            supabase,
-            workspaceId,
-          );
+          await workspaceApi.invoices.list();
 
         if (!isMounted) {
           return;
@@ -1198,7 +1182,7 @@ function WorkspaceDashboard({
     return () => {
       isMounted = false;
     };
-  }, [supabase, workspaceId]);
+  }, [workspaceApi]);
 
   async function addRecord(record: NewClientWorkflowRecord) {
     try {
@@ -1561,35 +1545,6 @@ function WorkspaceDashboard({
     }
   }
 
-  async function recordActivity(
-    activity: NewActivityLog,
-  ) {
-    try {
-      const savedActivity = await createActivityLog(
-        supabase,
-        workspaceId,
-        activity,
-      );
-
-      setActivityLogs((currentLogs) => [
-        savedActivity,
-        ...currentLogs.filter(
-          (log) => log.id !== savedActivity.id,
-        ),
-      ]);
-      setActivityLogsStatus("ready");
-      setActivityLogsMessage("");
-    } catch (error) {
-      console.error(
-        "Workspace activity history insert failed",
-        error,
-      );
-      setActivityLogsStatus("error");
-      setActivityLogsMessage(
-        "The change was saved, but activity history could not be updated. Refresh and try again.",
-      );
-    }
-  }
   function applyRiskReconciliation(
     result: Awaited<
       ReturnType<typeof reconcileClientRiskSignals>
@@ -1950,40 +1905,25 @@ function WorkspaceDashboard({
     setInvoicesMessage("");
 
     try {
-      const savedInvoice = await createInvoiceRecord(
-        supabase,
-        workspaceId,
-        getSelectedEngagementForRecord(
-          invoice.clientWorkflowRecordId,
-        ).id,
-        invoice,
+      const engagement = getSelectedEngagementForRecord(
+        invoice.clientWorkflowRecordId,
       );
+      const result = await workspaceApi.invoices.create({
+        commandId: createOperationRequestId(),
+        clientEngagementId: engagement.id,
+        invoice,
+      });
+      const savedInvoice = result.invoice;
 
       setInvoices((currentInvoices) => [
         savedInvoice,
         ...currentInvoices,
       ]);
 
-      await refreshRiskSignalsAfterChange(
-        savedInvoice.clientWorkflowRecordId,
-        savedInvoice.clientEngagementId,
-      );
-
-      const invoiceLabel =
-        savedInvoice.status === "Not needed"
-          ? "Invoice not needed"
-          : savedInvoice.invoiceNumber
-            ? `Invoice ${savedInvoice.invoiceNumber}`
-            : "Invoice preparation";
-
-        await recordActivity({
-        clientWorkflowRecordId:
-          savedInvoice.clientWorkflowRecordId,
-        clientEngagementId:
-          savedInvoice.clientEngagementId,
-        actionType: "Invoice added",
-        note: `${invoiceLabel} was added with status: ${getInvoiceStatusLabel(savedInvoice.status)}.`,
-      });
+      applyRiskReconciliation(result.reconciliation);
+      setRiskSignalsStatus("ready");
+      setRiskSignalsMessage("");
+      await refreshActivityHistory();
     } catch (error) {
       const invoiceError =
         error instanceof Error
@@ -2005,76 +1945,34 @@ function WorkspaceDashboard({
       (invoice) => invoice.id === invoiceId,
     );
 
+    if (!previousInvoice) {
+      throw new Error(
+        "The invoice is no longer available. Refresh and try again.",
+      );
+    }
+
     setIsSavingInvoice(true);
     setInvoicesMessage("");
 
     try {
-      const savedInvoice = await updateInvoiceRecord(
-        supabase,
-        workspaceId,
+      const result = await workspaceApi.invoices.update({
+        commandId: createOperationRequestId(),
+        clientEngagementId: previousInvoice.clientEngagementId,
         invoiceId,
+        expectedUpdatedAt: previousInvoice.updatedAt,
         updates,
-      );
+      });
+      const savedInvoice = result.invoice;
 
       setInvoices((currentInvoices) =>
         currentInvoices.map((invoice) =>
           invoice.id === savedInvoice.id ? savedInvoice : invoice,
         ),
       );
-      await refreshRiskSignalsAfterChange(
-        savedInvoice.clientWorkflowRecordId,
-        savedInvoice.clientEngagementId,
-      );
-      const statusChanged =
-        previousInvoice?.status !== savedInvoice.status;
-
-      const disputeOpened =
-        previousInvoice?.status !== "Disputed" &&
-        savedInvoice.status === "Disputed";
-
-      const disputeResolved =
-        previousInvoice?.status === "Disputed" &&
-        savedInvoice.status !== "Disputed" &&
-        Boolean(savedInvoice.disputeResolvedAt);
-
-      const invoiceReference = savedInvoice.invoiceNumber
-        ? `Invoice ${savedInvoice.invoiceNumber}`
-        : "The invoice";
-
-      let actionType = "Invoice payment details updated";
-      let activityNote =
-        `${invoiceReference} payment details were updated.`;
-
-      if (disputeResolved) {
-        actionType = "Invoice dispute resolved";
-        activityNote =
-          `${invoiceReference} dispute was resolved. ` +
-          `Resolution: ${savedInvoice.disputeResolutionOutcome}. ` +
-          `${savedInvoice.disputeResolutionNote}`;
-      } else if (disputeOpened) {
-        actionType = "Invoice dispute opened";
-        activityNote =
-          `${invoiceReference} was marked as disputed. ` +
-          `Reason: ${savedInvoice.disputeReason}`;
-      } else if (statusChanged) {
-        actionType = "Invoice status updated";
-        activityNote =
-          `${invoiceReference} changed from ` +
-          `${
-            previousInvoice
-              ? getInvoiceStatusLabel(previousInvoice.status)
-              : "its previous status"
-          } to ${getInvoiceStatusLabel(savedInvoice.status)}.`;
-      }
-
-      await recordActivity({
-        clientWorkflowRecordId:
-          savedInvoice.clientWorkflowRecordId,
-        clientEngagementId:
-          savedInvoice.clientEngagementId,
-        actionType,
-        note: activityNote,
-      });
+      applyRiskReconciliation(result.reconciliation);
+      setRiskSignalsStatus("ready");
+      setRiskSignalsMessage("");
+      await refreshActivityHistory();
     } catch (error) {
       const invoiceError =
         error instanceof Error
@@ -2108,14 +2006,15 @@ function WorkspaceDashboard({
     setInvoicesMessage("");
 
     try {
-      const result =
-        await applyInvoiceWorkflowRecommendationTransaction(
-          supabase,
-          workspaceId,
-          invoice,
-          recommendation.effectiveStatus,
-          recommendation.updates,
-        );
+      const result = await workspaceApi.invoices.applyRecommendation({
+        commandId: createOperationRequestId(),
+        clientEngagementId: invoice.clientEngagementId,
+        invoiceId: invoice.id,
+        clientWorkflowRecordId: invoice.clientWorkflowRecordId,
+        expectedStatus: invoice.status,
+        effectiveStatus: recommendation.effectiveStatus,
+        updates: recommendation.updates,
+      });
 
       setRecords((current) =>
         current.map((record) =>
@@ -2135,20 +2034,10 @@ function WorkspaceDashboard({
       setEngagements(
         await workspaceApi.engagements.list(),
       );
-      await refreshRiskSignalsAfterChange(
-        result.invoice.clientWorkflowRecordId,
-        result.invoice.clientEngagementId,
-      );
-      if (!result.alreadyApplied) {
-        await recordActivity({
-          clientWorkflowRecordId:
-            result.invoice.clientWorkflowRecordId,
-          clientEngagementId:
-            result.invoice.clientEngagementId,
-          actionType: "Invoice payment step applied",
-          note: `${recommendation.title} was applied to the client workflow.`,
-        });
-      }
+      applyRiskReconciliation(result.reconciliation);
+      setRiskSignalsStatus("ready");
+      setRiskSignalsMessage("");
+      await refreshActivityHistory();
     } catch (error) {
       const invoiceError =
         error instanceof Error

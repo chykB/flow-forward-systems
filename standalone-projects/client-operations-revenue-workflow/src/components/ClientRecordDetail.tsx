@@ -45,7 +45,7 @@ import type {
 import type {
   InvoiceRecordUpdates,
   NewInvoiceRecord,
-} from "@/lib/supabase/invoice-records";
+} from "@/lib/application/workspace-api";
 import type {
   RiskSignalStatusUpdate,
 } from "@/lib/supabase/risk-signals";

@@ -13,7 +13,7 @@ import {
   invoiceStatusRequiresIssuedDetails,
 } from "@/lib/invoice-options";
 
-import type { InvoiceRecordUpdates } from "@/lib/supabase/invoice-records";
+import type { InvoiceRecordUpdates } from "@/lib/application/workspace-api";
 
 type Props = {
   invoice: InvoiceRecord;

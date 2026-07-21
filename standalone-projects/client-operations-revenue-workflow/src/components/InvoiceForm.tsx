@@ -10,7 +10,7 @@ import {
   invoiceStatusRequiresSentDate,
   invoiceStatusRequiresIssuedDetails,
 } from "@/lib/invoice-options";
-import type { NewInvoiceRecord } from "@/lib/supabase/invoice-records";
+import type { NewInvoiceRecord } from "@/lib/application/workspace-api";
 
 type InvoiceFormProps = {
   clientWorkflowRecordId: string;

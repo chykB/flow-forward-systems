@@ -5,11 +5,13 @@ import type {
   EngagementFollowUp,
   FollowUpOutcome,
   HandoffNote,
+  InvoiceRecord,
   ProposalRecord,
   WorkItemPhase,
   WorkflowTask,
 } from "@/lib/client-workflow-types";
 import { getLocalDateKey } from "@/lib/date-key";
+import type { InvoiceWorkflowUpdates } from "@/lib/invoice-workflow";
 import type {
   ProposalWorkflowUpdates,
 } from "@/lib/proposal-workflow";
@@ -38,6 +40,11 @@ import {
   mapHandoffNoteRow,
   type HandoffNoteRow,
 } from "@/lib/supabase/handoff-notes";
+import {
+  getWorkspaceInvoiceRecords,
+  mapInvoiceRow,
+  type InvoiceRecordRow,
+} from "@/lib/supabase/invoice-records";
 import {
   getWorkspaceProposalRecords,
   mapProposalRow,
@@ -95,6 +102,35 @@ export type ProposalRecordUpdates = Partial<
     | "updatedAt"
     | "workflowActionAppliedStatus"
     | "workflowActionAppliedAt"
+  >
+>;
+
+export type NewInvoiceRecord = Omit<
+  InvoiceRecord,
+  | "id"
+  | "clientEngagementId"
+  | "createdAt"
+  | "updatedAt"
+  | "workflowActionAppliedStatus"
+  | "workflowActionAppliedAt"
+  | "disputedAt"
+  | "disputeResolvedAt"
+  | "disputeResolutionOutcome"
+  | "disputeResolutionNote"
+>;
+
+export type InvoiceRecordUpdates = Partial<
+  Omit<
+    InvoiceRecord,
+    | "id"
+    | "clientWorkflowRecordId"
+    | "clientEngagementId"
+    | "createdAt"
+    | "updatedAt"
+    | "workflowActionAppliedStatus"
+    | "workflowActionAppliedAt"
+    | "disputedAt"
+    | "disputeResolvedAt"
   >
 >;
 
@@ -191,6 +227,18 @@ export type ProposalRecommendationCommandResult =
     alreadyApplied: boolean;
   };
 
+export type InvoiceCommandResult = {
+  requestId: string;
+  invoice: InvoiceRecord;
+  reconciliation: RiskSignalReconciliationResult;
+};
+
+export type InvoiceRecommendationCommandResult =
+  InvoiceCommandResult & {
+    clientRecord: ClientWorkflowRecord;
+    alreadyApplied: boolean;
+  };
+
 export type CreateHandoffNoteCommand = {
   commandId: string;
   clientEngagementId: string;
@@ -220,6 +268,33 @@ export type ApplyProposalRecommendationCommand = {
   clientWorkflowRecordId: string;
   expectedStatus: ProposalRecord["status"];
   updates: ProposalWorkflowUpdates;
+  evaluationDate?: Date;
+};
+
+export type CreateInvoiceCommand = {
+  commandId: string;
+  clientEngagementId: string;
+  invoice: NewInvoiceRecord;
+  evaluationDate?: Date;
+};
+
+export type UpdateInvoiceCommand = {
+  commandId: string;
+  clientEngagementId: string;
+  invoiceId: string;
+  expectedUpdatedAt: string;
+  updates: InvoiceRecordUpdates;
+  evaluationDate?: Date;
+};
+
+export type ApplyInvoiceRecommendationCommand = {
+  commandId: string;
+  clientEngagementId: string;
+  invoiceId: string;
+  clientWorkflowRecordId: string;
+  expectedStatus: InvoiceRecord["status"];
+  effectiveStatus: InvoiceRecord["status"];
+  updates: InvoiceWorkflowUpdates;
   evaluationDate?: Date;
 };
 
@@ -318,6 +393,18 @@ export type WorkspaceApplicationApi = {
       command: ApplyProposalRecommendationCommand,
     ) => Promise<ProposalRecommendationCommandResult>;
   };
+  invoices: {
+    list: () => Promise<InvoiceRecord[]>;
+    create: (
+      command: CreateInvoiceCommand,
+    ) => Promise<InvoiceCommandResult>;
+    update: (
+      command: UpdateInvoiceCommand,
+    ) => Promise<InvoiceCommandResult>;
+    applyRecommendation: (
+      command: ApplyInvoiceRecommendationCommand,
+    ) => Promise<InvoiceRecommendationCommandResult>;
+  };
   workItems: {
     list: () => Promise<WorkflowTask[]>;
     create: (
@@ -376,6 +463,18 @@ type ProposalRecommendationCommandRpcResult =
     alreadyApplied: boolean;
   };
 
+type InvoiceCommandRpcResult = {
+  requestId: string;
+  invoice: InvoiceRecordRow;
+  reconciliation: unknown;
+};
+
+type InvoiceRecommendationCommandRpcResult =
+  InvoiceCommandRpcResult & {
+    clientRecord: ClientWorkflowRecordRow;
+    alreadyApplied: boolean;
+  };
+
 const engagementWorkflowStatuses = new Set<
   WorkflowTask["status"]
 >([
@@ -423,6 +522,23 @@ const proposalStatuses = new Set<ProposalRecord["status"]>([
   "Accepted",
   "Rejected",
   "Expired",
+]);
+const invoiceStatuses = new Set<InvoiceRecord["status"]>([
+  "Not needed",
+  "Draft needed",
+  "Sent",
+  "Due soon",
+  "Overdue",
+  "Paid",
+  "Disputed",
+  "Voided",
+]);
+const invoiceDisputeResolutionOutcomes = new Set<
+  Exclude<InvoiceRecord["disputeResolutionOutcome"], "">
+>([
+  "Payment received",
+  "Payment still due",
+  "Invoice voided or replaced",
 ]);
 const lifecycleStages = new Set<
   ClientWorkflowRecord["lifecycleStage"]
@@ -572,6 +688,39 @@ const proposalWorkflowFields = new Set<
   "onboardingStatus",
   "priority",
   "estimatedValue",
+]);
+const invoiceFields = new Set<keyof NewInvoiceRecord>([
+  "clientWorkflowRecordId",
+  "invoiceNumber",
+  "amount",
+  "currency",
+  "description",
+  "status",
+  "paymentLink",
+  "sentAt",
+  "dueDate",
+  "paidAt",
+  "disputeReason",
+]);
+const mutableInvoiceFields = new Set<keyof InvoiceRecordUpdates>([
+  "invoiceNumber",
+  "amount",
+  "currency",
+  "description",
+  "status",
+  "paymentLink",
+  "sentAt",
+  "dueDate",
+  "paidAt",
+  "disputeReason",
+  "disputeResolutionOutcome",
+  "disputeResolutionNote",
+]);
+const invoiceWorkflowFields = new Set<keyof InvoiceWorkflowUpdates>([
+  "paymentStatus",
+  "priority",
+  "nextAction",
+  "nextFollowUpAt",
 ]);
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -865,6 +1014,69 @@ function mapProposalRecommendationCommandResult(
   return {
     requestId: result.requestId,
     proposal: mapProposalRow(result.proposal),
+    clientRecord: mapClientWorkflowRecordRow(
+      result.clientRecord,
+    ),
+    alreadyApplied: result.alreadyApplied,
+    reconciliation: mapRiskSignalReconciliationResult(
+      result.reconciliation,
+    ),
+  };
+}
+
+function mapInvoiceCommandResult(
+  data: unknown,
+  expectedRequestId: string,
+): InvoiceCommandResult {
+  const result = data as InvoiceCommandRpcResult | null;
+
+  if (
+    !result?.requestId ||
+    result.requestId !== expectedRequestId ||
+    !result.invoice ||
+    !result.reconciliation
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_response",
+      "The invoice operation returned an invalid response.",
+      expectedRequestId,
+    );
+  }
+
+  return {
+    requestId: result.requestId,
+    invoice: mapInvoiceRow(result.invoice),
+    reconciliation: mapRiskSignalReconciliationResult(
+      result.reconciliation,
+    ),
+  };
+}
+
+function mapInvoiceRecommendationCommandResult(
+  data: unknown,
+  expectedRequestId: string,
+): InvoiceRecommendationCommandResult {
+  const result =
+    data as InvoiceRecommendationCommandRpcResult | null;
+
+  if (
+    !result?.requestId ||
+    result.requestId !== expectedRequestId ||
+    !result.invoice ||
+    !result.clientRecord ||
+    typeof result.alreadyApplied !== "boolean" ||
+    !result.reconciliation
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_response",
+      "The invoice recommendation returned an invalid response.",
+      expectedRequestId,
+    );
+  }
+
+  return {
+    requestId: result.requestId,
+    invoice: mapInvoiceRow(result.invoice),
     clientRecord: mapClientWorkflowRecordRow(
       result.clientRecord,
     ),
@@ -2229,6 +2441,537 @@ function validateApplyProposalRecommendationCommand(
   validateProposalWorkflowUpdates(command);
 }
 
+function assertInvoiceDate(
+  value: string,
+  label: string,
+  requestId: string,
+) {
+  if (value && !dateKeyPattern.test(value)) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      `${label} is invalid.`,
+      requestId,
+    );
+  }
+}
+
+function assertInvoicePaymentLink(
+  value: string,
+  requestId: string,
+) {
+  if (!value) {
+    return;
+  }
+
+  try {
+    const url = new URL(value);
+
+    if (url.protocol === "http:" || url.protocol === "https:") {
+      return;
+    }
+  } catch {
+    // The shared error below keeps validation messages consistent.
+  }
+
+  throw new WorkspaceApiError(
+    "invalid_request",
+    "Enter a valid payment link beginning with http or https.",
+    requestId,
+  );
+}
+
+function validateInvoiceState(
+  invoice: NewInvoiceRecord,
+  requestId: string,
+) {
+  if (
+    typeof invoice.clientWorkflowRecordId !== "string" ||
+    typeof invoice.invoiceNumber !== "string" ||
+    typeof invoice.amount !== "number" ||
+    typeof invoice.currency !== "string" ||
+    typeof invoice.description !== "string" ||
+    typeof invoice.status !== "string" ||
+    typeof invoice.paymentLink !== "string" ||
+    typeof invoice.sentAt !== "string" ||
+    typeof invoice.dueDate !== "string" ||
+    typeof invoice.paidAt !== "string" ||
+    typeof invoice.disputeReason !== "string"
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Invoice fields use an invalid value type.",
+      requestId,
+    );
+  }
+
+  assertUuid(
+    invoice.clientWorkflowRecordId,
+    "The client record identifier",
+    requestId,
+  );
+
+  if (!invoiceStatuses.has(invoice.status)) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Choose a valid invoice status.",
+      requestId,
+    );
+  }
+
+  const invoiceIssued = ![
+    "Not needed",
+    "Draft needed",
+    "Voided",
+  ].includes(invoice.status);
+  const invoiceNeeded = invoice.status !== "Not needed";
+
+  if (invoiceIssued && invoice.invoiceNumber.trim().length < 2) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Enter the invoice number before issuing it.",
+      requestId,
+    );
+  }
+  assertMaximumText(
+    invoice.invoiceNumber,
+    80,
+    "Keep the invoice number under 80 characters.",
+    requestId,
+  );
+
+  if (
+    !Number.isFinite(invoice.amount) ||
+    invoice.amount < 0 ||
+    invoice.amount >= 10_000_000_000 ||
+    (invoiceIssued && invoice.amount <= 0)
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      invoiceIssued
+        ? "Enter an amount greater than zero before issuing the invoice."
+        : "Enter a valid invoice amount.",
+      requestId,
+    );
+  }
+
+  if (
+    invoiceNeeded &&
+    !/^[A-Za-z]{3}$/.test(invoice.currency.trim())
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Use a three-letter currency code.",
+      requestId,
+    );
+  }
+
+  assertMinimumText(
+    invoice.description,
+    5,
+    invoiceNeeded
+      ? "Add a short invoice description."
+      : "Explain why an invoice is not needed.",
+    requestId,
+  );
+  assertMaximumText(
+    invoice.description,
+    500,
+    "Keep the invoice description under 500 characters.",
+    requestId,
+  );
+  assertInvoicePaymentLink(invoice.paymentLink.trim(), requestId);
+
+  assertInvoiceDate(invoice.sentAt, "The sent date", requestId);
+  assertInvoiceDate(invoice.dueDate, "The due date", requestId);
+  assertInvoiceDate(invoice.paidAt, "The payment date", requestId);
+
+  if (invoice.sentAt && invoice.dueDate && invoice.dueDate < invoice.sentAt) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "The due date cannot be before the sent date.",
+      requestId,
+    );
+  }
+  if (invoice.sentAt && invoice.paidAt && invoice.paidAt < invoice.sentAt) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "The payment date cannot be before the sent date.",
+      requestId,
+    );
+  }
+
+  if (
+    ["Sent", "Due soon", "Overdue", "Disputed"].includes(
+      invoice.status,
+    ) &&
+    (!invoice.sentAt || !invoice.dueDate)
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Enter both the sent date and due date.",
+      requestId,
+    );
+  }
+
+  if (invoice.status === "Paid" && !invoice.paidAt) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Enter the date payment was received.",
+      requestId,
+    );
+  }
+
+  if (invoice.status === "Disputed") {
+    assertMinimumText(
+      invoice.disputeReason,
+      5,
+      "Add a short explanation of the payment dispute.",
+      requestId,
+    );
+  }
+  assertMaximumText(
+    invoice.disputeReason,
+    1000,
+    "Keep the dispute reason under 1,000 characters.",
+    requestId,
+  );
+}
+
+function normalizeInvoiceValues<
+  T extends NewInvoiceRecord | InvoiceRecordUpdates,
+>(values: T) {
+  return Object.fromEntries(
+    Object.entries(values).map(([field, value]) => [
+      field,
+      typeof value === "string"
+        ? field === "currency"
+          ? value.trim().toUpperCase()
+          : value.trim()
+        : value,
+    ]),
+  ) as T;
+}
+
+function validateCreateInvoiceCommand(
+  workspaceId: string,
+  command: CreateInvoiceCommand,
+) {
+  assertRequestId(command.commandId);
+  assertUuid(
+    workspaceId,
+    "The workspace identifier",
+    command.commandId,
+  );
+  assertUuid(
+    command.clientEngagementId,
+    "The engagement identifier",
+    command.commandId,
+  );
+
+  if (
+    !command.invoice ||
+    typeof command.invoice !== "object" ||
+    Array.isArray(command.invoice)
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Invoice details are required.",
+      command.commandId,
+    );
+  }
+
+  const suppliedFields = Object.keys(command.invoice) as Array<
+    keyof NewInvoiceRecord
+  >;
+
+  if (
+    suppliedFields.length !== invoiceFields.size ||
+    suppliedFields.some((field) => !invoiceFields.has(field))
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Invoice details are incomplete or contain a protected field.",
+      command.commandId,
+    );
+  }
+
+  validateInvoiceState(command.invoice, command.commandId);
+}
+
+function validateUpdateInvoiceCommand(
+  workspaceId: string,
+  command: UpdateInvoiceCommand,
+) {
+  assertRequestId(command.commandId);
+  assertUuid(workspaceId, "The workspace identifier", command.commandId);
+  assertUuid(command.invoiceId, "The invoice identifier", command.commandId);
+  assertUuid(
+    command.clientEngagementId,
+    "The engagement identifier",
+    command.commandId,
+  );
+
+  if (
+    !timestampPattern.test(command.expectedUpdatedAt) ||
+    Number.isNaN(Date.parse(command.expectedUpdatedAt))
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "The expected invoice version is invalid.",
+      command.commandId,
+    );
+  }
+
+  if (
+    !command.updates ||
+    typeof command.updates !== "object" ||
+    Array.isArray(command.updates)
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Invoice changes are required.",
+      command.commandId,
+    );
+  }
+
+  const fields = Object.keys(command.updates) as Array<
+    keyof InvoiceRecordUpdates
+  >;
+
+  if (
+    fields.length === 0 ||
+    fields.some((field) => !mutableInvoiceFields.has(field))
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Invoice changes are empty or contain a protected field.",
+      command.commandId,
+    );
+  }
+
+  if (
+    command.updates.status !== undefined &&
+    (typeof command.updates.status !== "string" ||
+      !invoiceStatuses.has(command.updates.status))
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Choose a valid invoice status.",
+      command.commandId,
+    );
+  }
+
+  if (
+    command.updates.amount !== undefined &&
+    (typeof command.updates.amount !== "number" ||
+      !Number.isFinite(command.updates.amount) ||
+      command.updates.amount < 0 ||
+      command.updates.amount >= 10_000_000_000)
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Enter a valid invoice amount.",
+      command.commandId,
+    );
+  }
+
+  const textLimits: Array<[
+    keyof InvoiceRecordUpdates,
+    number,
+    string,
+  ]> = [
+    ["invoiceNumber", 80, "Keep the invoice number under 80 characters."],
+    ["description", 500, "Keep the invoice description under 500 characters."],
+    ["disputeReason", 1000, "Keep the dispute reason under 1,000 characters."],
+    ["disputeResolutionNote", 1000, "Keep the dispute resolution note under 1,000 characters."],
+  ];
+
+  for (const [field, maximum, message] of textLimits) {
+    const value = command.updates[field];
+
+    if (value !== undefined) {
+      if (typeof value !== "string") {
+        throw new WorkspaceApiError(
+          "invalid_request",
+          "Invoice text fields must use text values.",
+          command.commandId,
+        );
+      }
+      assertMaximumText(value, maximum, message, command.commandId);
+    }
+  }
+
+  if (
+    command.updates.currency !== undefined &&
+    (typeof command.updates.currency !== "string" ||
+      !/^[A-Za-z]{3}$/.test(command.updates.currency.trim()))
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Use a three-letter currency code.",
+      command.commandId,
+    );
+  }
+
+  if (command.updates.paymentLink !== undefined) {
+    if (typeof command.updates.paymentLink !== "string") {
+      throw new WorkspaceApiError(
+        "invalid_request",
+        "The payment link must be text.",
+        command.commandId,
+      );
+    }
+    assertInvoicePaymentLink(
+      command.updates.paymentLink.trim(),
+      command.commandId,
+    );
+  }
+
+  for (const [field, label] of [
+    ["sentAt", "The sent date"],
+    ["dueDate", "The due date"],
+    ["paidAt", "The payment date"],
+  ] as const) {
+    const value = command.updates[field];
+
+    if (value !== undefined) {
+      if (typeof value !== "string") {
+        throw new WorkspaceApiError(
+          "invalid_request",
+          `${label} must be text.`,
+          command.commandId,
+        );
+      }
+      assertInvoiceDate(value, label, command.commandId);
+    }
+  }
+
+  if (
+    command.updates.disputeResolutionOutcome !== undefined &&
+    command.updates.disputeResolutionOutcome !== "" &&
+    !invoiceDisputeResolutionOutcomes.has(
+      command.updates.disputeResolutionOutcome,
+    )
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Choose a valid dispute resolution outcome.",
+      command.commandId,
+    );
+  }
+}
+
+function validateInvoiceWorkflowUpdates(
+  command: ApplyInvoiceRecommendationCommand,
+) {
+  const fields = Object.keys(command.updates ?? {}) as Array<
+    keyof InvoiceWorkflowUpdates
+  >;
+
+  if (
+    fields.length === 0 ||
+    fields.some((field) => !invoiceWorkflowFields.has(field))
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Invoice workflow changes are empty or contain an unsupported field.",
+      command.commandId,
+    );
+  }
+
+  if (
+    command.updates.paymentStatus !== undefined &&
+    (typeof command.updates.paymentStatus !== "string" ||
+      !engagementWorkflowStatuses.has(command.updates.paymentStatus))
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Choose a valid payment status.",
+      command.commandId,
+    );
+  }
+  if (
+    command.updates.priority !== undefined &&
+    (typeof command.updates.priority !== "string" ||
+      !priorities.has(command.updates.priority))
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Choose a valid priority.",
+      command.commandId,
+    );
+  }
+  if (command.updates.nextAction !== undefined) {
+    if (typeof command.updates.nextAction !== "string") {
+      throw new WorkspaceApiError(
+        "invalid_request",
+        "The recommended next action must be text.",
+        command.commandId,
+      );
+    }
+    assertMinimumText(
+      command.updates.nextAction,
+      5,
+      "Enter the recommended next action.",
+      command.commandId,
+    );
+  }
+  if (
+    command.updates.nextFollowUpAt !== undefined &&
+    (typeof command.updates.nextFollowUpAt !== "string" ||
+      !dateKeyPattern.test(command.updates.nextFollowUpAt))
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Choose a valid follow-up date.",
+      command.commandId,
+    );
+  }
+}
+
+function validateApplyInvoiceRecommendationCommand(
+  workspaceId: string,
+  command: ApplyInvoiceRecommendationCommand,
+) {
+  assertRequestId(command.commandId);
+  assertUuid(workspaceId, "The workspace identifier", command.commandId);
+  assertUuid(command.invoiceId, "The invoice identifier", command.commandId);
+  assertUuid(
+    command.clientEngagementId,
+    "The engagement identifier",
+    command.commandId,
+  );
+  assertUuid(
+    command.clientWorkflowRecordId,
+    "The client record identifier",
+    command.commandId,
+  );
+
+  if (
+    !invoiceStatuses.has(command.expectedStatus) ||
+    !invoiceStatuses.has(command.effectiveStatus)
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Choose valid invoice workflow statuses.",
+      command.commandId,
+    );
+  }
+
+  validateInvoiceWorkflowUpdates(command);
+}
+
+function normalizeInvoiceWorkflowUpdates(
+  updates: InvoiceWorkflowUpdates,
+) {
+  return Object.fromEntries(
+    Object.entries(updates).map(([field, value]) => [
+      field,
+      typeof value === "string" ? value.trim() : value,
+    ]),
+  ) as InvoiceWorkflowUpdates;
+}
+
 function validateStatusCommand(
   workspaceId: string,
   command: UpdateWorkItemStatusCommand,
@@ -2831,6 +3574,162 @@ export function createWorkspaceApplicationApi(
             error,
             command.commandId,
             "The recommended proposal step could not be applied.",
+          );
+        }
+      },
+    },
+    invoices: {
+      async list() {
+        const requestId = createOperationRequestId();
+
+        try {
+          assertUuid(
+            workspaceId,
+            "The workspace identifier",
+            requestId,
+          );
+          return await getWorkspaceInvoiceRecords(
+            supabase,
+            workspaceId,
+          );
+        } catch (error) {
+          console.error(
+            "Workspace API invoice query failed",
+            { requestId, error },
+          );
+          throw mapOperationError(
+            error,
+            requestId,
+            "Invoices could not be loaded.",
+          );
+        }
+      },
+
+      async create(command) {
+        validateCreateInvoiceCommand(workspaceId, command);
+
+        try {
+          const { data, error } = await supabase.rpc(
+            "command_create_engagement_invoice_record",
+            {
+              p_workspace_id: workspaceId,
+              p_client_engagement_id:
+                command.clientEngagementId,
+              p_invoice: normalizeInvoiceValues(command.invoice),
+              p_evaluation_date: getLocalDateKey(
+                command.evaluationDate ?? new Date(),
+              ),
+              p_idempotency_key: command.commandId,
+            },
+          );
+
+          if (error) {
+            throw error;
+          }
+
+          return mapInvoiceCommandResult(
+            data,
+            command.commandId,
+          );
+        } catch (error) {
+          console.error(
+            "Workspace API invoice create failed",
+            { requestId: command.commandId, error },
+          );
+          throw mapOperationError(
+            error,
+            command.commandId,
+            "The invoice could not be saved.",
+          );
+        }
+      },
+
+      async update(command) {
+        validateUpdateInvoiceCommand(workspaceId, command);
+
+        try {
+          const { data, error } = await supabase.rpc(
+            "command_update_engagement_invoice_record",
+            {
+              p_workspace_id: workspaceId,
+              p_client_engagement_id:
+                command.clientEngagementId,
+              p_invoice_id: command.invoiceId,
+              p_expected_updated_at: command.expectedUpdatedAt,
+              p_updates: normalizeInvoiceValues(command.updates),
+              p_evaluation_date: getLocalDateKey(
+                command.evaluationDate ?? new Date(),
+              ),
+              p_idempotency_key: command.commandId,
+            },
+          );
+
+          if (error) {
+            throw error;
+          }
+
+          return mapInvoiceCommandResult(
+            data,
+            command.commandId,
+          );
+        } catch (error) {
+          console.error(
+            "Workspace API invoice update failed",
+            { requestId: command.commandId, error },
+          );
+          throw mapOperationError(
+            error,
+            command.commandId,
+            "The invoice could not be updated.",
+          );
+        }
+      },
+
+      async applyRecommendation(command) {
+        validateApplyInvoiceRecommendationCommand(
+          workspaceId,
+          command,
+        );
+
+        try {
+          const { data, error } = await supabase.rpc(
+            "command_apply_engagement_invoice_workflow_recommendation",
+            {
+              p_workspace_id: workspaceId,
+              p_client_engagement_id:
+                command.clientEngagementId,
+              p_invoice_id: command.invoiceId,
+              p_client_workflow_record_id:
+                command.clientWorkflowRecordId,
+              p_expected_invoice_status: command.expectedStatus,
+              p_effective_invoice_status: command.effectiveStatus,
+              p_updates: normalizeInvoiceWorkflowUpdates(
+                command.updates,
+              ),
+              p_evaluation_date: getLocalDateKey(
+                command.evaluationDate ?? new Date(),
+              ),
+              p_idempotency_key: command.commandId,
+            },
+          );
+
+          if (error) {
+            throw error;
+          }
+
+          return mapInvoiceRecommendationCommandResult(
+            data,
+            command.commandId,
+          );
+        } catch (error) {
+          console.error(
+            "Workspace API invoice recommendation failed",
+            { requestId: command.commandId, error },
+          );
+          throw mapOperationError(
+            error,
+            command.commandId,
+            "The recommended invoice step could not be applied.",
           );
         }
       },
