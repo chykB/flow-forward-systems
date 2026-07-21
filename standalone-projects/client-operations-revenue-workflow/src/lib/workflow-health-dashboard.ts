@@ -1,4 +1,5 @@
 import type {
+  ClientEngagement,
   ClientWorkflowRecord,
   RiskSignal,
 } from "@/lib/client-workflow-types";
@@ -8,11 +9,13 @@ import {
 } from "@/lib/risk-signal-display";
 
 export type WorkspaceRiskQueueItem = {
+  engagement: ClientEngagement;
   record: ClientWorkflowRecord;
   signal: RiskSignal;
 };
 
 export type WorkspaceRiskQueueGroup = {
+  engagement: ClientEngagement;
   record: ClientWorkflowRecord;
   signals: RiskSignal[];
 };
@@ -32,10 +35,14 @@ function getReviewPriority(
 
 export function buildWorkspaceRiskQueue(
   records: ClientWorkflowRecord[],
+  engagements: ClientEngagement[],
   riskSignals: RiskSignal[],
 ) {
   const recordsById = new Map(
     records.map((record) => [record.id, record]),
+  );
+  const engagementsById = new Map(
+    engagements.map((engagement) => [engagement.id, engagement]),
   );
 
   return riskSignals
@@ -44,8 +51,13 @@ export function buildWorkspaceRiskQueue(
       const record = recordsById.get(
         signal.clientWorkflowRecordId,
       );
+      const engagement = engagementsById.get(
+        signal.clientEngagementId,
+      );
 
-      return record ? [{ record, signal }] : [];
+      return record && engagement
+        ? [{ engagement, record, signal }]
+        : [];
     })
     .sort((first, second) => {
       const severityDifference =
@@ -61,8 +73,8 @@ export function buildWorkspaceRiskQueue(
       }
 
       const healthDifference =
-        first.record.workflowHealthScore -
-        second.record.workflowHealthScore;
+        first.engagement.workflowHealthScore -
+        second.engagement.workflowHealthScore;
 
       if (healthDifference !== 0) {
         return healthDifference;
@@ -84,6 +96,9 @@ export function buildWorkspaceRiskQueue(
       return (
         ageDifference ||
         first.record.name.localeCompare(second.record.name) ||
+        first.engagement.title.localeCompare(
+          second.engagement.title,
+        ) ||
         first.signal.id.localeCompare(second.signal.id)
       );
     });
@@ -91,34 +106,42 @@ export function buildWorkspaceRiskQueue(
 
 export function buildWorkspaceRiskQueueGroups(
   records: ClientWorkflowRecord[],
+  engagements: ClientEngagement[],
   riskSignals: RiskSignal[],
 ) {
-  const groupsByRecordId = new Map<
+  const groupsByEngagementId = new Map<
     string,
     WorkspaceRiskQueueGroup
   >();
 
-  buildWorkspaceRiskQueue(records, riskSignals).forEach(
-    ({ record, signal }) => {
-      const existingGroup = groupsByRecordId.get(record.id);
+  buildWorkspaceRiskQueue(
+    records,
+    engagements,
+    riskSignals,
+  ).forEach(
+    ({ engagement, record, signal }) => {
+      const existingGroup = groupsByEngagementId.get(
+        engagement.id,
+      );
 
       if (existingGroup) {
         existingGroup.signals.push(signal);
         return;
       }
 
-      groupsByRecordId.set(record.id, {
+      groupsByEngagementId.set(engagement.id, {
+        engagement,
         record,
         signals: [signal],
       });
     },
   );
 
-  return [...groupsByRecordId.values()];
+  return [...groupsByEngagementId.values()];
 }
 
 export function getWorkspaceHealthSummary(
-  records: ClientWorkflowRecord[],
+  engagements: ClientEngagement[],
   riskSignals: RiskSignal[],
 ): WorkspaceHealthSummary {
   const activeSignals = riskSignals.filter(
@@ -129,9 +152,12 @@ export function getWorkspaceHealthSummary(
       (signal) => signal.clientWorkflowRecordId,
     ),
   );
-  const totalHealthScore = records.reduce(
-    (sum, record) =>
-      sum + record.workflowHealthScore,
+  const activeEngagements = engagements.filter(
+    (engagement) => engagement.engagementStatus === "Active",
+  );
+  const totalHealthScore = activeEngagements.reduce(
+    (sum, engagement) =>
+      sum + engagement.workflowHealthScore,
     0,
   );
 
@@ -139,8 +165,10 @@ export function getWorkspaceHealthSummary(
     activeRiskCount: activeSignals.length,
     affectedClientCount: affectedClientIds.size,
     averageHealthScore:
-      records.length > 0
-        ? Math.round(totalHealthScore / records.length)
+      activeEngagements.length > 0
+        ? Math.round(
+            totalHealthScore / activeEngagements.length,
+          )
         : null,
     criticalRiskCount: activeSignals.filter(
       (signal) => signal.severity === "Critical",

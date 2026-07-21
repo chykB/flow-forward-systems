@@ -8,10 +8,20 @@ import type {
   RiskLevel,
   WorkflowStatus,
 } from "@/lib/client-workflow-types";
+import type {
+  ClientWorkflowRecordUpdates,
+} from "@/lib/application/workspace-api";
 import { getLifecycleStageLabel } from "@/lib/client-workflow-display";
 
 type RecordStatusControlsProps = {
-  onUpdateRecord: (updates: Partial<ClientWorkflowRecord>, note: string) => void;
+  onUpdateClientRecord: (
+    updates: ClientWorkflowRecordUpdates,
+    note: string,
+  ) => void;
+  onUpdateEngagement: (
+    updates: Partial<ClientWorkflowRecord>,
+    note: string,
+  ) => void;
   record: ClientWorkflowRecord;
 };
 
@@ -57,7 +67,8 @@ const workflowStatuses: WorkflowStatus[] = [
 const riskLevels: RiskLevel[] = ["High", "Medium", "Low"];
 
 export function RecordStatusControls({
-  onUpdateRecord,
+  onUpdateClientRecord,
+  onUpdateEngagement,
   record,
 }: RecordStatusControlsProps) {
   return (
@@ -87,7 +98,7 @@ export function RecordStatusControls({
                     ? "Dormant"
                     : "Not returning";
 
-              onUpdateRecord(
+              onUpdateClientRecord(
                 {
                   clientType,
                   returningClientStatus,
@@ -116,7 +127,7 @@ export function RecordStatusControls({
               const lifecycleStage =
                 event.target.value as LifecycleStage;
 
-              onUpdateRecord(
+              onUpdateEngagement(
                 { lifecycleStage },
                 `Workflow stage changed to ${getLifecycleStageLabel(
                   lifecycleStage,
@@ -146,7 +157,7 @@ export function RecordStatusControls({
                 const returningClientStatus =
                   event.target.value as ReturningClientStatus;
 
-                onUpdateRecord(
+                onUpdateClientRecord(
                   { returningClientStatus },
                   `Returning client status changed to ${returningClientStatus}.`,
                 );
@@ -170,7 +181,7 @@ export function RecordStatusControls({
             id="status-risk"
             value={record.riskLevel}
             onChange={(event) =>
-              onUpdateRecord(
+              onUpdateClientRecord(
                 { riskLevel: event.target.value as RiskLevel },
                 `Relationship concern changed to ${event.target.value}.`,
               )
@@ -193,7 +204,7 @@ export function RecordStatusControls({
             id="status-onboarding"
             value={record.onboardingStatus}
             onChange={(event) =>
-              onUpdateRecord(
+              onUpdateEngagement(
                 { onboardingStatus: event.target.value as WorkflowStatus },
                 `Onboarding status changed to ${event.target.value}.`,
               )
@@ -216,7 +227,7 @@ export function RecordStatusControls({
             id="status-delivery"
             value={record.deliveryStatus}
             onChange={(event) =>
-              onUpdateRecord(
+              onUpdateEngagement(
                 { deliveryStatus: event.target.value as WorkflowStatus },
                 `Delivery status changed to ${event.target.value}.`,
               )
@@ -239,7 +250,7 @@ export function RecordStatusControls({
             id="status-approval"
             value={record.approvalStatus}
             onChange={(event) =>
-              onUpdateRecord(
+              onUpdateEngagement(
                 { approvalStatus: event.target.value as WorkflowStatus },
                 `Approval status changed to ${event.target.value}.`,
               )
@@ -262,7 +273,7 @@ export function RecordStatusControls({
             id="status-payment"
             value={record.paymentStatus}
             onChange={(event) =>
-              onUpdateRecord(
+              onUpdateEngagement(
                 { paymentStatus: event.target.value as WorkflowStatus },
                 `Payment status changed to ${event.target.value}.`,
               )

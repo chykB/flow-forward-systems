@@ -30,6 +30,7 @@ type ProposalPanelProps = {
   isSaving: boolean;
   errorMessage?: string;
   isApplyingRecommendation: boolean;
+  showWorkflowRecommendations: boolean;
   record: ClientWorkflowRecord;
   onApplyRecommendation: (
     proposal: ProposalRecord,
@@ -497,6 +498,7 @@ export function ProposalPanel({
   clientWorkflowRecordId,
   proposals,
   isApplyingRecommendation,
+  showWorkflowRecommendations,
   isLoading,
   isSaving,
   errorMessage,
@@ -565,12 +567,14 @@ export function ProposalPanel({
               onUpdate={onUpdate}
               proposal={proposal}
               record={record}
-              showRecommendation={index === 0}
+              showRecommendation={
+                showWorkflowRecommendations && index === 0
+              }
             />
           ))
         ) : (
           <p className="rounded-md bg-[#EDF3EF] p-4 leading-7 text-[#5F6862]">
-            No proposals or quotes have been added for this client yet.
+            No proposals or quotes have been added for this job yet.
           </p>
         )}
       </div>

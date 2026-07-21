@@ -17,9 +17,6 @@ import type {
   InvoiceRecordUpdates,
   NewInvoiceRecord,
 } from "@/lib/supabase/invoice-records";
-// import type {
-//   InvoiceRecord,
-// } from "@/lib/client-workflow-types";
 import {
   getInvoiceStatusLabel,
 } from "@/lib/invoice-options";
@@ -32,10 +29,11 @@ type InvoicePanelProps = {
   isSaving: boolean;
   record: ClientWorkflowRecord;
   isApplyingRecommendation: boolean;
+  showWorkflowRecommendations: boolean;
   onApplyRecommendation: (
     invoice: InvoiceRecord,
     recommendation: RecommendationData,
-    ) => Promise<void>;
+  ) => Promise<void>;
   onCreate: (invoice: NewInvoiceRecord) => Promise<void>;
   onUpdate: (
     invoiceId: string,
@@ -252,6 +250,7 @@ export function InvoicePanel({
   onCreate,
   onUpdate,
   isApplyingRecommendation,
+  showWorkflowRecommendations,
   onApplyRecommendation,
   record,
 }: InvoicePanelProps) {
@@ -307,23 +306,24 @@ export function InvoicePanel({
         </p>
       ) : invoices.length === 0 ? (
         <p className="mt-5 rounded-md bg-[#EDF3EF] p-4 text-[#5F6862]">
-          No invoices have been added for this client yet.
+          No invoices have been added for this job yet.
         </p>
       ) : (
         <div className="mt-6">
           {invoices.map((invoice) => (
             <InvoiceHistoryItem
-                invoice={invoice}
-                isApplyingRecommendation={isApplyingRecommendation}
-                isPrimaryRecommendation={
-                    primaryInvoice?.id === invoice.id
-                }
-                isSaving={isSaving}
-                key={invoice.id}
-                onApplyRecommendation={onApplyRecommendation}
-                onUpdate={onUpdate}
-                record={record}
-                />
+              invoice={invoice}
+              isApplyingRecommendation={isApplyingRecommendation}
+              isPrimaryRecommendation={
+                showWorkflowRecommendations &&
+                primaryInvoice?.id === invoice.id
+              }
+              isSaving={isSaving}
+              key={invoice.id}
+              onApplyRecommendation={onApplyRecommendation}
+              onUpdate={onUpdate}
+              record={record}
+            />
           ))}
         </div>
       )}

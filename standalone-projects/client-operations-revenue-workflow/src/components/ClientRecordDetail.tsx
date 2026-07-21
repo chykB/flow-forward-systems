@@ -1,8 +1,9 @@
 "use client";
 
-
-import { HandoffNoteForm } from "@/components/HandoffNoteForm";
+import { ClientEngagementWorkspace } from "@/components/ClientEngagementWorkspace";
 import { FollowUpCompletionForm } from "@/components/FollowUpCompletionForm";
+import { HandoffNoteForm } from "@/components/HandoffNoteForm";
+import { InvoicePanel } from "@/components/InvoicePanel";
 import { NextActionForm } from "@/components/NextActionForm";
 import { ProposalPanel } from "@/components/ProposalPanel";
 import { RecordStatusControls } from "@/components/RecordStatusControls";
@@ -12,12 +13,12 @@ import {
   getRelationshipConcernLabel,
 } from "@/lib/client-workflow-display";
 import { formatDateTime } from "@/lib/format-date";
-import { InvoicePanel } from "@/components/InvoicePanel";
-import type { NewInvoiceRecord, InvoiceRecordUpdates } from "@/lib/supabase/invoice-records";
 import { RiskSignalPanel } from "@/components/RiskSignalPanel";
 import { WorkflowTaskStatusEditor } from "@/components/WorkflowTaskStatusEditor";
 import type {
   CompleteFollowUpInput,
+  ClientWorkflowRecordUpdates,
+  NewClientEngagement,
   NewHandoffNote,
   NewProposalRecord,
   NewWorkflowTask,
@@ -32,6 +33,7 @@ import type {
 } from "@/lib/proposal-workflow";
 import type {
   ActivityLog,
+  ClientEngagement,
   ClientWorkflowRecord,
   EngagementFollowUp,
   HandoffNote,
@@ -39,8 +41,11 @@ import type {
   ProposalRecord,
   RiskSignal,
   WorkflowTask,
-
 } from "@/lib/client-workflow-types";
+import type {
+  InvoiceRecordUpdates,
+  NewInvoiceRecord,
+} from "@/lib/supabase/invoice-records";
 import type {
   RiskSignalStatusUpdate,
 } from "@/lib/supabase/risk-signals";
@@ -59,6 +64,8 @@ type ClientRecordDetailProps = {
   activeTab: DetailTab;
   onTabChange: (tab: DetailTab) => void;
   activityLogs: ActivityLog[];
+  engagementMessage: string;
+  engagements: ClientEngagement[];
   followUpMessage: string;
   followUps: EngagementFollowUp[];
   handoffNotes: HandoffNote[];
@@ -73,23 +80,33 @@ type ClientRecordDetailProps = {
   onCompleteFollowUp: (
     completion: CompleteFollowUpInput,
   ) => Promise<void>;
+  onCreateEngagement: (
+    engagement: NewClientEngagement,
+  ) => Promise<void>;
   onAddProposal: (proposal: NewProposalRecord) => Promise<void>;
   onAddTask: (task: NewWorkflowTask) => Promise<void>;
   onUpdateProposal: (
     proposalId: string,
     updates: ProposalRecordUpdates,
   ) => Promise<void>;
-  onUpdateRecord: (
+  onSelectEngagement: (engagementId: string) => void;
+  onUpdateClientRecord: (
+    updates: ClientWorkflowRecordUpdates,
+    note: string,
+  ) => void;
+  onUpdateEngagement: (
     updates: Partial<ClientWorkflowRecord>,
     note: string,
   ) => void;
   proposalMessage: string;
   proposals: ProposalRecord[];
   record: ClientWorkflowRecord;
+  selectedEngagement: ClientEngagement;
   tasks: WorkflowTask[];
   tasksMessage: string;
   isTasksLoading: boolean;
   isTaskSaving: boolean;
+  isEngagementSaving: boolean;
   isApplyingProposalRecommendation: boolean;
   invoices: InvoiceRecord[];
   invoiceMessage: string;
@@ -109,7 +126,7 @@ type ClientRecordDetailProps = {
     invoice: InvoiceRecord,
     recommendation: InvoiceRecommendationData,
   ) => Promise<void>;
-    isRiskSignalsLoading: boolean;
+  isRiskSignalsLoading: boolean;
   isRiskSignalSaving: boolean;
   riskSignalMessage: string;
   riskSignals: RiskSignal[];
@@ -126,7 +143,7 @@ type ClientRecordDetailProps = {
     update: WorkflowTaskStatusUpdate,
   ) => Promise<void>;
   updatingTaskId: string | null;
-  };
+};
 
 const detailTabs: { key: DetailTab; label: string }[] = [
   { key: "overview", label: "Overview" },
@@ -137,7 +154,6 @@ const detailTabs: { key: DetailTab; label: string }[] = [
   { key: "work-items", label: "Work Items" },
   { key: "handoff", label: "Handoff Notes" },
   { key: "activity", label: "Activity" },
-
 ];
 
 function DetailRow({
@@ -196,6 +212,8 @@ export function ClientRecordDetail({
   activeTab,
   onTabChange,
   activityLogs,
+  engagementMessage,
+  engagements,
   followUpMessage,
   followUps,
   handoffNotes,
@@ -213,16 +231,21 @@ export function ClientRecordDetail({
   onAddProposal,
   onAddTask,
   onCompleteFollowUp,
+  onCreateEngagement,
   onApplyProposalRecommendation,
   onUpdateProposal,
-  onUpdateRecord,
+  onSelectEngagement,
+  onUpdateClientRecord,
+  onUpdateEngagement,
   proposalMessage,
   proposals,
   record,
+  selectedEngagement,
   tasks,
   tasksMessage,
   isTasksLoading,
   isTaskSaving,
+  isEngagementSaving,
   isApplyingProposalRecommendation,
   isApplyingInvoiceRecommendation,
   onApplyInvoiceRecommendation,
@@ -239,6 +262,23 @@ export function ClientRecordDetail({
   onUpdateTaskStatus,
   updatingTaskId,
 }: ClientRecordDetailProps) {
+
+  const workflowRecord: ClientWorkflowRecord = {
+    ...record,
+    lifecycleStage: selectedEngagement.lifecycleStage,
+    priority: selectedEngagement.priority,
+    estimatedValue: selectedEngagement.estimatedValue,
+    workflowHealthScore:
+      selectedEngagement.workflowHealthScore,
+    nextAction: selectedEngagement.nextAction,
+    nextFollowUpAt: selectedEngagement.nextFollowUpAt,
+    assignedTo: selectedEngagement.assignedTo,
+    onboardingStatus: selectedEngagement.onboardingStatus,
+    deliveryStatus: selectedEngagement.deliveryStatus,
+    approvalStatus: selectedEngagement.approvalStatus,
+    paymentStatus: selectedEngagement.paymentStatus,
+    updatedAt: selectedEngagement.updatedAt,
+  };
 
 
   const recordTasks = tasks.filter(
@@ -272,7 +312,7 @@ export function ClientRecordDetail({
 
         <div className="flex shrink-0 flex-wrap gap-2">
           <span className="rounded-md bg-[#EDF3EF] px-3 py-2 text-sm font-bold text-[#174F42]">
-            {record.workflowHealthScore}/100 health
+            {selectedEngagement.workflowHealthScore}/100 health
           </span>
           <span
             className={`rounded-md px-3 py-2 text-sm font-bold ${getRiskClasses(
@@ -283,6 +323,17 @@ export function ClientRecordDetail({
           </span>
         </div>
       </div>
+
+      <ClientEngagementWorkspace
+        client={record}
+        engagements={engagements}
+        errorMessage={engagementMessage}
+        isSaving={isEngagementSaving}
+        key={`engagement-workspace-${record.id}`}
+        onCreate={onCreateEngagement}
+        onSelect={onSelectEngagement}
+        selectedEngagement={selectedEngagement}
+      />
 
       <div
         aria-label="Client record sections"
@@ -313,20 +364,20 @@ export function ClientRecordDetail({
             <DetailRow
               label="Workflow stage"
               value={getLifecycleStageLabel(
-                record.lifecycleStage,
+                workflowRecord.lifecycleStage,
               )}
             />
             <DetailRow
               label="Next action"
-              value={record.nextAction}
+              value={workflowRecord.nextAction}
             />
             <DetailRow
               label="Follow-up date"
-              value={record.nextFollowUpAt || "Not scheduled"}
+              value={workflowRecord.nextFollowUpAt || "Not scheduled"}
             />
             <DetailRow
               label="Owner"
-              value={record.assignedTo}
+              value={workflowRecord.assignedTo}
             />
           </div>
 
@@ -373,8 +424,9 @@ export function ClientRecordDetail({
           </section>
 
           <RecordStatusControls
-            record={record}
-            onUpdateRecord={onUpdateRecord}
+            onUpdateClientRecord={onUpdateClientRecord}
+            onUpdateEngagement={onUpdateEngagement}
+            record={workflowRecord}
           />
         </div>
       ) : null}
@@ -396,7 +448,7 @@ export function ClientRecordDetail({
               }
             }}
             onUpdateStatus={onUpdateRiskSignalStatus}
-            record={record}
+            record={workflowRecord}
             riskSignals={riskSignals}
           />
         </div>
@@ -407,11 +459,11 @@ export function ClientRecordDetail({
           <div className="rounded-md bg-[#EDF3EF] p-4">
             <h3 className="font-bold">Current Next Action</h3>
             <p className="mt-2 leading-7 text-[#5F6862]">
-              {record.nextAction}
+              {workflowRecord.nextAction}
             </p>
             <p className="mt-2 text-sm text-[#5F6862]">
-              Follow-up: {record.nextFollowUpAt || "Not scheduled"} | Owner:{" "}
-              {record.assignedTo}
+              Follow-up: {workflowRecord.nextFollowUpAt || "Not scheduled"} | Owner:{" "}
+              {workflowRecord.assignedTo}
             </p>
           </div>
 
@@ -420,9 +472,9 @@ export function ClientRecordDetail({
             followUps={followUps}
             isLoading={isFollowUpLoading}
             isSubmitting={isFollowUpSaving}
-            key={`follow-up-${record.id}-${record.updatedAt}`}
+            key={`follow-up-${selectedEngagement.id}-${selectedEngagement.updatedAt}`}
             onComplete={onCompleteFollowUp}
-            record={record}
+            record={workflowRecord}
           />
 
           <details className="mt-6 border-t border-[#D9DED8] pt-5">
@@ -430,9 +482,9 @@ export function ClientRecordDetail({
               Update schedule without completing a follow-up
             </summary>
             <NextActionForm
-              key={`next-action-${record.id}-${record.updatedAt}`}
-              record={record}
-              onUpdateRecord={onUpdateRecord}
+              key={`next-action-${selectedEngagement.id}-${selectedEngagement.updatedAt}`}
+              record={workflowRecord}
+              onUpdateRecord={onUpdateEngagement}
             />
           </details>
         </div>
@@ -454,31 +506,37 @@ export function ClientRecordDetail({
             onCreate={onAddProposal}
             onUpdate={onUpdateProposal}
             proposals={proposals}
-            record={record}
+            record={workflowRecord}
+            showWorkflowRecommendations={
+              selectedEngagement.isPrimary
+            }
           />
         </div>
       ) : null}
 
       {activeTab === "invoices" ? (
-      <div className="mt-5">
-        <InvoicePanel
-          clientWorkflowRecordId={record.id}
-          errorMessage={invoiceMessage}
-          invoices={invoices}
-          isLoading={isInvoiceLoading}
-          isSaving={isInvoiceSaving}
-          onCreate={onAddInvoice}
-          onUpdate={onUpdateInvoice}
-          isApplyingRecommendation={
-            isApplyingInvoiceRecommendation
-          }
-          onApplyRecommendation={
-            onApplyInvoiceRecommendation
-          }
-          record={record}
-        />
-      </div>
-    ) : null}
+        <div className="mt-5">
+          <InvoicePanel
+            clientWorkflowRecordId={record.id}
+            errorMessage={invoiceMessage}
+            invoices={invoices}
+            isApplyingRecommendation={
+              isApplyingInvoiceRecommendation
+            }
+            isLoading={isInvoiceLoading}
+            isSaving={isInvoiceSaving}
+            onApplyRecommendation={
+              onApplyInvoiceRecommendation
+            }
+            onCreate={onAddInvoice}
+            onUpdate={onUpdateInvoice}
+            record={workflowRecord}
+            showWorkflowRecommendations={
+              selectedEngagement.isPrimary
+            }
+          />
+        </div>
+      ) : null}
 
       {activeTab === "work-items" ? (
         <div className="mt-5">
@@ -608,7 +666,7 @@ export function ClientRecordDetail({
               {activityMessage}
             </p>
           ) : null}
-                    {isActivityLoading ? (
+          {isActivityLoading ? (
             <p className="mt-4 text-[#5F6862]">
               Loading activity history...
             </p>

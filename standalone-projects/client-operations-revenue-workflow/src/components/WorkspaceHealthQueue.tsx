@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import type {
+  ClientEngagement,
   ClientWorkflowRecord,
   RiskSignal,
 } from "@/lib/client-workflow-types";
@@ -18,8 +19,12 @@ import {
 
 type WorkspaceHealthQueueProps = {
   errorMessage: string;
+  engagements: ClientEngagement[];
   isLoading: boolean;
-  onReviewRecord: (recordId: string) => void;
+  onReviewRecord: (
+    recordId: string,
+    engagementId: string,
+  ) => void;
   records: ClientWorkflowRecord[];
   riskSignals: RiskSignal[];
 };
@@ -106,18 +111,24 @@ function RiskIssue({ signal }: { signal: RiskSignal }) {
 
 export function WorkspaceHealthQueue({
   errorMessage,
+  engagements,
   isLoading,
   onReviewRecord,
   records,
   riskSignals,
 }: WorkspaceHealthQueueProps) {
   const queueGroups = useMemo(
-    () => buildWorkspaceRiskQueueGroups(records, riskSignals),
-    [records, riskSignals],
+    () =>
+      buildWorkspaceRiskQueueGroups(
+        records,
+        engagements,
+        riskSignals,
+      ),
+    [engagements, records, riskSignals],
   );
   const summary = useMemo(
-    () => getWorkspaceHealthSummary(records, riskSignals),
-    [records, riskSignals],
+    () => getWorkspaceHealthSummary(engagements, riskSignals),
+    [engagements, riskSignals],
   );
 
   return (
@@ -130,7 +141,7 @@ export function WorkspaceHealthQueue({
           Fix the highest-impact workflow issues first
         </h2>
         <p className="mt-3 leading-7 text-[#5F6862]">
-          Review open workflow issues in priority order, then open
+          Review active client risks in priority order, then open
           the affected workflow to complete the recommended step.
         </p>
       </div>
@@ -157,7 +168,7 @@ export function WorkspaceHealthQueue({
               }
             />
             <SummaryMetric
-              label="Open issues"
+              label="Active issues"
               value={summary.activeRiskCount}
             />
             <SummaryMetric
@@ -173,76 +184,86 @@ export function WorkspaceHealthQueue({
           <div className="mt-7">
             <div>
               <h3 className="text-xl font-bold text-[#17201C]">
-                Clients needing action
+                Fix-It Queue
               </h3>
               <p className="mt-2 text-sm leading-6 text-[#5F6862]">
-                Clients with the most severe open issues appear
-                first. Each client&apos;s issues are ordered by
-                severity.
+                Jobs with the most severe issues appear first.
+                Each job&apos;s issues are ordered by severity.
               </p>
             </div>
 
             {queueGroups.length === 0 ? (
               <p className="mt-4 rounded-md bg-[#EDF3EF] p-4 text-[#5F6862]">
-                No open workflow issues need attention.
+                No active workflow issues need attention.
               </p>
             ) : (
               <div className="mt-4 grid gap-4">
-                {queueGroups.map(({ record, signals }) => (
-                  <article
-                    className="rounded-lg border border-[#D9DED8] bg-white p-5"
-                    key={record.id}
-                  >
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                      <div className="min-w-0">
-                        <h4 className="text-lg font-bold text-[#17201C]">
-                          {record.name}
-                        </h4>
-                        {record.businessName ? (
-                          <p className="mt-1 text-sm text-[#5F6862]">
-                            {record.businessName}
+                {queueGroups.map(
+                  ({ engagement, record, signals }) => (
+                    <article
+                      className="rounded-lg border border-[#D9DED8] bg-white p-5"
+                      key={engagement.id}
+                    >
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0">
+                          <h4 className="text-lg font-bold text-[#17201C]">
+                            {record.name}
+                          </h4>
+                          {record.businessName ? (
+                            <p className="mt-1 text-sm text-[#5F6862]">
+                              {record.businessName}
+                            </p>
+                          ) : null}
+                          <p className="mt-2 font-bold text-[#174F42]">
+                            {engagement.title}
+                            {engagement.isPrimary
+                              ? " | Primary job"
+                              : ""}
                           </p>
-                        ) : null}
+                        </div>
+
+                        <span className="w-fit shrink-0 rounded-md bg-[#EDF3EF] px-3 py-2 text-sm font-bold text-[#174F42]">
+                          {signals.length} active{" "}
+                          {signals.length === 1 ? "issue" : "issues"}
+                        </span>
                       </div>
 
-                      <span className="w-fit shrink-0 rounded-md bg-[#EDF3EF] px-3 py-2 text-sm font-bold text-[#174F42]">
-                        {signals.length} open{" "}
-                        {signals.length === 1 ? "issue" : "issues"}
-                      </span>
-                    </div>
-
-                    <div className="mt-5 divide-y divide-[#D9DED8] border-y border-[#D9DED8]">
-                      {signals.map((signal) => (
-                        <RiskIssue
-                          key={signal.id}
-                          signal={signal}
-                        />
-                      ))}
-                    </div>
-
-                    <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-                      <div className="text-sm text-[#5F6862]">
-                        <p>Workflow health</p>
-                        <p className="mt-1 font-bold text-[#17201C]">
-                          {record.workflowHealthScore}/100 |{" "}
-                          {getWorkflowHealthLabel(
-                            record.workflowHealthScore,
-                          )}
-                        </p>
+                      <div className="mt-5 divide-y divide-[#D9DED8] border-y border-[#D9DED8]">
+                        {signals.map((signal) => (
+                          <RiskIssue
+                            key={signal.id}
+                            signal={signal}
+                          />
+                        ))}
                       </div>
 
-                      <button
-                        className="rounded-md bg-[#174F42] px-4 py-3 font-bold text-white hover:bg-[#1F6F5B]"
-                        onClick={() =>
-                          onReviewRecord(record.id)
-                        }
-                        type="button"
-                      >
-                        Review workflow
-                      </button>
-                    </div>
-                  </article>
-                ))}
+                      <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                        <div className="text-sm text-[#5F6862]">
+                          <p>Workflow health</p>
+                          <p className="mt-1 font-bold text-[#17201C]">
+                            {engagement.workflowHealthScore}/100 |{" "}
+                            {getWorkflowHealthLabel(
+                              engagement.workflowHealthScore,
+                            )}
+                          </p>
+                        </div>
+
+                        <button
+                          className="rounded-md bg-[#174F42] px-4 py-3 font-bold text-white hover:bg-[#1F6F5B]"
+                          onClick={() =>
+                            onReviewRecord(
+                              record.id,
+                              engagement.id,
+                            )
+                          }
+                          type="button"
+                        >
+                          Review workflow
+                        </button>
+                      </div>
+                    </article>
+                  ),
+                )}
               </div>
             )}
           </div>

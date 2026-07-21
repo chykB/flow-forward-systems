@@ -4,20 +4,26 @@ import { useMemo } from "react";
 import { ArrowRight } from "lucide-react";
 import type {
   ActivityLog,
+  ClientEngagement,
   ClientWorkflowRecord,
 } from "@/lib/client-workflow-types";
 import { formatDateTime } from "@/lib/format-date";
 
 type WorkspaceActivityProps = {
   activityLogs: ActivityLog[];
+  engagements: ClientEngagement[];
   errorMessage: string;
   isLoading: boolean;
-  onOpenRecord: (recordId: string) => void;
+  onOpenRecord: (
+    recordId: string,
+    engagementId: string,
+  ) => void;
   records: ClientWorkflowRecord[];
 };
 
 export function WorkspaceActivity({
   activityLogs,
+  engagements,
   errorMessage,
   isLoading,
   onOpenRecord,
@@ -26,6 +32,16 @@ export function WorkspaceActivity({
   const recordsById = useMemo(
     () => new Map(records.map((record) => [record.id, record])),
     [records],
+  );
+  const engagementsById = useMemo(
+    () =>
+      new Map(
+        engagements.map((engagement) => [
+          engagement.id,
+          engagement,
+        ]),
+      ),
+    [engagements],
   );
   const orderedLogs = useMemo(
     () =>
@@ -73,6 +89,9 @@ export function WorkspaceActivity({
             const record = recordsById.get(
               log.clientWorkflowRecordId,
             );
+            const engagement = engagementsById.get(
+              log.clientEngagementId,
+            );
 
             return (
               <article
@@ -87,18 +106,26 @@ export function WorkspaceActivity({
                   <h3 className="mt-1 font-bold text-[#17201C]">
                     {log.actionType}
                   </h3>
+                  {engagement ? (
+                    <p className="mt-1 text-sm font-bold text-[#174F42]">
+                      {engagement.title}
+                      {engagement.isPrimary ? " | Primary job" : ""}
+                    </p>
+                  ) : null}
                   <p className="mt-2 leading-7 text-[#5F6862]">
                     {log.note}
                   </p>
                 </div>
 
-                {record ? (
+                {record && engagement ? (
                   <button
                     className="flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-md border border-[#174F42] px-3 py-2 text-sm font-bold text-[#174F42] hover:bg-[#EDF3EF]"
-                    onClick={() => onOpenRecord(record.id)}
+                    onClick={() =>
+                      onOpenRecord(record.id, engagement.id)
+                    }
                     type="button"
                   >
-                    Open record
+                    Open job
                     <ArrowRight
                       aria-hidden="true"
                       className="h-4 w-4"

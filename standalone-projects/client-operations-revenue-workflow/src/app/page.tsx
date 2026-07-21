@@ -28,7 +28,9 @@ import {
   createOperationRequestId,
   createWorkspaceApplicationApi,
   type CompleteFollowUpInput,
+  type ClientEngagementUpdates,
   type ClientWorkflowRecordUpdates,
+  type NewClientEngagement,
   type NewClientWorkflowRecord,
   type NewHandoffNote,
   type NewProposalRecord,
@@ -278,6 +280,39 @@ function persistSelectedRecordId(
   }
 }
 
+function getSelectedEngagementStorageKey(
+  workspaceId: string,
+  recordId: string,
+) {
+  return `client-operations:selected-engagement:${workspaceId}:${recordId}`;
+}
+
+function getPersistedSelectedEngagementId(
+  workspaceId: string,
+  recordId: string,
+) {
+  return window.localStorage.getItem(
+    getSelectedEngagementStorageKey(workspaceId, recordId),
+  );
+}
+
+function persistSelectedEngagementId(
+  workspaceId: string,
+  recordId: string,
+  engagementId: string | undefined,
+) {
+  const storageKey = getSelectedEngagementStorageKey(
+    workspaceId,
+    recordId,
+  );
+
+  if (engagementId) {
+    window.localStorage.setItem(storageKey, engagementId);
+  } else {
+    window.localStorage.removeItem(storageKey);
+  }
+}
+
 
 type WorkspaceDashboardProps = {
   onSignOut: () => void;
@@ -298,6 +333,7 @@ function WorkspaceDashboard({
     [supabase, workspaceId],
   );
   const isSavingRecordRef = useRef(false);
+  const isSavingEngagementRef = useRef(false);
   const updatingWorkflowTaskIdsRef =
   useRef(new Set<string>());
   const [records, setRecords] = useState<ClientWorkflowRecord[]>([]);
@@ -380,6 +416,12 @@ function WorkspaceDashboard({
   const [isAddRecordOpen, setIsAddRecordOpen] = useState(false);
   const [selectedRecordId, setSelectedRecordId] =
     useState<string>();
+  const [selectedEngagementId, setSelectedEngagementId] =
+    useState<string>();
+  const [engagementMessage, setEngagementMessage] =
+    useState("");
+  const [isSavingEngagement, setIsSavingEngagement] =
+    useState(false);
   const [selectedDetailTab, setSelectedDetailTab] =
   useState<DetailTab>("overview");
   const [activeWorkspaceView, setActiveWorkspaceView] =
@@ -427,34 +469,64 @@ function WorkspaceDashboard({
     filteredRecords[0] ||
     null;
 
-  const selectedEngagement = useMemo(
+  const selectedClientEngagements = useMemo(
     () =>
       selectedRecord
-        ? engagements.find(
-            (engagement) =>
-              engagement.clientWorkflowRecordId ===
-                selectedRecord.id && engagement.isPrimary,
-          ) ?? null
-        : null,
+        ? engagements
+            .filter(
+              (engagement) =>
+                engagement.clientWorkflowRecordId ===
+                selectedRecord.id,
+            )
+            .sort((first, second) => {
+              if (first.engagementStatus === "Active") {
+                if (second.engagementStatus !== "Active") {
+                  return -1;
+                }
+              } else if (second.engagementStatus === "Active") {
+                return 1;
+              }
+
+              if (first.isPrimary !== second.isPrimary) {
+                return first.isPrimary ? -1 : 1;
+              }
+
+              return second.createdAt.localeCompare(
+                first.createdAt,
+              );
+            })
+        : [],
     [engagements, selectedRecord],
   );
 
-  function getPrimaryEngagement(
+  const selectedEngagement = useMemo(
+    () =>
+      selectedClientEngagements.find(
+        (engagement) =>
+          engagement.id === selectedEngagementId,
+      ) ??
+      selectedClientEngagements.find(
+        (engagement) => engagement.isPrimary,
+      ) ??
+      selectedClientEngagements[0] ??
+      null,
+    [selectedClientEngagements, selectedEngagementId],
+  );
+
+  function getSelectedEngagementForRecord(
     clientWorkflowRecordId: string,
   ) {
-    const engagement = engagements.find(
-      (candidate) =>
-        candidate.clientWorkflowRecordId ===
-          clientWorkflowRecordId && candidate.isPrimary,
-    );
-
-    if (!engagement) {
+    if (
+      !selectedEngagement ||
+      selectedEngagement.clientWorkflowRecordId !==
+        clientWorkflowRecordId
+    ) {
       throw new Error(
-        "The client engagement could not be found. Refresh and try again.",
+        "Select the client job before adding workflow details.",
       );
     }
 
-    return engagement;
+    return selectedEngagement;
   }
 
   const selectedRecordProposals = useMemo(
@@ -580,9 +652,62 @@ function WorkspaceDashboard({
     navigateWorkspaceView(view);
   }
 
-  function rememberSelectedRecord(recordId: string | undefined) {
+  function findPreferredEngagement(
+    recordId: string,
+    preferredEngagementId?: string,
+  ) {
+    const recordEngagements = engagements.filter(
+      (engagement) =>
+        engagement.clientWorkflowRecordId === recordId,
+    );
+    const persistedEngagementId =
+      getPersistedSelectedEngagementId(workspaceId, recordId);
+
+    return (
+      recordEngagements.find(
+        (engagement) =>
+          engagement.id === preferredEngagementId,
+      ) ??
+      recordEngagements.find(
+        (engagement) =>
+          engagement.id === persistedEngagementId,
+      ) ??
+      recordEngagements.find(
+        (engagement) => engagement.isPrimary,
+      ) ??
+      recordEngagements[0]
+    );
+  }
+
+  function rememberSelectedEngagement(
+    recordId: string,
+    engagementId?: string,
+  ) {
+    const engagement = findPreferredEngagement(
+      recordId,
+      engagementId,
+    );
+
+    setSelectedEngagementId(engagement?.id);
+    persistSelectedEngagementId(
+      workspaceId,
+      recordId,
+      engagement?.id,
+    );
+  }
+
+  function rememberSelectedRecord(
+    recordId: string | undefined,
+    engagementId?: string,
+  ) {
     setSelectedRecordId(recordId);
     persistSelectedRecordId(workspaceId, recordId);
+
+    if (recordId) {
+      rememberSelectedEngagement(recordId, engagementId);
+    } else {
+      setSelectedEngagementId(undefined);
+    }
   }
 
   function changeRecordFilters(nextFilters: RecordFilters) {
@@ -605,6 +730,19 @@ function WorkspaceDashboard({
     setSelectedDetailTab("overview");
   }
 
+  function selectClientEngagement(engagementId: string) {
+    if (!selectedRecord) {
+      return;
+    }
+
+    rememberSelectedEngagement(
+      selectedRecord.id,
+      engagementId,
+    );
+    setSelectedDetailTab("overview");
+    setEngagementMessage("");
+  }
+
   function openClientStage(stage: LifecycleStage) {
     const stageFilters: RecordFilters = {
       ...initialRecordFilters,
@@ -624,23 +762,32 @@ function WorkspaceDashboard({
     navigateWorkspaceView("client-records");
   }
 
-  function openClientRecord(recordId: string) {
+  function openClientRecord(
+    recordId: string,
+    engagementId?: string,
+  ) {
     setRecordFilters(initialRecordFilters);
-    rememberSelectedRecord(recordId);
+    rememberSelectedRecord(recordId, engagementId);
     setSelectedDetailTab("overview");
     navigateWorkspaceView("client-records");
   }
 
-  function reviewClientWorkflow(recordId: string) {
+  function reviewClientWorkflow(
+    recordId: string,
+    engagementId: string,
+  ) {
     setRecordFilters(initialRecordFilters);
-    rememberSelectedRecord(recordId);
+    rememberSelectedRecord(recordId, engagementId);
     setSelectedDetailTab("workflow-health");
     navigateWorkspaceView("client-records");
   }
 
-  function openClientActivity(recordId: string) {
+  function openClientActivity(
+    recordId: string,
+    engagementId: string,
+  ) {
     setRecordFilters(initialRecordFilters);
-    rememberSelectedRecord(recordId);
+    rememberSelectedRecord(recordId, engagementId);
     setSelectedDetailTab("activity");
     navigateWorkspaceView("client-records");
   }
@@ -718,21 +865,48 @@ function WorkspaceDashboard({
         )
           ? persistedRecordId ?? undefined
           : currentRecords[0]?.id;
+        const currentEngagements = workspaceEngagements.map(
+          (engagement) =>
+            reconciledEngagements.get(engagement.id) ??
+            engagement,
+        );
+        const persistedEngagementId = nextSelectedRecordId
+          ? getPersistedSelectedEngagementId(
+              workspaceId,
+              nextSelectedRecordId,
+            )
+          : null;
+        const nextRecordEngagements = currentEngagements.filter(
+          (engagement) =>
+            engagement.clientWorkflowRecordId ===
+            nextSelectedRecordId,
+        );
+        const nextSelectedEngagement =
+          nextRecordEngagements.find(
+            (engagement) =>
+              engagement.id === persistedEngagementId,
+          ) ??
+          nextRecordEngagements.find(
+            (engagement) => engagement.isPrimary,
+          ) ??
+          nextRecordEngagements[0];
 
         setRecords(currentRecords);
-        setEngagements(
-          workspaceEngagements.map(
-            (engagement) =>
-              reconciledEngagements.get(engagement.id) ??
-              engagement,
-          ),
-        );
+        setEngagements(currentEngagements);
         setRiskSignals(loadedRiskSignals);
         setSelectedRecordId(nextSelectedRecordId);
+        setSelectedEngagementId(nextSelectedEngagement?.id);
         persistSelectedRecordId(
           workspaceId,
           nextSelectedRecordId,
         );
+        if (nextSelectedRecordId) {
+          persistSelectedEngagementId(
+            workspaceId,
+            nextSelectedRecordId,
+            nextSelectedEngagement?.id,
+          );
+        }
         setRecordsStatus("ready");
 
         if (failedReconciliations > 0) {
@@ -1048,7 +1222,14 @@ function WorkspaceDashboard({
       await refreshActivityHistory();
 
       setRecordFilters(initialRecordFilters);
-      rememberSelectedRecord(savedRecord.id);
+      setSelectedRecordId(savedRecord.id);
+      persistSelectedRecordId(workspaceId, savedRecord.id);
+      setSelectedEngagementId(result.clientEngagement.id);
+      persistSelectedEngagementId(
+        workspaceId,
+        savedRecord.id,
+        result.clientEngagement.id,
+      );
       setSelectedDetailTab("overview");
       setIsAddRecordOpen(false);
       setRecordsMessage("");
@@ -1063,6 +1244,55 @@ function WorkspaceDashboard({
           ? error.message
           : "The record could not be saved. Please try again.",
       );
+    }
+  }
+
+  async function addClientEngagement(
+    engagement: NewClientEngagement,
+  ) {
+    if (
+      !selectedRecord ||
+      engagement.clientWorkflowRecordId !== selectedRecord.id
+    ) {
+      throw new Error(
+        "The job is not linked to the selected client.",
+      );
+    }
+
+    setIsSavingEngagement(true);
+    setEngagementMessage("");
+
+    try {
+      const result = await workspaceApi.engagements.create({
+        commandId: createOperationRequestId(),
+        engagement,
+      });
+
+      setEngagements((currentEngagements) => [
+        result.clientEngagement,
+        ...currentEngagements.filter(
+          (currentEngagement) =>
+            currentEngagement.id !== result.clientEngagement.id,
+        ),
+      ]);
+      setSelectedEngagementId(result.clientEngagement.id);
+      persistSelectedEngagementId(
+        workspaceId,
+        selectedRecord.id,
+        result.clientEngagement.id,
+      );
+      setSelectedDetailTab("overview");
+      await refreshActivityHistory();
+    } catch (error) {
+      const engagementError =
+        error instanceof Error
+          ? error
+          : new Error("The job could not be created.");
+
+      setEngagementMessage(engagementError.message);
+      throw engagementError;
+    } finally {
+      setIsSavingEngagement(false);
     }
   }
 
@@ -1117,7 +1347,7 @@ function WorkspaceDashboard({
     setHandoffNotesMessage("");
 
     try {
-      const engagement = getPrimaryEngagement(
+      const engagement = getSelectedEngagementForRecord(
         handoffNote.clientWorkflowRecordId,
       );
       const result = await workspaceApi.handoffNotes.create({
@@ -1153,7 +1383,7 @@ function WorkspaceDashboard({
     setWorkflowTasksMessage("");
 
     try {
-      const engagement = getPrimaryEngagement(
+      const engagement = getSelectedEngagementForRecord(
         task.clientWorkflowRecordId,
       );
       const result = await workspaceApi.workItems.create({
@@ -1257,11 +1487,55 @@ function WorkspaceDashboard({
     }
   }
 
-  function updateSelectedRecord(
+  function updateSelectedClientRecord(
     updates: ClientWorkflowRecordUpdates,
     note: string,
   ) {
     void saveSelectedRecordUpdates(updates, note);
+  }
+
+  function updateSelectedEngagement(
+    updates: Partial<ClientWorkflowRecord>,
+    note: string,
+  ) {
+    const engagementUpdates: ClientEngagementUpdates = {};
+
+    if (updates.lifecycleStage !== undefined) {
+      engagementUpdates.lifecycleStage = updates.lifecycleStage;
+    }
+    if (updates.priority !== undefined) {
+      engagementUpdates.priority = updates.priority;
+    }
+    if (updates.estimatedValue !== undefined) {
+      engagementUpdates.estimatedValue = updates.estimatedValue;
+    }
+    if (updates.nextAction !== undefined) {
+      engagementUpdates.nextAction = updates.nextAction;
+    }
+    if (updates.nextFollowUpAt !== undefined) {
+      engagementUpdates.nextFollowUpAt = updates.nextFollowUpAt;
+    }
+    if (updates.assignedTo !== undefined) {
+      engagementUpdates.assignedTo = updates.assignedTo;
+    }
+    if (updates.onboardingStatus !== undefined) {
+      engagementUpdates.onboardingStatus =
+        updates.onboardingStatus;
+    }
+    if (updates.deliveryStatus !== undefined) {
+      engagementUpdates.deliveryStatus = updates.deliveryStatus;
+    }
+    if (updates.approvalStatus !== undefined) {
+      engagementUpdates.approvalStatus = updates.approvalStatus;
+    }
+    if (updates.paymentStatus !== undefined) {
+      engagementUpdates.paymentStatus = updates.paymentStatus;
+    }
+
+    void saveSelectedEngagementUpdates(
+      engagementUpdates,
+      note,
+    );
   }
 
     async function refreshActivityHistory() {
@@ -1457,6 +1731,94 @@ function WorkspaceDashboard({
       setIsSavingRiskSignal(false);
     }
   }
+
+  async function saveSelectedEngagementUpdates(
+    updates: ClientEngagementUpdates,
+    note: string,
+  ) {
+    if (!selectedRecord || !selectedEngagement) {
+      return false;
+    }
+
+    if (isSavingEngagementRef.current) {
+      return false;
+    }
+
+    const previousEngagement = selectedEngagement;
+    const hasChanges = Object.entries(updates).some(
+      ([key, value]) =>
+        value !==
+        previousEngagement[key as keyof ClientEngagement],
+    );
+
+    if (!hasChanges) {
+      setEngagementMessage("No job changes to save.");
+      return false;
+    }
+
+    isSavingEngagementRef.current = true;
+    setIsSavingEngagement(true);
+    setEngagementMessage("");
+    const now = new Date().toISOString();
+
+    setEngagements((currentEngagements) =>
+      currentEngagements.map((engagement) =>
+        engagement.id === previousEngagement.id
+          ? {
+              ...engagement,
+              ...updates,
+              updatedAt: now,
+            }
+          : engagement,
+      ),
+    );
+
+    try {
+      const result = await workspaceApi.engagements.update({
+        commandId: createOperationRequestId(),
+        clientEngagementId: previousEngagement.id,
+        expectedUpdatedAt: previousEngagement.updatedAt,
+        updates,
+        activityNote: note,
+      });
+
+      setEngagements((currentEngagements) =>
+        currentEngagements.map((engagement) =>
+          engagement.id === result.clientEngagement.id
+            ? result.clientEngagement
+            : engagement,
+        ),
+      );
+      await refreshRiskSignalsAfterChange(
+        selectedRecord.id,
+        result.clientEngagement.id,
+      );
+      await refreshActivityHistory();
+      setEngagementMessage("");
+      return true;
+    } catch (error) {
+      console.error("Client job update failed", error);
+
+      setEngagements((currentEngagements) =>
+        currentEngagements.map((engagement) =>
+          engagement.id === previousEngagement.id
+            ? previousEngagement
+            : engagement,
+        ),
+      );
+      setEngagementMessage(
+        error instanceof Error
+          ? error.message
+          : "The job could not be updated. Please try again.",
+      );
+    } finally {
+      isSavingEngagementRef.current = false;
+      setIsSavingEngagement(false);
+    }
+
+    return false;
+  }
+
   async function saveSelectedRecordUpdates(
     updates: ClientWorkflowRecordUpdates,
     note: string,
@@ -1552,7 +1914,7 @@ function WorkspaceDashboard({
     setProposalsMessage("");
 
     try {
-      const engagement = getPrimaryEngagement(
+      const engagement = getSelectedEngagementForRecord(
         proposal.clientWorkflowRecordId,
       );
       const result = await workspaceApi.proposals.create({
@@ -1591,7 +1953,7 @@ function WorkspaceDashboard({
       const savedInvoice = await createInvoiceRecord(
         supabase,
         workspaceId,
-        getPrimaryEngagement(
+        getSelectedEngagementForRecord(
           invoice.clientWorkflowRecordId,
         ).id,
         invoice,
@@ -1732,10 +2094,13 @@ function WorkspaceDashboard({
   ) {
     if (
       !selectedRecord ||
-      invoice.clientWorkflowRecordId !== selectedRecord.id
+      !selectedEngagement ||
+      !selectedEngagement.isPrimary ||
+      invoice.clientWorkflowRecordId !== selectedRecord.id ||
+      invoice.clientEngagementId !== selectedEngagement.id
     ) {
       throw new Error(
-        "The invoice is not linked to the selected client.",
+        "Payment recommendations are available only for the selected primary job.",
       );
     }
 
@@ -1857,10 +2222,13 @@ function WorkspaceDashboard({
   ) {
     if (
       !selectedRecord ||
-      proposal.clientWorkflowRecordId !== selectedRecord.id
+      !selectedEngagement ||
+      !selectedEngagement.isPrimary ||
+      proposal.clientWorkflowRecordId !== selectedRecord.id ||
+      proposal.clientEngagementId !== selectedEngagement.id
     ) {
       throw new Error(
-        "The proposal is not linked to the selected client.",
+        "Proposal recommendations are available only for the selected primary job.",
       );
     }
 
@@ -2038,6 +2406,7 @@ function WorkspaceDashboard({
       {activeWorkspaceView === "action-queue" ? (
         <div id="action-queue">
           <WorkspaceHealthQueue
+            engagements={engagements}
             errorMessage={riskSignalsMessage}
             isLoading={
               recordsStatus === "loading" ||
@@ -2053,6 +2422,7 @@ function WorkspaceDashboard({
       {activeWorkspaceView === "activity" ? (
         <WorkspaceActivity
           activityLogs={activityLogs}
+          engagements={engagements}
           errorMessage={activityLogsMessage}
           isLoading={activityLogsStatus === "loading"}
           onOpenRecord={openClientActivity}
@@ -2204,12 +2574,14 @@ function WorkspaceDashboard({
                   </div>
                 </div>
 
-                {selectedRecord ? (
+                {selectedRecord && selectedEngagement ? (
                   <div className="min-w-0">
                     <ClientRecordDetail
                       activeTab={selectedDetailTab}
                       activityMessage={activityLogsMessage}
                       activityLogs={selectedRecordActivityLogs}
+                      engagementMessage={engagementMessage}
+                      engagements={selectedClientEngagements}
                       followUpMessage={followUpsMessage}
                       followUps={selectedRecordFollowUps}
                       handoffMessage={handoffNotesMessage}
@@ -2219,6 +2591,7 @@ function WorkspaceDashboard({
                       isActivityLoading={
                         activityLogsStatus === "loading"
                       }
+                      isEngagementSaving={isSavingEngagement}
                       isApplyingInvoiceRecommendation={
                         isApplyingInvoiceRecommendation
                       }
@@ -2254,6 +2627,7 @@ function WorkspaceDashboard({
                       onAddProposal={addProposal}
                       onAddTask={addWorkflowTask}
                       onCompleteFollowUp={completeFollowUp}
+                      onCreateEngagement={addClientEngagement}
                       onApplyInvoiceRecommendation={
                         applyInvoiceRecommendation
                       }
@@ -2261,9 +2635,15 @@ function WorkspaceDashboard({
                         applyProposalRecommendation
                       }
                       onTabChange={setSelectedDetailTab}
+                      onSelectEngagement={selectClientEngagement}
                       onUpdateInvoice={saveInvoiceUpdates}
                       onUpdateProposal={saveProposalUpdates}
-                      onUpdateRecord={updateSelectedRecord}
+                      onUpdateClientRecord={
+                        updateSelectedClientRecord
+                      }
+                      onUpdateEngagement={
+                        updateSelectedEngagement
+                      }
                       onUpdateRiskSignalStatus={
                         saveRiskSignalStatus
                       }
@@ -2273,6 +2653,7 @@ function WorkspaceDashboard({
                       proposalMessage={proposalsMessage}
                       proposals={selectedRecordProposals}
                       record={selectedRecord}
+                      selectedEngagement={selectedEngagement}
                       riskSignalMessage={riskSignalsMessage}
                       riskSignals={selectedRecordRiskSignals}
                       tasks={selectedRecordTasks}
