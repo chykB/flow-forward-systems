@@ -14,6 +14,7 @@ import {
 } from "@/lib/invoice-options";
 
 import type { InvoiceRecordUpdates } from "@/lib/application/workspace-api";
+import { getEffectiveInvoiceStatus } from "@/lib/invoice-workflow";
 
 type Props = {
   invoice: InvoiceRecord;
@@ -68,7 +69,9 @@ function StandardInvoiceStatusEditor({
     invoice.amount > 0 ? String(invoice.amount) : "",
   );
   const [currency, setCurrency] = useState(invoice.currency);
-  const [status, setStatus] = useState(invoice.status);
+  const [status, setStatus] = useState(
+    getEffectiveInvoiceStatus(invoice, new Date()),
+  );
   const [sentAt, setSentAt] = useState(invoice.sentAt);
   const [dueDate, setDueDate] = useState(invoice.dueDate);
   const [paidAt, setPaidAt] = useState(invoice.paidAt);
@@ -150,8 +153,12 @@ function StandardInvoiceStatusEditor({
       return;
     }
 
+    const effectiveStatus = getEffectiveInvoiceStatus(
+      { dueDate, status },
+      new Date(),
+    );
     const updates: InvoiceRecordUpdates = {
-      status,
+      status: effectiveStatus,
       invoiceNumber: invoiceNeeded
         ? invoiceNumber.trim()
         : invoice.invoiceNumber,
@@ -211,8 +218,13 @@ function StandardInvoiceStatusEditor({
           }}
         >
           {invoiceStatusOptions.map((option) => (
-            <option key={option.value} value={option.value}>
+            <option
+              disabled={option.automatic}
+              key={option.value}
+              value={option.value}
+            >
               {option.label}
+              {option.automatic ? " (automatic)" : ""}
             </option>
           ))}
         </select>

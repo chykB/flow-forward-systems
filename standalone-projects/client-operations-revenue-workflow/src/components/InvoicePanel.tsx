@@ -6,6 +6,7 @@ import { InvoiceStatusEditor } from "@/components/InvoiceStatusEditor";
 import { InvoiceWorkflowRecommendation } from "@/components/InvoiceWorkflowRecommendation";
 import { formatDateTime } from "@/lib/format-date";
 import {
+  getEffectiveInvoiceStatus,
   getPrimaryInvoiceWorkflowTarget,
   type InvoiceWorkflowRecommendation as RecommendationData,
 } from "@/lib/invoice-workflow";
@@ -99,9 +100,13 @@ function InvoiceHistoryItem({
   record: ClientWorkflowRecord;
 }) {
   const [isEditing, setIsEditing] = useState(false);
+  const effectiveStatus = getEffectiveInvoiceStatus(
+    invoice,
+    new Date(),
+  );
   const needsAttention =
-    invoice.status === "Overdue" ||
-    invoice.status === "Disputed";
+    effectiveStatus === "Overdue" ||
+    effectiveStatus === "Disputed";
 
   return (
     <article className="border-t border-[#D9DED8] py-5 first:border-t-0 first:pt-0">
@@ -124,7 +129,7 @@ function InvoiceHistoryItem({
               : "bg-[#EDF3EF] text-[#174F42]"
           }`}
         >
-          {getInvoiceStatusLabel(invoice.status)}
+          {getInvoiceStatusLabel(effectiveStatus)}
         </span>
       </div>
 

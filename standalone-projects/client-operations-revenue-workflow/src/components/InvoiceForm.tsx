@@ -11,6 +11,7 @@ import {
   invoiceStatusRequiresIssuedDetails,
 } from "@/lib/invoice-options";
 import type { NewInvoiceRecord } from "@/lib/application/workspace-api";
+import { getEffectiveInvoiceStatus } from "@/lib/invoice-workflow";
 
 type InvoiceFormProps = {
   clientWorkflowRecordId: string;
@@ -244,6 +245,10 @@ export function InvoiceForm({
     }
 
     const invoiceNeeded = values.status !== "Not needed";
+    const effectiveStatus = getEffectiveInvoiceStatus(
+      values,
+      new Date(),
+    );
     // const invoiceIssued =
     //     invoiceStatusRequiresIssuedDetails(values.status);
 
@@ -259,7 +264,7 @@ export function InvoiceForm({
             : 0,
         currency: values.currency.trim().toUpperCase(),
         description: values.description.trim(),
-        status: values.status,
+        status: effectiveStatus,
         paymentLink: invoiceNeeded
           ? values.paymentLink.trim()
           : "",
@@ -319,8 +324,13 @@ export function InvoiceForm({
           }
         >
           {invoiceStatusOptions.map((option) => (
-            <option key={option.value} value={option.value}>
+            <option
+              disabled={option.automatic}
+              key={option.value}
+              value={option.value}
+            >
               {option.label}
+              {option.automatic ? " (automatic)" : ""}
             </option>
           ))}
         </select>

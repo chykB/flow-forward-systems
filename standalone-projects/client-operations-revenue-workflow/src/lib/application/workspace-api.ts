@@ -11,7 +11,10 @@ import type {
   WorkflowTask,
 } from "@/lib/client-workflow-types";
 import { getLocalDateKey } from "@/lib/date-key";
-import type { InvoiceWorkflowUpdates } from "@/lib/invoice-workflow";
+import {
+  getEffectiveInvoiceStatus,
+  type InvoiceWorkflowUpdates,
+} from "@/lib/invoice-workflow";
 import type {
   ProposalWorkflowUpdates,
 } from "@/lib/proposal-workflow";
@@ -2629,6 +2632,17 @@ function validateInvoiceState(
       requestId,
     );
   }
+
+  if (
+    invoice.status !==
+    getEffectiveInvoiceStatus(invoice, new Date())
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Payment due soon and invoice overdue are determined by the due date.",
+      requestId,
+    );
+  }
   assertMaximumText(
     invoice.disputeReason,
     1000,
@@ -2844,6 +2858,25 @@ function validateUpdateInvoiceCommand(
       }
       assertInvoiceDate(value, label, command.commandId);
     }
+  }
+
+  if (
+    command.updates.status !== undefined &&
+    command.updates.dueDate !== undefined &&
+    command.updates.status !==
+      getEffectiveInvoiceStatus(
+        {
+          dueDate: command.updates.dueDate,
+          status: command.updates.status,
+        },
+        new Date(),
+      )
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Payment due soon and invoice overdue are determined by the due date.",
+      command.commandId,
+    );
   }
 
   if (

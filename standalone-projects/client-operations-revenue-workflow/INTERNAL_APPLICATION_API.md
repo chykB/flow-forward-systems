@@ -168,6 +168,7 @@ Invoice creation and update validate:
 
 - the exact writable field set, excluding IDs, timestamps, workspace ownership, dispute lifecycle timestamps, and recommendation markers;
 - invoice number, amount, currency, description, status, payment link, and date requirements;
+- date-derived payment tracking: `Due soon` is valid from the due date through seven days before it, while `Overdue` is valid only after the due date; commands preserve the contractual due date and reject mismatched status/date combinations;
 - dispute reason and resolution outcome requirements;
 - the referenced Client Record and workspace relationship;
 - an Active engagement that belongs to the referenced Client Record and workspace;

@@ -92,11 +92,11 @@ function getPostPaymentNextAction(
   return "Review the next active client workflow step.";
 }
 
-function getEffectiveStatus(
-  invoice: InvoiceRecord,
+export function getEffectiveInvoiceStatus(
+  invoice: Pick<InvoiceRecord, "dueDate" | "status">,
   currentDate: Date,
 ): InvoiceStatus {
-  if (!["Sent", "Due soon"].includes(invoice.status)) {
+  if (!["Sent", "Due soon", "Overdue"].includes(invoice.status)) {
     return invoice.status;
   }
 
@@ -122,11 +122,11 @@ export function getPrimaryInvoiceWorkflowTarget(
 ) {
   const orderedInvoices = [...invoices].sort(
     (first, second) => {
-      const firstStatus = getEffectiveStatus(
+      const firstStatus = getEffectiveInvoiceStatus(
         first,
         currentDate,
       );
-      const secondStatus = getEffectiveStatus(
+      const secondStatus = getEffectiveInvoiceStatus(
         second,
         currentDate,
       );
@@ -175,7 +175,7 @@ export function getInvoiceWorkflowRecommendation(
   record: ClientWorkflowRecord,
   currentDate = new Date(),
 ): InvoiceWorkflowRecommendation {
-  const effectiveStatus = getEffectiveStatus(invoice, currentDate);
+  const effectiveStatus = getEffectiveInvoiceStatus(invoice, currentDate);
   const reference = invoice.invoiceNumber
     ? `invoice ${invoice.invoiceNumber}`
     : "the invoice";

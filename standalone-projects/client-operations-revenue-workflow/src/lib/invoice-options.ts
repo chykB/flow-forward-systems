@@ -6,6 +6,7 @@ import type {
 
 
 export const invoiceStatusOptions: {
+  automatic?: boolean;
   label: string;
   value: InvoiceStatus;
 }[] = [
@@ -18,10 +19,12 @@ export const invoiceStatusOptions: {
     label: "Sent to client",
   },
   {
+    automatic: true,
     value: "Due soon",
     label: "Payment due soon",
   },
   {
+    automatic: true,
     value: "Overdue",
     label: "Invoice overdue",
   },
