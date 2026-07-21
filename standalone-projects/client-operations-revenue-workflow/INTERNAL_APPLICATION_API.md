@@ -2,7 +2,7 @@
 
 Status: Active technical contract
 
-Implemented slices: Work items, client records, handoff notes, proposals, engagement ownership, engagement-scoped risk, and sequential Work Item controls
+Implemented slices: Work items, client records, follow-up completion, handoff notes, proposals, engagement ownership, engagement-scoped risk, and sequential Work Item controls
 
 Public API status: None of the interfaces or database functions in this document are a versioned customer API.
 
@@ -29,6 +29,9 @@ The manual and rules-based product remains fully operational without an AI provi
 - `engagements.list()`
 - `engagements.create(command)`
 - `engagements.update(command)`
+
+- `followUps.list()`
+- `followUps.complete(command)`
 
 - `clientRecords.list()`
 - `clientRecords.create(command)`
@@ -59,6 +62,7 @@ For client records, engagements, work items, handoff notes, and proposals, direc
 The implemented migrations expose authenticated `security definer` command functions for:
 
 - engagement create/update;
+- engagement-scoped follow-up completion;
 - client-record create/update;
 - engagement-scoped handoff-note creation;
 - engagement-scoped Proposal create/update/recommendation;
@@ -68,6 +72,8 @@ The current function names are:
 
 - `command_create_client_engagement`
 - `command_update_client_engagement`
+
+- `command_complete_engagement_follow_up`
 
 - `command_create_client_workflow_record`
 - `command_update_client_workflow_record`
@@ -109,6 +115,8 @@ Engagement creation validates:
 
 Engagement updates accept only a whitelisted partial payload. IDs, workspace ownership, client ownership, primary status, engagement state, Workflow Health, and timestamps are protected. Primary-engagement updates continue to mirror the compatibility Client Record fields until the guided engagement UI replaces that read model.
 
+Follow-up completion validates the outcome, outcome note, owner, optimistic engagement version, and either a current-or-future next date or an explicit no-further-follow-up choice. It records an immutable completion event, updates the engagement schedule, mirrors primary compatibility fields, and reconciles risks in one transaction. The normal completion path for a generated overdue-follow-up risk is this command changing the source schedule; dismissal remains an explicit waiver for a signal that should not apply.
+
 Client-record creation validates:
 
 - required profile, workflow, ownership, and follow-up fields;
@@ -148,7 +156,7 @@ Proposal recommendation application accepts only the workflow fields produced by
 
 ### Optimistic concurrency
 
-Work-item status updates include `expectedStatus`. Client-record, engagement, and Proposal updates include `expectedUpdatedAt`. The database refreshes those concurrency tokens with wall-clock time on every update, including multiple updates within one transaction. Proposal recommendation application includes `expectedStatus`. If another command changes an entity first, the command returns a conflict instead of overwriting newer data.
+Work-item status updates include `expectedStatus`. Client-record, engagement, follow-up completion, and Proposal updates include `expectedUpdatedAt`. The database refreshes those concurrency tokens with wall-clock time on every update, including multiple updates within one transaction. Proposal recommendation application includes `expectedStatus`. If another command changes an entity first, the command returns a conflict instead of overwriting newer data.
 
 ### Idempotency
 
@@ -163,6 +171,8 @@ The idempotency ledger has RLS enabled and no direct `anon` or `authenticated` t
 Creating a client record writes exactly one `Record created` Activity entry. Updating it writes exactly one `Workflow status updated` entry using the user-facing note supplied by the typed UI operation. The action type, actor, workspace, record, and timestamp are command-owned.
 
 Creating an additional engagement writes exactly one `Engagement created` entry. Updating it writes exactly one `Engagement updated` entry. Both entries carry the engagement identifier.
+
+Completing a follow-up writes one immutable `engagement_follow_ups` row and one `Follow-up completed` Activity entry. It updates or clears the next schedule and runs engagement reconciliation in the same transaction. Replaying the command does not duplicate the outcome or Activity entry.
 
 Creating active work writes exactly one `Work item added` Activity entry. Creating future work as `Planned` writes exactly one `Work item planned` entry. Activating it writes exactly one `Work item activated` entry. Planned work does not create risk or reduce Workflow Health.
 
@@ -199,6 +209,7 @@ User-facing errors include the command or query request ID. Console diagnostics 
 | --- | --- | --- | --- | --- |
 | Workspace | owned workspace lookup | create workspace | none | Persistence adapter; retain RLS |
 | Engagements | workspace engagements | none directly | create/update + Activity | Implemented; primary compatibility bridge active |
+| Follow-ups | workspace completion history | none directly | complete + schedule update + reconciliation + Activity | Implemented for all Active engagements |
 | Client records | workspace records | none directly | create/update + reconciliation + Activity | Implemented in second slice |
 | Work items | workspace work items | none directly | engagement-scoped create/status update + reconciliation + Activity | All Active engagements; Planned and stage guard implemented |
 | Handoff notes | workspace notes | none directly | engagement-scoped create + Activity | Implemented for all Active engagements |
@@ -209,7 +220,7 @@ User-facing errors include the command or query request ID. Console diagnostics 
 
 ## Assistant Eligibility
 
-The engagement, client-record, work-item, handoff-note, and Proposal commands are structurally suitable for a future protected assistant tool, but they are not exposed to an assistant yet. Assistant enablement also requires:
+The engagement, follow-up, client-record, work-item, handoff-note, and Proposal commands are structurally suitable for a future protected assistant tool, but they are not exposed to an assistant yet. Assistant enablement also requires:
 
 - explicit per-tool policy and plan entitlements;
 - user confirmation for consequential changes;

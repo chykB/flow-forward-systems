@@ -2,6 +2,7 @@
 
 
 import { HandoffNoteForm } from "@/components/HandoffNoteForm";
+import { FollowUpCompletionForm } from "@/components/FollowUpCompletionForm";
 import { NextActionForm } from "@/components/NextActionForm";
 import { ProposalPanel } from "@/components/ProposalPanel";
 import { RecordStatusControls } from "@/components/RecordStatusControls";
@@ -16,6 +17,7 @@ import type { NewInvoiceRecord, InvoiceRecordUpdates } from "@/lib/supabase/invo
 import { RiskSignalPanel } from "@/components/RiskSignalPanel";
 import { WorkflowTaskStatusEditor } from "@/components/WorkflowTaskStatusEditor";
 import type {
+  CompleteFollowUpInput,
   NewHandoffNote,
   NewProposalRecord,
   NewWorkflowTask,
@@ -31,6 +33,7 @@ import type {
 import type {
   ActivityLog,
   ClientWorkflowRecord,
+  EngagementFollowUp,
   HandoffNote,
   InvoiceRecord,
   ProposalRecord,
@@ -56,6 +59,8 @@ type ClientRecordDetailProps = {
   activeTab: DetailTab;
   onTabChange: (tab: DetailTab) => void;
   activityLogs: ActivityLog[];
+  followUpMessage: string;
+  followUps: EngagementFollowUp[];
   handoffNotes: HandoffNote[];
   isProposalLoading: boolean;
   isProposalSaving: boolean;
@@ -63,6 +68,11 @@ type ClientRecordDetailProps = {
     note: NewHandoffNote,
   ) => Promise<void>;
   isHandoffSaving: boolean;
+  isFollowUpLoading: boolean;
+  isFollowUpSaving: boolean;
+  onCompleteFollowUp: (
+    completion: CompleteFollowUpInput,
+  ) => Promise<void>;
   onAddProposal: (proposal: NewProposalRecord) => Promise<void>;
   onAddTask: (task: NewWorkflowTask) => Promise<void>;
   onUpdateProposal: (
@@ -186,6 +196,8 @@ export function ClientRecordDetail({
   activeTab,
   onTabChange,
   activityLogs,
+  followUpMessage,
+  followUps,
   handoffNotes,
   invoiceMessage,
   invoices,
@@ -193,11 +205,14 @@ export function ClientRecordDetail({
   isInvoiceSaving,
   isProposalLoading,
   isProposalSaving,
+  isFollowUpLoading,
+  isFollowUpSaving,
   onAddHandoffNote,
   onAddInvoice,
   onUpdateInvoice,
   onAddProposal,
   onAddTask,
+  onCompleteFollowUp,
   onApplyProposalRecommendation,
   onUpdateProposal,
   onUpdateRecord,
@@ -307,7 +322,7 @@ export function ClientRecordDetail({
             />
             <DetailRow
               label="Follow-up date"
-              value={record.nextFollowUpAt}
+              value={record.nextFollowUpAt || "Not scheduled"}
             />
             <DetailRow
               label="Owner"
@@ -369,6 +384,17 @@ export function ClientRecordDetail({
             errorMessage={riskSignalMessage}
             isLoading={isRiskSignalsLoading}
             isSaving={isRiskSignalSaving}
+            onOpenSource={(signal) => {
+              if (signal.riskType === "overdue_follow_up") {
+                onTabChange("next-action");
+              } else if (signal.sourceType === "proposal") {
+                onTabChange("proposals");
+              } else if (signal.sourceType === "invoice") {
+                onTabChange("invoices");
+              } else {
+                onTabChange("work-items");
+              }
+            }}
             onUpdateStatus={onUpdateRiskSignalStatus}
             record={record}
             riskSignals={riskSignals}
@@ -384,15 +410,31 @@ export function ClientRecordDetail({
               {record.nextAction}
             </p>
             <p className="mt-2 text-sm text-[#5F6862]">
-              Follow-up: {record.nextFollowUpAt} | Owner:{" "}
+              Follow-up: {record.nextFollowUpAt || "Not scheduled"} | Owner:{" "}
               {record.assignedTo}
             </p>
           </div>
 
-          <NextActionForm
+          <FollowUpCompletionForm
+            errorMessage={followUpMessage}
+            followUps={followUps}
+            isLoading={isFollowUpLoading}
+            isSubmitting={isFollowUpSaving}
+            key={`follow-up-${record.id}-${record.updatedAt}`}
+            onComplete={onCompleteFollowUp}
             record={record}
-            onUpdateRecord={onUpdateRecord}
           />
+
+          <details className="mt-6 border-t border-[#D9DED8] pt-5">
+            <summary className="cursor-pointer font-bold text-[#174F42]">
+              Update schedule without completing a follow-up
+            </summary>
+            <NextActionForm
+              key={`next-action-${record.id}-${record.updatedAt}`}
+              record={record}
+              onUpdateRecord={onUpdateRecord}
+            />
+          </details>
         </div>
       ) : null}
 

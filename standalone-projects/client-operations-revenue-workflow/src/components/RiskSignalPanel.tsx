@@ -20,6 +20,7 @@ type Props = {
   errorMessage: string;
   isLoading: boolean;
   isSaving: boolean;
+  onOpenSource: (signal: RiskSignal) => void;
   onUpdateStatus: (
     riskSignalId: string,
     update: RiskSignalStatusUpdate,
@@ -27,10 +28,6 @@ type Props = {
   record: ClientWorkflowRecord;
   riskSignals: RiskSignal[];
 };
-
-type ClosingStatus = "Resolved" | "Dismissed";
-
-
 
 function getSeverityClasses(severity: RiskSignal["severity"]) {
   if (severity === "Critical") {
@@ -48,38 +45,43 @@ function getSeverityClasses(severity: RiskSignal["severity"]) {
   return "bg-[#EDF3EF] text-[#174F42]";
 }
 
+function getSourceActionLabel(signal: RiskSignal) {
+  if (signal.riskType === "overdue_follow_up") {
+    return "Complete follow-up";
+  }
+
+  if (signal.sourceType === "proposal") {
+    return "Review proposal";
+  }
+
+  if (signal.sourceType === "invoice") {
+    return "Review invoice";
+  }
+
+  return "Open work item";
+}
+
 export function RiskSignalPanel({
   errorMessage,
   isLoading,
   isSaving,
+  onOpenSource,
   onUpdateStatus,
   record,
   riskSignals,
 }: Props) {
-  const [closingSignalId, setClosingSignalId] =
+  const [dismissingSignalId, setDismissingSignalId] =
     useState<string | null>(null);
-  const [closingStatus, setClosingStatus] =
-    useState<ClosingStatus | null>(null);
   const [resolutionNote, setResolutionNote] = useState("");
   const [formMessage, setFormMessage] = useState("");
 
-  const activeSignalCount = riskSignals.filter((signal) =>
-    isActiveRiskSignal(signal)
-  ).length;
+  const activeSignals = riskSignals.filter(isActiveRiskSignal);
+  const closedSignals = riskSignals.filter(
+    (signal) => !isActiveRiskSignal(signal),
+  );
 
-  function beginClosing(
-    signalId: string,
-    status: ClosingStatus,
-  ) {
-    setClosingSignalId(signalId);
-    setClosingStatus(status);
-    setResolutionNote("");
-    setFormMessage("");
-  }
-
-  function cancelClosing() {
-    setClosingSignalId(null);
-    setClosingStatus(null);
+  function cancelDismissal() {
+    setDismissingSignalId(null);
     setResolutionNote("");
     setFormMessage("");
   }
@@ -92,7 +94,7 @@ export function RiskSignalPanel({
 
     try {
       await onUpdateStatus(riskSignalId, update);
-      cancelClosing();
+      cancelDismissal();
     } catch (error) {
       setFormMessage(
         error instanceof Error
@@ -109,8 +111,9 @@ export function RiskSignalPanel({
           Workflow Health
         </h3>
         <p className="mt-2 leading-7 text-[#5F6862]">
-          Review active issues and complete the next step needed
-          to keep this client workflow moving.
+          Open the source of each issue and complete the work that
+          clears it. Generated issues close automatically when the
+          underlying condition changes.
         </p>
       </div>
 
@@ -136,7 +139,7 @@ export function RiskSignalPanel({
             Active issues
           </p>
           <p className="mt-1 font-bold text-[#17201C]">
-            {activeSignalCount}
+            {activeSignals.length}
           </p>
         </div>
       </div>
@@ -151,15 +154,15 @@ export function RiskSignalPanel({
         <p className="mt-5 text-[#5F6862]">
           Reviewing workflow health...
         </p>
-      ) : riskSignals.length === 0 ? (
+      ) : activeSignals.length === 0 ? (
         <p className="mt-5 rounded-md bg-[#EDF3EF] p-4 text-[#5F6862]">
-          No workflow risks need attention.
+          No active workflow issues need attention.
         </p>
       ) : (
         <div className="mt-5">
-          {riskSignals.map((signal) => {
-            const isActive = isActiveRiskSignal(signal);
-            const isClosing = closingSignalId === signal.id;
+          {activeSignals.map((signal) => {
+            const isDismissing =
+              dismissingSignalId === signal.id;
 
             return (
               <article
@@ -199,56 +202,44 @@ export function RiskSignalPanel({
                   </p>
                 </div>
 
-                {isActive ? (
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <button
-                      className="rounded-md border border-[#174F42] px-4 py-2 font-bold text-[#174F42] disabled:opacity-60"
-                      disabled={
-                        isSaving || signal.status === "Reviewed"
-                      }
-                      onClick={() =>
-                        void submitUpdate(signal.id, {
-                          status: "Reviewed",
-                        })
-                      }
-                      type="button"
-                    >
-                      Mark as reviewed
-                    </button>
-                    <button
-                      className="rounded-md bg-[#174F42] px-4 py-2 font-bold text-white disabled:opacity-60"
-                      disabled={isSaving}
-                      onClick={() =>
-                        beginClosing(signal.id, "Resolved")
-                      }
-                      type="button"
-                    >
-                      Resolve risk
-                    </button>
-                    <button
-                      className="rounded-md border border-[#8A3B12] px-4 py-2 font-bold text-[#8A3B12] disabled:opacity-60"
-                      disabled={isSaving}
-                      onClick={() =>
-                        beginClosing(signal.id, "Dismissed")
-                      }
-                      type="button"
-                    >
-                      Dismiss
-                    </button>
-                  </div>
-                ) : (
-                  <div className="mt-4 text-sm text-[#5F6862]">
-                    <p>
-                      <span className="font-bold">Closure note:</span>{" "}
-                      {signal.resolutionNote}
-                    </p>
-                    <p className="mt-1">
-                      Closed {formatDateTime(signal.resolvedAt)}
-                    </p>
-                  </div>
-                )}
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button
+                    className="rounded-md bg-[#174F42] px-4 py-2 font-bold text-white disabled:opacity-60"
+                    disabled={isSaving}
+                    onClick={() => onOpenSource(signal)}
+                    type="button"
+                  >
+                    {getSourceActionLabel(signal)}
+                  </button>
+                  <button
+                    className="rounded-md border border-[#174F42] px-4 py-2 font-bold text-[#174F42] disabled:opacity-60"
+                    disabled={
+                      isSaving || signal.status === "Reviewed"
+                    }
+                    onClick={() =>
+                      void submitUpdate(signal.id, {
+                        status: "Reviewed",
+                      })
+                    }
+                    type="button"
+                  >
+                    Mark as reviewed
+                  </button>
+                  <button
+                    className="rounded-md border border-[#8A3B12] px-4 py-2 font-bold text-[#8A3B12] disabled:opacity-60"
+                    disabled={isSaving}
+                    onClick={() => {
+                      setDismissingSignalId(signal.id);
+                      setResolutionNote("");
+                      setFormMessage("");
+                    }}
+                    type="button"
+                  >
+                    Dismiss
+                  </button>
+                </div>
 
-                {isClosing && closingStatus ? (
+                {isDismissing ? (
                   <form
                     className="mt-4 grid gap-3 border-t border-[#D9DED8] pt-4"
                     onSubmit={(event) => {
@@ -256,27 +247,25 @@ export function RiskSignalPanel({
 
                       if (resolutionNote.trim().length < 5) {
                         setFormMessage(
-                          "Add a short note explaining how this risk was closed.",
+                          "Add a short reason for dismissing this issue.",
                         );
                         return;
                       }
 
                       void submitUpdate(signal.id, {
-                        status: closingStatus,
+                        status: "Dismissed",
                         resolutionNote,
                       });
                     }}
                   >
                     <label
                       className="grid gap-2 font-bold"
-                      htmlFor={`risk-resolution-${signal.id}`}
+                      htmlFor={`risk-dismissal-${signal.id}`}
                     >
-                      {closingStatus === "Resolved"
-                        ? "Resolution note"
-                        : "Dismissal reason"}
+                      Dismissal reason
                       <textarea
                         className="min-h-24 rounded-md border border-[#D9DED8] px-4 py-3"
-                        id={`risk-resolution-${signal.id}`}
+                        id={`risk-dismissal-${signal.id}`}
                         onChange={(event) => {
                           setResolutionNote(event.target.value);
                           setFormMessage("");
@@ -299,14 +288,12 @@ export function RiskSignalPanel({
                       >
                         {isSaving
                           ? "Saving..."
-                          : closingStatus === "Resolved"
-                            ? "Confirm resolution"
-                            : "Confirm dismissal"}
+                          : "Confirm dismissal"}
                       </button>
                       <button
                         className="rounded-md border border-[#D9DED8] px-4 py-2 font-bold text-[#17201C]"
                         disabled={isSaving}
-                        onClick={cancelClosing}
+                        onClick={cancelDismissal}
                         type="button"
                       >
                         Cancel
@@ -319,6 +306,41 @@ export function RiskSignalPanel({
           })}
         </div>
       )}
+
+      {closedSignals.length > 0 ? (
+        <details className="mt-6 border-t border-[#D9DED8] pt-5">
+          <summary className="cursor-pointer font-bold text-[#174F42]">
+            Closed issue history ({closedSignals.length})
+          </summary>
+          <div className="mt-4 grid gap-3">
+            {closedSignals.map((signal) => (
+              <article
+                className="rounded-md border border-[#D9DED8] p-4"
+                key={signal.id}
+              >
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <p className="font-bold">
+                    {getRiskSignalTypeLabel(signal.riskType)}
+                  </p>
+                  <span className="rounded-md bg-[#EDF3EF] px-3 py-2 text-sm font-bold text-[#174F42]">
+                    {getRiskSignalStatusLabel(signal.status)}
+                  </span>
+                </div>
+                <p className="mt-2 leading-7 text-[#5F6862]">
+                  {signal.reason}
+                </p>
+                <p className="mt-2 text-sm text-[#5F6862]">
+                  <span className="font-bold">Closure note:</span>{" "}
+                  {signal.resolutionNote || "No note recorded."}
+                </p>
+                <p className="mt-1 text-sm text-[#5F6862]">
+                  Closed {formatDateTime(signal.resolvedAt)}
+                </p>
+              </article>
+            ))}
+          </div>
+        </details>
+      ) : null}
     </div>
   );
 }

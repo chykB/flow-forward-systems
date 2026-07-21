@@ -27,6 +27,7 @@ import { WorkspaceGate } from "@/components/WorkspaceGate";
 import {
   createOperationRequestId,
   createWorkspaceApplicationApi,
+  type CompleteFollowUpInput,
   type ClientWorkflowRecordUpdates,
   type NewClientWorkflowRecord,
   type NewHandoffNote,
@@ -60,6 +61,7 @@ import type {
   ActivityLog,
   ClientEngagement,
   ClientWorkflowRecord,
+  EngagementFollowUp,
   HandoffNote,
   LifecycleStage,
   ProposalRecord,
@@ -301,6 +303,14 @@ function WorkspaceDashboard({
   const [records, setRecords] = useState<ClientWorkflowRecord[]>([]);
   const [engagements, setEngagements] =
     useState<ClientEngagement[]>([]);
+  const [followUps, setFollowUps] =
+    useState<EngagementFollowUp[]>([]);
+  const [followUpsStatus, setFollowUpsStatus] = useState<
+    "loading" | "ready" | "error"
+  >("loading");
+  const [followUpsMessage, setFollowUpsMessage] = useState("");
+  const [isSavingFollowUp, setIsSavingFollowUp] =
+    useState(false);
   const [riskSignals, setRiskSignals] = useState<RiskSignal[]>([]);
   const [riskSignalsStatus, setRiskSignalsStatus] = useState<
     "loading" | "ready" | "error"
@@ -513,6 +523,18 @@ function WorkspaceDashboard({
           )
         : [],
     [handoffNotes, selectedEngagement],
+  );
+
+  const selectedRecordFollowUps = useMemo(
+    () =>
+      selectedEngagement
+        ? followUps.filter(
+            (followUp) =>
+              followUp.clientEngagementId ===
+              selectedEngagement.id,
+          )
+        : [],
+    [followUps, selectedEngagement],
   );
 
   useEffect(() => {
@@ -925,6 +947,47 @@ function WorkspaceDashboard({
   useEffect(() => {
     let isMounted = true;
 
+    async function loadFollowUps() {
+      setFollowUpsStatus("loading");
+      setFollowUpsMessage("");
+
+      try {
+        const workspaceFollowUps =
+          await workspaceApi.followUps.list();
+
+        if (!isMounted) {
+          return;
+        }
+
+        setFollowUps(workspaceFollowUps);
+        setFollowUpsStatus("ready");
+      } catch (error) {
+        console.error(
+          "Workspace completed follow-ups load failed",
+          error,
+        );
+
+        if (!isMounted) {
+          return;
+        }
+
+        setFollowUpsStatus("error");
+        setFollowUpsMessage(
+          "Completed follow-ups could not be loaded. Refresh and try again.",
+        );
+      }
+    }
+
+    void loadFollowUps();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [workspaceApi]);
+
+  useEffect(() => {
+    let isMounted = true;
+
     async function loadInvoices() {
       setInvoicesStatus("loading");
       setInvoicesMessage("");
@@ -1000,6 +1063,50 @@ function WorkspaceDashboard({
           ? error.message
           : "The record could not be saved. Please try again.",
       );
+    }
+  }
+
+  async function completeFollowUp(
+    completion: CompleteFollowUpInput,
+  ) {
+    if (!selectedEngagement) {
+      throw new Error(
+        "The client engagement could not be found. Refresh and try again.",
+      );
+    }
+
+    setIsSavingFollowUp(true);
+    setFollowUpsMessage("");
+
+    try {
+      const result = await workspaceApi.followUps.complete({
+        commandId: createOperationRequestId(),
+        clientEngagementId: selectedEngagement.id,
+        expectedUpdatedAt: selectedEngagement.updatedAt,
+        completion,
+      });
+
+      setFollowUps((currentFollowUps) => [
+        result.followUp,
+        ...currentFollowUps.filter(
+          (followUp) => followUp.id !== result.followUp.id,
+        ),
+      ]);
+      applyRiskReconciliation(result.reconciliation);
+      setFollowUpsStatus("ready");
+      setRiskSignalsStatus("ready");
+      setRiskSignalsMessage("");
+      await refreshActivityHistory();
+    } catch (error) {
+      const followUpError =
+        error instanceof Error
+          ? error
+          : new Error("The follow-up could not be completed.");
+
+      setFollowUpsMessage(followUpError.message);
+      throw followUpError;
+    } finally {
+      setIsSavingFollowUp(false);
     }
   }
 
@@ -2103,6 +2210,8 @@ function WorkspaceDashboard({
                       activeTab={selectedDetailTab}
                       activityMessage={activityLogsMessage}
                       activityLogs={selectedRecordActivityLogs}
+                      followUpMessage={followUpsMessage}
+                      followUps={selectedRecordFollowUps}
                       handoffMessage={handoffNotesMessage}
                       handoffNotes={selectedRecordHandoffNotes}
                       invoiceMessage={invoicesMessage}
@@ -2116,6 +2225,10 @@ function WorkspaceDashboard({
                       isApplyingProposalRecommendation={
                         isApplyingProposalRecommendation
                       }
+                      isFollowUpLoading={
+                        followUpsStatus === "loading"
+                      }
+                      isFollowUpSaving={isSavingFollowUp}
                       isHandoffLoading={
                         handoffNotesStatus === "loading"
                       }
@@ -2140,6 +2253,7 @@ function WorkspaceDashboard({
                       onAddInvoice={addInvoice}
                       onAddProposal={addProposal}
                       onAddTask={addWorkflowTask}
+                      onCompleteFollowUp={completeFollowUp}
                       onApplyInvoiceRecommendation={
                         applyInvoiceRecommendation
                       }

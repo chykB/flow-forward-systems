@@ -18,7 +18,7 @@ export type ClientEngagementRow = {
   estimated_value: number | string;
   workflow_health_score: number;
   next_action: string;
-  next_follow_up_at: string;
+  next_follow_up_at: string | null;
   assigned_to: string;
   onboarding_status: WorkflowStatus;
   delivery_status: WorkflowStatus;
@@ -43,7 +43,7 @@ export function mapClientEngagementRow(
     estimatedValue: Number(row.estimated_value),
     workflowHealthScore: row.workflow_health_score,
     nextAction: row.next_action,
-    nextFollowUpAt: row.next_follow_up_at,
+    nextFollowUpAt: row.next_follow_up_at ?? "",
     assignedTo: row.assigned_to,
     onboardingStatus: row.onboarding_status,
     deliveryStatus: row.delivery_status,

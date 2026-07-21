@@ -2,6 +2,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   ClientEngagement,
   ClientWorkflowRecord,
+  EngagementFollowUp,
+  FollowUpOutcome,
   HandoffNote,
   ProposalRecord,
   WorkItemPhase,
@@ -26,6 +28,11 @@ import {
   mapClientWorkflowRecordRow,
   type ClientWorkflowRecordRow,
 } from "@/lib/supabase/client-workflow-records";
+import {
+  getWorkspaceEngagementFollowUps,
+  mapEngagementFollowUpRow,
+  type EngagementFollowUpRow,
+} from "@/lib/supabase/engagement-follow-ups";
 import {
   getWorkspaceHandoffNotes,
   mapHandoffNoteRow,
@@ -151,6 +158,22 @@ export type ClientEngagementCommandResult = {
   clientEngagement: ClientEngagement;
 };
 
+export type CompleteFollowUpInput = {
+  outcome: FollowUpOutcome;
+  note: string;
+  nextAction: string;
+  nextFollowUpAt: string | null;
+  assignedTo: string;
+};
+
+export type FollowUpCommandResult = {
+  requestId: string;
+  followUp: EngagementFollowUp;
+  clientRecord: ClientWorkflowRecord;
+  clientEngagement: ClientEngagement;
+  reconciliation: RiskSignalReconciliationResult;
+};
+
 export type HandoffNoteCommandResult = {
   requestId: string;
   handoffNote: HandoffNote;
@@ -244,6 +267,14 @@ export type UpdateClientEngagementCommand = {
   activityNote: string;
 };
 
+export type CompleteFollowUpCommand = {
+  commandId: string;
+  clientEngagementId: string;
+  expectedUpdatedAt: string;
+  completion: CompleteFollowUpInput;
+  evaluationDate?: Date;
+};
+
 export type WorkspaceApplicationApi = {
   engagements: {
     list: () => Promise<ClientEngagement[]>;
@@ -253,6 +284,12 @@ export type WorkspaceApplicationApi = {
     update: (
       command: UpdateClientEngagementCommand,
     ) => Promise<ClientEngagementCommandResult>;
+  };
+  followUps: {
+    list: () => Promise<EngagementFollowUp[]>;
+    complete: (
+      command: CompleteFollowUpCommand,
+    ) => Promise<FollowUpCommandResult>;
   };
   clientRecords: {
     list: () => Promise<ClientWorkflowRecord[]>;
@@ -312,6 +349,14 @@ type ClientRecordCommandRpcResult = {
 type ClientEngagementCommandRpcResult = {
   requestId: string;
   clientEngagement: ClientEngagementRow;
+};
+
+type FollowUpCommandRpcResult = {
+  requestId: string;
+  followUp: EngagementFollowUpRow;
+  clientRecord: ClientWorkflowRecordRow;
+  clientEngagement: ClientEngagementRow;
+  reconciliation: unknown;
 };
 
 type HandoffNoteCommandRpcResult = {
@@ -418,6 +463,14 @@ const returningClientStatuses = new Set<
   "Repeat project opportunity",
   "Reactivated",
   "Dormant",
+]);
+const followUpOutcomes = new Set<FollowUpOutcome>([
+  "Replied",
+  "No response",
+  "Meeting booked",
+  "Decision received",
+  "Not proceeding",
+  "Other",
 ]);
 const mutableClientRecordFields = new Set<
   keyof NewClientWorkflowRecord
@@ -695,6 +748,42 @@ function mapClientEngagementCommandResult(
     requestId: result.requestId,
     clientEngagement: mapClientEngagementRow(
       result.clientEngagement,
+    ),
+  };
+}
+
+function mapFollowUpCommandResult(
+  data: unknown,
+  expectedRequestId: string,
+): FollowUpCommandResult {
+  const result = data as FollowUpCommandRpcResult | null;
+
+  if (
+    !result?.requestId ||
+    result.requestId !== expectedRequestId ||
+    !result.followUp ||
+    !result.clientRecord ||
+    !result.clientEngagement ||
+    !result.reconciliation
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_response",
+      "The follow-up operation returned an invalid response.",
+      expectedRequestId,
+    );
+  }
+
+  return {
+    requestId: result.requestId,
+    followUp: mapEngagementFollowUpRow(result.followUp),
+    clientRecord: mapClientWorkflowRecordRow(
+      result.clientRecord,
+    ),
+    clientEngagement: mapClientEngagementRow(
+      result.clientEngagement,
+    ),
+    reconciliation: mapRiskSignalReconciliationResult(
+      result.reconciliation,
     ),
   };
 }
@@ -1069,6 +1158,17 @@ function normalizeEngagementValues<
   ) as T;
 }
 
+function normalizeFollowUpCompletion(
+  completion: CompleteFollowUpInput,
+) {
+  return {
+    ...completion,
+    note: completion.note.trim(),
+    nextAction: completion.nextAction.trim(),
+    assignedTo: completion.assignedTo.trim(),
+  } satisfies CompleteFollowUpInput;
+}
+
 function validateEngagementValues(
   values: NewClientEngagement | ClientEngagementUpdates,
   requestId: string,
@@ -1275,6 +1375,86 @@ function validateUpdateEngagementCommand(
     command.commandId,
   );
   validateEngagementValues(command.updates, command.commandId);
+}
+
+function validateCompleteFollowUpCommand(
+  workspaceId: string,
+  command: CompleteFollowUpCommand,
+) {
+  assertRequestId(command.commandId);
+  assertUuid(
+    workspaceId,
+    "The workspace identifier",
+    command.commandId,
+  );
+  assertUuid(
+    command.clientEngagementId,
+    "The engagement identifier",
+    command.commandId,
+  );
+
+  if (
+    !timestampPattern.test(command.expectedUpdatedAt) ||
+    Number.isNaN(Date.parse(command.expectedUpdatedAt))
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "The expected engagement version is invalid.",
+      command.commandId,
+    );
+  }
+
+  const { completion } = command;
+
+  if (!followUpOutcomes.has(completion.outcome)) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Choose a valid follow-up outcome.",
+      command.commandId,
+    );
+  }
+
+  assertMinimumText(
+    completion.note,
+    5,
+    "Add a short note about the follow-up outcome.",
+    command.commandId,
+  );
+  assertMaximumText(
+    completion.note,
+    2000,
+    "Keep the follow-up note under 2,000 characters.",
+    command.commandId,
+  );
+  assertMinimumText(
+    completion.nextAction,
+    3,
+    "Enter the next action.",
+    command.commandId,
+  );
+  assertMaximumText(
+    completion.nextAction,
+    1000,
+    "Keep the next action under 1,000 characters.",
+    command.commandId,
+  );
+  assertMinimumText(
+    completion.assignedTo,
+    2,
+    "Enter the follow-up owner.",
+    command.commandId,
+  );
+
+  if (
+    completion.nextFollowUpAt !== null &&
+    !dateKeyPattern.test(completion.nextFollowUpAt)
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Choose a valid next follow-up date.",
+      command.commandId,
+    );
+  }
 }
 
 function validateCreateClientRecordCommand(
@@ -2201,6 +2381,79 @@ export function createWorkspaceApplicationApi(
             error,
             command.commandId,
             "The engagement could not be updated.",
+          );
+        }
+      },
+    },
+    followUps: {
+      async list() {
+        const requestId = createOperationRequestId();
+
+        try {
+          assertUuid(
+            workspaceId,
+            "The workspace identifier",
+            requestId,
+          );
+          return await getWorkspaceEngagementFollowUps(
+            supabase,
+            workspaceId,
+          );
+        } catch (error) {
+          console.error(
+            "Workspace API follow-up query failed",
+            { requestId, error },
+          );
+          throw mapOperationError(
+            error,
+            requestId,
+            "Completed follow-ups could not be loaded.",
+          );
+        }
+      },
+
+      async complete(command) {
+        validateCompleteFollowUpCommand(
+          workspaceId,
+          command,
+        );
+
+        try {
+          const { data, error } = await supabase.rpc(
+            "command_complete_engagement_follow_up",
+            {
+              p_workspace_id: workspaceId,
+              p_client_engagement_id:
+                command.clientEngagementId,
+              p_expected_updated_at:
+                command.expectedUpdatedAt,
+              p_completion: normalizeFollowUpCompletion(
+                command.completion,
+              ),
+              p_evaluation_date: getLocalDateKey(
+                command.evaluationDate ?? new Date(),
+              ),
+              p_idempotency_key: command.commandId,
+            },
+          );
+
+          if (error) {
+            throw error;
+          }
+
+          return mapFollowUpCommandResult(
+            data,
+            command.commandId,
+          );
+        } catch (error) {
+          console.error(
+            "Workspace API follow-up completion failed",
+            { requestId: command.commandId, error },
+          );
+          throw mapOperationError(
+            error,
+            command.commandId,
+            "The follow-up could not be completed.",
           );
         }
       },

@@ -19,6 +19,14 @@ export type EngagementStatus =
   | "Completed"
   | "Cancelled";
 
+export type FollowUpOutcome =
+  | "Replied"
+  | "No response"
+  | "Meeting booked"
+  | "Decision received"
+  | "Not proceeding"
+  | "Other";
+
 export type RiskLevel = "High" | "Medium" | "Low";
 export type ClientType =
   | "Lead"
@@ -127,6 +135,19 @@ export type ClientEngagement = {
   isPrimary: boolean;
   createdAt: string;
   updatedAt: string;
+};
+
+export type EngagementFollowUp = {
+  id: string;
+  clientWorkflowRecordId: string;
+  clientEngagementId: string;
+  outcome: FollowUpOutcome;
+  note: string;
+  completedAt: string;
+  nextAction: string;
+  nextFollowUpAt: string;
+  assignedTo: string;
+  createdAt: string;
 };
 
 export type ProposalRecord = {
