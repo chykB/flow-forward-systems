@@ -235,6 +235,16 @@ A Work Item with an unresolved prerequisite cannot move to In progress or Comple
 
 Replacing a Work Item prerequisite set is one atomic command. Prerequisites must belong to the same engagement and be in the same or an earlier phase. Self-references, duplicate identifiers, dependency cycles, future-phase prerequisites, and stale task versions are rejected. A changed set writes one `Work item dependencies updated` Activity entry and reconciles only the selected engagement; an unchanged set and an idempotent replay create no duplicate Activity effect.
 
+### Automatic engagement stage progression
+
+Engagement lifecycle stage is forward-only when it is derived from durable business milestones. Sending a Proposal advances an earlier engagement to Proposal sent, and accepting one advances it to Won client. Active Onboarding, Delivery, Approval, and Payment Work Items advance the engagement to the matching operational stage. Completing the current phase can also advance the engagement when the next Planned Work Item is ready and has no unresolved prerequisite.
+
+An issued Invoice advances the engagement to Payment follow-up only after Onboarding, Delivery, and Approval work is complete or not needed. This prevents a deposit or early Invoice from hiding unfinished delivery. An engagement advances to Completed and closes only when it has completion evidence, every Work Item is Complete or Not needed, and every Invoice has a final Paid, Not needed, or Voided decision. A completed Work Item without a billing decision does not silently close the engagement.
+
+Automatic reconciliation never moves a stage backward and never marks an engagement Lost or inactive. Rejected or expired Proposals remain explicit human decisions. Manual lead qualification and exceptional corrections continue through the engagement update command.
+
+Each automatic transition writes one `Workflow stage advanced` Activity entry. The primary engagement mirrors its derived stage to the compatibility Client Record; additional engagements remain isolated. Existing Active engagements are reconciled once when the rule is installed, and only forward changes are applied.
+
 ### Errors and diagnostics
 
 The application maps database failures to stable categories:
@@ -253,7 +263,7 @@ User-facing errors include the command or query request ID. Console diagnostics 
 | Area | Reads | Ordinary writes | Privileged or atomic writes | Current boundary status |
 | --- | --- | --- | --- | --- |
 | Workspace | owned workspace lookup | create workspace | none | Persistence adapter; retain RLS |
-| Engagements | workspace engagements | none directly | create/update + Activity | Implemented; primary compatibility bridge active |
+| Engagements | workspace engagements | none directly | create/update + automatic milestone progression + Activity | Implemented; forward-only stage derivation and primary compatibility bridge active |
 | Follow-ups | workspace completion history | none directly | complete + schedule update + reconciliation + Activity | Implemented for all Active engagements |
 | Client records | workspace records | none directly | create/update + reconciliation + Activity | Implemented in second slice |
 | Work items | workspace work items and dependencies | none directly | engagement-scoped create/status/dependency update + reconciliation + Activity | Sequential queue default; parallel override, Planned, stage, dependency, and cycle guards implemented |
