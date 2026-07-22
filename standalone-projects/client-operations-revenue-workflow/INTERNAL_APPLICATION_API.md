@@ -2,7 +2,7 @@
 
 Status: Active technical contract
 
-Implemented slices: Work items, client records, follow-up completion, handoff notes, proposals, invoices, engagement ownership, engagement-scoped risk review, and sequential Work Item controls
+Implemented slices: Work items, client records, follow-up completion, handoff notes, proposals, invoices, engagement ownership, engagement-scoped risk review, sequential Work Item controls, and Work Item dependency editing
 
 Public API status: None of the interfaces or database functions in this document are a versioned customer API.
 
@@ -55,8 +55,10 @@ The manual and rules-based product remains fully operational without an AI provi
 - `riskSignals.dismiss(command)`
 
 - `workItems.list()`
+- `workItems.listDependencies()`
 - `workItems.create(command)`
 - `workItems.updateStatus(command)`
+- `workItems.replaceDependencies(command)`
 
 Each command returns the saved entity. Commands that can change deterministic workflow conditions also return the authoritative risk-reconciliation result from the same transaction.
 
@@ -76,7 +78,7 @@ The implemented migrations expose authenticated `security definer` command funct
 - engagement-scoped handoff-note creation;
 - engagement-scoped Proposal create/update/recommendation;
 - engagement-scoped Invoice create/update/recommendation;
-- engagement-scoped Work Item create/status update.
+- engagement-scoped Work Item create/status/dependency update.
 
 The current function names are:
 
@@ -102,6 +104,7 @@ The current function names are:
 
 - `command_create_engagement_workflow_task`
 - `command_update_engagement_workflow_task_status`
+- `command_replace_engagement_workflow_task_dependencies`
 
 Each function explicitly verifies that `auth.uid()` owns the workspace, validates its input, and performs the write with its durable Activity entry before committing. Child operations verify that the engagement belongs to the supplied client and workspace. Commands that can change deterministic workflow conditions also reconcile risk signals and Workflow Health. Creating a context-only handoff note does not change risk or health.
 
@@ -224,6 +227,8 @@ When this rule is installed, existing nonterminal Work Items assigned to a futur
 
 The current phase order is Lead, Proposal, Onboarding, Delivery, Approval, Payment, and Handoff. Dependencies explain execution order within or across those phases. When an unresolved prerequisite already blocks downstream work, reconciliation reports the prerequisite rather than charging Workflow Health for both rows.
 
+Replacing a Work Item prerequisite set is one atomic command. Prerequisites must belong to the same engagement and be in the same or an earlier phase. Self-references, duplicate identifiers, dependency cycles, future-phase prerequisites, and stale task versions are rejected. A changed set writes one `Work item dependencies updated` Activity entry and reconciles only the selected engagement; an unchanged set and an idempotent replay create no duplicate Activity effect.
+
 ### Errors and diagnostics
 
 The application maps database failures to stable categories:
@@ -245,7 +250,7 @@ User-facing errors include the command or query request ID. Console diagnostics 
 | Engagements | workspace engagements | none directly | create/update + Activity | Implemented; primary compatibility bridge active |
 | Follow-ups | workspace completion history | none directly | complete + schedule update + reconciliation + Activity | Implemented for all Active engagements |
 | Client records | workspace records | none directly | create/update + reconciliation + Activity | Implemented in second slice |
-| Work items | workspace work items | none directly | engagement-scoped create/status update + reconciliation + Activity | All Active engagements; Planned and stage guard implemented |
+| Work items | workspace work items and dependencies | none directly | engagement-scoped create/status/dependency update + reconciliation + Activity | All Active engagements; Planned, stage, dependency, and cycle guards implemented |
 | Handoff notes | workspace notes | none directly | engagement-scoped create + Activity | Implemented for all Active engagements |
 | Proposals | workspace/client proposals | none directly | engagement-scoped create/update/recommendation + reconciliation + Activity | Create/update enabled for all Active engagements; recommendation remains primary-only |
 | Invoices | workspace/client invoices | none directly | engagement-scoped create/update/recommendation + reconciliation + Activity | Create/update enabled for all Active engagements; recommendation remains primary-only |
@@ -268,7 +273,6 @@ The assistant should use the same application command contract as the manual UI 
 ## Next Slices
 
 1. Add engagement selection and creation to Client Records while keeping the primary compatibility engagement as the default.
-2. Add dependency editing and a focused root-blocker view to the Work Item UI.
-3. Replace the primary-only Proposal recommendation with an engagement-owned recommendation update.
-4. Replace the primary-only Invoice recommendation with an engagement-owned recommendation update.
-5. Add a protected server tool layer only after the manual command surface is complete and tested.
+2. Replace the primary-only Proposal recommendation with an engagement-owned recommendation update.
+3. Replace the primary-only Invoice recommendation with an engagement-owned recommendation update.
+4. Add a protected server tool layer only after the manual command surface is complete and tested.

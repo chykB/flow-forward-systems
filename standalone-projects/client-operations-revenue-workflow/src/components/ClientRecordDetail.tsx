@@ -8,6 +8,7 @@ import { NextActionForm } from "@/components/NextActionForm";
 import { ProposalPanel } from "@/components/ProposalPanel";
 import { RecordStatusControls } from "@/components/RecordStatusControls";
 import { WorkflowTaskForm } from "@/components/WorkflowTaskForm";
+import { WorkflowTaskDependencyEditor } from "@/components/WorkflowTaskDependencyEditor";
 import {
   getLifecycleStageLabel,
   getRelationshipConcernLabel,
@@ -42,7 +43,13 @@ import type {
   ProposalRecord,
   RiskSignal,
   WorkflowTask,
+  WorkflowTaskDependency,
 } from "@/lib/client-workflow-types";
+import {
+  getUnresolvedWorkItemPrerequisites,
+  getWorkItemPrerequisiteIds,
+  getWorkItemRootBlockers,
+} from "@/lib/work-item-dependencies";
 import type {
   InvoiceRecordUpdates,
   NewInvoiceRecord,
@@ -100,6 +107,7 @@ type ClientRecordDetailProps = {
   record: ClientWorkflowRecord;
   selectedEngagement: ClientEngagement;
   tasks: WorkflowTask[];
+  taskDependencies: WorkflowTaskDependency[];
   tasksMessage: string;
   isTasksLoading: boolean;
   isTaskSaving: boolean;
@@ -139,7 +147,12 @@ type ClientRecordDetailProps = {
     workflowTaskId: string,
     update: WorkflowTaskStatusUpdate,
   ) => Promise<void>;
+  onUpdateTaskDependencies: (
+    workflowTaskId: string,
+    prerequisiteIds: string[],
+  ) => Promise<void>;
   updatingTaskId: string | null;
+  updatingTaskDependenciesId: string | null;
 };
 
 const detailTabs: { key: DetailTab; label: string }[] = [
@@ -239,6 +252,7 @@ export function ClientRecordDetail({
   record,
   selectedEngagement,
   tasks,
+  taskDependencies,
   tasksMessage,
   isTasksLoading,
   isTaskSaving,
@@ -257,7 +271,9 @@ export function ClientRecordDetail({
   isHandoffLoading,
   isHandoffSaving,
   onUpdateTaskStatus,
+  onUpdateTaskDependencies,
   updatingTaskId,
+  updatingTaskDependenciesId,
 }: ClientRecordDetailProps) {
 
   const workflowRecord: ClientWorkflowRecord = {
@@ -280,6 +296,20 @@ export function ClientRecordDetail({
 
   const recordTasks = tasks.filter(
     (task) => task.clientWorkflowRecordId === record.id,
+  );
+  const recordTaskIds = new Set(
+    recordTasks.map((task) => task.id),
+  );
+  const recordTaskDependencies = taskDependencies.filter(
+    (dependency) =>
+      recordTaskIds.has(dependency.workflowTaskId) &&
+      recordTaskIds.has(
+        dependency.dependsOnWorkflowTaskId,
+      ),
+  );
+  const rootBlockers = getWorkItemRootBlockers(
+    recordTasks,
+    recordTaskDependencies,
   );
 
   const recordLogs = activityLogs.filter(
@@ -543,6 +573,50 @@ export function ClientRecordDetail({
             approvals, payments, or handoff.
           </p>
 
+          {rootBlockers.length > 0 ? (
+            <section
+              aria-labelledby="root-blockers-heading"
+              className="mt-4 border-y border-[#D9DED8] py-4"
+            >
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h4
+                  className="font-bold"
+                  id="root-blockers-heading"
+                >
+                  Work Blocking Progress
+                </h4>
+                <span className="text-sm font-semibold text-[#5F6862]">
+                  {rootBlockers.length} root {rootBlockers.length === 1 ? "item" : "items"}
+                </span>
+              </div>
+
+              <div className="mt-3 divide-y divide-[#D9DED8]">
+                {rootBlockers.map(({ task, impactedTasks }) => (
+                  <div
+                    className="grid gap-2 py-3 first:pt-0 last:pb-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start"
+                    key={task.id}
+                  >
+                    <div className="min-w-0">
+                      <p className="break-words font-semibold">
+                        {task.title}
+                      </p>
+                      <p className="mt-1 text-sm text-[#5F6862]">
+                        Blocking: {impactedTasks.map(
+                          (impactedTask) => impactedTask.title,
+                        ).join(", ")}
+                      </p>
+                    </div>
+                    <span className="w-fit rounded-md bg-amber-50 px-3 py-2 text-sm font-bold text-amber-800">
+                      {task.status === "Planned"
+                        ? "Planned prerequisite"
+                        : "Resolve first"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
           {tasksMessage ? (
             <p className="mt-4 rounded-md bg-red-50 p-4 font-semibold text-red-700">
               {tasksMessage}
@@ -556,11 +630,26 @@ export function ClientRecordDetail({
           ) : (
             <div className="mt-3 grid gap-3">
               {recordTasks.length > 0 ? (
-                recordTasks.map((task) => (
-                  <div
-                    className="rounded-md border border-[#D9DED8] p-4"
-                    key={task.id}
-                  >
+                recordTasks.map((task) => {
+                  const unresolvedPrerequisites =
+                    getUnresolvedWorkItemPrerequisites(
+                      task.id,
+                      recordTasks,
+                      recordTaskDependencies,
+                    );
+                  const prerequisiteKey =
+                    getWorkItemPrerequisiteIds(
+                      task.id,
+                      recordTaskDependencies,
+                    )
+                      .sort()
+                      .join(":");
+
+                  return (
+                    <div
+                      className="rounded-md border border-[#D9DED8] p-4"
+                      key={task.id}
+                    >
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                       <div>
                         <p className="font-bold">{task.title}</p>
@@ -576,15 +665,42 @@ export function ClientRecordDetail({
                       Due: {task.dueDate} | Criticality:{" "}
                       {task.criticality}
                     </p>
+                    {unresolvedPrerequisites.length > 0 ? (
+                      <p className="mt-3 rounded-md bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800">
+                        Waiting on: {unresolvedPrerequisites.map(
+                          (prerequisite) => prerequisite.title,
+                        ).join(", ")}
+                      </p>
+                    ) : null}
                     <WorkflowTaskStatusEditor
-                      isSaving={updatingTaskId === task.id}
+                      isSaving={
+                        updatingTaskId === task.id ||
+                        updatingTaskDependenciesId === task.id
+                      }
                       onUpdateStatus={(update) =>
                         onUpdateTaskStatus(task.id, update)
                       }
                       task={task}
                     />
+                    <WorkflowTaskDependencyEditor
+                      dependencies={recordTaskDependencies}
+                      isSaving={
+                        updatingTaskDependenciesId === task.id ||
+                        updatingTaskId === task.id
+                      }
+                      key={`${task.id}:${task.updatedAt}:${prerequisiteKey}`}
+                      onSave={(prerequisiteIds) =>
+                        onUpdateTaskDependencies(
+                          task.id,
+                          prerequisiteIds,
+                        )
+                      }
+                      task={task}
+                      tasks={recordTasks}
+                    />
                   </div>
-                ))
+                  );
+                })
               ) : (
                 <p className="rounded-md bg-[#EDF3EF] p-4 text-[#5F6862]">
                   No work items added yet.

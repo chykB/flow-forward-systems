@@ -59,6 +59,7 @@ import type {
   LifecycleStage,
   ProposalRecord,
   WorkflowTask,
+  WorkflowTaskDependency,
   InvoiceRecord,
   RiskSignal,
 } from "@/lib/client-workflow-types";
@@ -387,6 +388,8 @@ function WorkspaceDashboard({
     useState("");
   const [workflowTasks, setWorkflowTasks] =
   useState<WorkflowTask[]>([]);
+  const [workflowTaskDependencies, setWorkflowTaskDependencies] =
+    useState<WorkflowTaskDependency[]>([]);
   const [workflowTasksStatus, setWorkflowTasksStatus] =
     useState<"loading" | "ready" | "error">("loading");
 
@@ -397,7 +400,11 @@ function WorkspaceDashboard({
   const [
   updatingWorkflowTaskId,
   setUpdatingWorkflowTaskId,
-] = useState<string | null>(null);
+  ] = useState<string | null>(null);
+  const [
+    updatingWorkflowTaskDependenciesId,
+    setUpdatingWorkflowTaskDependenciesId,
+  ] = useState<string | null>(null);
   const [recordFilters, setRecordFilters] = useState(initialRecordFilters);
   const [isAddRecordOpen, setIsAddRecordOpen] = useState(false);
   const [selectedRecordId, setSelectedRecordId] =
@@ -559,6 +566,18 @@ function WorkspaceDashboard({
           )
         : [],
     [selectedEngagement, workflowTasks],
+  );
+
+  const selectedRecordTaskDependencies = useMemo(
+    () =>
+      selectedEngagement
+        ? workflowTaskDependencies.filter(
+            (dependency) =>
+              dependency.clientEngagementId ===
+              selectedEngagement.id,
+          )
+        : [],
+    [selectedEngagement, workflowTaskDependencies],
   );
 
   const selectedRecordActivityLogs = useMemo(
@@ -1033,14 +1052,22 @@ function WorkspaceDashboard({
       setWorkflowTasksMessage("");
 
       try {
-        const workspaceWorkflowTasks =
-          await workspaceApi.workItems.list();
+        const [
+          workspaceWorkflowTasks,
+          workspaceWorkflowTaskDependencies,
+        ] = await Promise.all([
+          workspaceApi.workItems.list(),
+          workspaceApi.workItems.listDependencies(),
+        ]);
 
         if (!isMounted) {
           return;
         }
 
         setWorkflowTasks(workspaceWorkflowTasks);
+        setWorkflowTaskDependencies(
+          workspaceWorkflowTaskDependencies,
+        );
         setWorkflowTasksStatus("ready");
       } catch (error) {
         console.error(
@@ -1465,6 +1492,84 @@ function WorkspaceDashboard({
         workflowTaskId,
       );
       setUpdatingWorkflowTaskId((currentId) =>
+        currentId === workflowTaskId ? null : currentId,
+      );
+    }
+  }
+
+  async function saveWorkflowTaskDependencies(
+    workflowTaskId: string,
+    prerequisiteIds: string[],
+  ) {
+    const previousTask = workflowTasks.find(
+      (task) => task.id === workflowTaskId,
+    );
+
+    if (!previousTask) {
+      throw new Error("The Work Item could not be found.");
+    }
+
+    if (
+      updatingWorkflowTaskIdsRef.current.has(
+        workflowTaskId,
+      )
+    ) {
+      return;
+    }
+
+    updatingWorkflowTaskIdsRef.current.add(workflowTaskId);
+    setUpdatingWorkflowTaskDependenciesId(workflowTaskId);
+    setWorkflowTasksMessage("");
+
+    try {
+      const result =
+        await workspaceApi.workItems.replaceDependencies({
+          commandId: createOperationRequestId(),
+          clientEngagementId:
+            previousTask.clientEngagementId,
+          workItemId: workflowTaskId,
+          expectedUpdatedAt: previousTask.updatedAt,
+          prerequisiteIds,
+        });
+
+      setWorkflowTasks((currentTasks) =>
+        currentTasks.map((task) =>
+          task.id === result.workItem.id
+            ? result.workItem
+            : task,
+        ),
+      );
+      setWorkflowTaskDependencies((currentDependencies) => [
+        ...currentDependencies.filter(
+          (dependency) =>
+            dependency.clientEngagementId !==
+            previousTask.clientEngagementId,
+        ),
+        ...result.dependencies,
+      ]);
+
+      applyRiskReconciliation(result.reconciliation);
+      setRiskSignalsStatus("ready");
+      setRiskSignalsMessage("");
+
+      if (result.changed) {
+        await refreshActivityHistory();
+      }
+    } catch (error) {
+      const dependencyError =
+        error instanceof Error
+          ? error
+          : new Error(
+              "The Work Item prerequisites could not be saved.",
+            );
+
+      setWorkflowTasksMessage(dependencyError.message);
+      throw dependencyError;
+    } finally {
+      updatingWorkflowTaskIdsRef.current.delete(
+        workflowTaskId,
+      );
+      setUpdatingWorkflowTaskDependenciesId((currentId) =>
         currentId === workflowTaskId ? null : currentId,
       );
     }
@@ -2506,6 +2611,9 @@ function WorkspaceDashboard({
                       onUpdateTaskStatus={
                         saveWorkflowTaskStatus
                       }
+                      onUpdateTaskDependencies={
+                        saveWorkflowTaskDependencies
+                      }
                       proposalMessage={proposalsMessage}
                       proposals={selectedRecordProposals}
                       record={selectedRecord}
@@ -2513,8 +2621,14 @@ function WorkspaceDashboard({
                       riskSignalMessage={riskSignalsMessage}
                       riskSignals={selectedRecordRiskSignals}
                       tasks={selectedRecordTasks}
+                      taskDependencies={
+                        selectedRecordTaskDependencies
+                      }
                       tasksMessage={workflowTasksMessage}
                       updatingTaskId={updatingWorkflowTaskId}
+                      updatingTaskDependenciesId={
+                        updatingWorkflowTaskDependenciesId
+                      }
                     />
                   </div>
                 ) : null}

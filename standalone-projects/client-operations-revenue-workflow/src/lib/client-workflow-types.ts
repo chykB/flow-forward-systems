@@ -258,6 +258,13 @@ export type WorkflowTask = {
   updatedAt: string;
 };
 
+export type WorkflowTaskDependency = {
+  clientEngagementId: string;
+  workflowTaskId: string;
+  dependsOnWorkflowTaskId: string;
+  createdAt: string;
+};
+
 export type ActivityLog = {
   id: string;
   clientWorkflowRecordId: string;

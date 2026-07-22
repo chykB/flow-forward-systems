@@ -10,6 +10,7 @@ import type {
   RiskSignal,
   WorkItemPhase,
   WorkflowTask,
+  WorkflowTaskDependency,
 } from "@/lib/client-workflow-types";
 import { getLocalDateKey } from "@/lib/date-key";
 import {
@@ -62,6 +63,11 @@ import {
   mapWorkflowTaskRow,
   type WorkflowTaskRow,
 } from "@/lib/supabase/workflow-tasks";
+import {
+  getWorkspaceWorkflowTaskDependencies,
+  mapWorkflowTaskDependencyRow,
+  type WorkflowTaskDependencyRow,
+} from "@/lib/supabase/workflow-task-dependencies";
 
 export type NewWorkflowTask = Omit<
   WorkflowTask,
@@ -188,6 +194,12 @@ export type WorkItemCommandResult = {
   workItem: WorkflowTask;
   reconciliation: RiskSignalReconciliationResult;
 };
+
+export type WorkItemDependenciesCommandResult =
+  WorkItemCommandResult & {
+    changed: boolean;
+    dependencies: WorkflowTaskDependency[];
+  };
 
 export type ClientRecordCommandResult = {
   requestId: string;
@@ -352,6 +364,15 @@ export type UpdateWorkItemStatusCommand = {
   evaluationDate?: Date;
 };
 
+export type ReplaceWorkItemDependenciesCommand = {
+  commandId: string;
+  clientEngagementId: string;
+  workItemId: string;
+  expectedUpdatedAt: string;
+  prerequisiteIds: string[];
+  evaluationDate?: Date;
+};
+
 export type CreateClientEngagementCommand = {
   commandId: string;
   engagement: NewClientEngagement;
@@ -452,12 +473,16 @@ export type WorkspaceApplicationApi = {
   };
   workItems: {
     list: () => Promise<WorkflowTask[]>;
+    listDependencies: () => Promise<WorkflowTaskDependency[]>;
     create: (
       command: CreateWorkItemCommand,
     ) => Promise<WorkItemCommandResult>;
     updateStatus: (
       command: UpdateWorkItemStatusCommand,
     ) => Promise<WorkItemCommandResult>;
+    replaceDependencies: (
+      command: ReplaceWorkItemDependenciesCommand,
+    ) => Promise<WorkItemDependenciesCommandResult>;
   };
 };
 
@@ -471,6 +496,12 @@ type WorkItemCommandRpcResult = {
   workItem: WorkflowTaskRow;
   reconciliation: unknown;
 };
+
+type WorkItemDependenciesCommandRpcResult =
+  WorkItemCommandRpcResult & {
+    changed: boolean;
+    dependencies: WorkflowTaskDependencyRow[];
+  };
 
 type ClientRecordCommandRpcResult = {
   requestId: string;
@@ -890,6 +921,41 @@ function mapCommandResult(
     reconciliation: mapRiskSignalReconciliationResult(
       result.reconciliation,
     ),
+  };
+}
+
+function mapWorkItemDependenciesCommandResult(
+  data: unknown,
+  expectedRequestId: string,
+): WorkItemDependenciesCommandResult {
+  const result =
+    data as WorkItemDependenciesCommandRpcResult | null;
+
+  if (
+    !result?.requestId ||
+    result.requestId !== expectedRequestId ||
+    !result.workItem ||
+    !Array.isArray(result.dependencies) ||
+    !result.reconciliation ||
+    typeof result.changed !== "boolean"
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_response",
+      "The prerequisite operation returned an invalid response.",
+      expectedRequestId,
+    );
+  }
+
+  return {
+    requestId: result.requestId,
+    workItem: mapWorkflowTaskRow(result.workItem),
+    dependencies: result.dependencies.map(
+      mapWorkflowTaskDependencyRow,
+    ),
+    reconciliation: mapRiskSignalReconciliationResult(
+      result.reconciliation,
+    ),
+    changed: result.changed,
   };
 }
 
@@ -3183,6 +3249,73 @@ function validateStatusCommand(
   }
 }
 
+function validateReplaceDependenciesCommand(
+  workspaceId: string,
+  command: ReplaceWorkItemDependenciesCommand,
+) {
+  assertRequestId(command.commandId);
+  assertUuid(
+    workspaceId,
+    "The workspace identifier",
+    command.commandId,
+  );
+  assertUuid(
+    command.clientEngagementId,
+    "The engagement identifier",
+    command.commandId,
+  );
+  assertUuid(
+    command.workItemId,
+    "The work item identifier",
+    command.commandId,
+  );
+
+  if (
+    !timestampPattern.test(command.expectedUpdatedAt) ||
+    Number.isNaN(Date.parse(command.expectedUpdatedAt))
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "The work item version is invalid. Refresh and try again.",
+      command.commandId,
+    );
+  }
+
+  if (command.prerequisiteIds.length > 50) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "A work item cannot have more than 50 prerequisites.",
+      command.commandId,
+    );
+  }
+
+  const uniqueIds = new Set(command.prerequisiteIds);
+
+  if (uniqueIds.size !== command.prerequisiteIds.length) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Each prerequisite can be selected only once.",
+      command.commandId,
+    );
+  }
+
+  for (const prerequisiteId of command.prerequisiteIds) {
+    assertUuid(
+      prerequisiteId,
+      "A prerequisite identifier",
+      command.commandId,
+    );
+
+    if (prerequisiteId === command.workItemId) {
+      throw new WorkspaceApiError(
+        "invalid_request",
+        "A work item cannot depend on itself.",
+        command.commandId,
+      );
+    }
+  }
+}
+
 export function createWorkspaceApplicationApi(
   supabase: SupabaseClient,
   workspaceId: string,
@@ -4046,6 +4179,32 @@ export function createWorkspaceApplicationApi(
         }
       },
 
+      async listDependencies() {
+        const requestId = createOperationRequestId();
+
+        try {
+          assertUuid(
+            workspaceId,
+            "The workspace identifier",
+            requestId,
+          );
+          return await getWorkspaceWorkflowTaskDependencies(
+            supabase,
+            workspaceId,
+          );
+        } catch (error) {
+          console.error(
+            "Workspace API Work Item dependencies query failed",
+            { requestId, error },
+          );
+          throw mapOperationError(
+            error,
+            requestId,
+            "Work Item prerequisites could not be loaded.",
+          );
+        }
+      },
+
       async create(command) {
         validateCreateCommand(workspaceId, command);
 
@@ -4126,6 +4285,51 @@ export function createWorkspaceApplicationApi(
             error,
             command.commandId,
             "The work item status could not be saved.",
+          );
+        }
+      },
+
+      async replaceDependencies(command) {
+        validateReplaceDependenciesCommand(
+          workspaceId,
+          command,
+        );
+
+        try {
+          const { data, error } = await supabase.rpc(
+            "command_replace_engagement_workflow_task_dependencies",
+            {
+              p_workspace_id: workspaceId,
+              p_client_engagement_id:
+                command.clientEngagementId,
+              p_workflow_task_id: command.workItemId,
+              p_expected_updated_at: command.expectedUpdatedAt,
+              p_depends_on_workflow_task_ids:
+                command.prerequisiteIds,
+              p_evaluation_date: getLocalDateKey(
+                command.evaluationDate ?? new Date(),
+              ),
+              p_idempotency_key: command.commandId,
+            },
+          );
+
+          if (error) {
+            throw error;
+          }
+
+          return mapWorkItemDependenciesCommandResult(
+            data,
+            command.commandId,
+          );
+        } catch (error) {
+          console.error(
+            "Workspace API Work Item prerequisites command failed",
+            { requestId: command.commandId, error },
+          );
+          throw mapOperationError(
+            error,
+            command.commandId,
+            "The Work Item prerequisites could not be saved.",
           );
         }
       },
