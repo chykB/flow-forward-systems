@@ -11,6 +11,7 @@ import type {
 
 type WorkflowTaskStatusEditorProps = {
   isSaving: boolean;
+  isWaitingForPrerequisite?: boolean;
   onUpdateStatus: (
     update: WorkflowTaskStatusUpdate,
   ) => Promise<void>;
@@ -35,16 +36,23 @@ const plannedWorkflowStatuses: WorkflowStatus[] = [
 
 export function WorkflowTaskStatusEditor({
   isSaving,
+  isWaitingForPrerequisite = false,
   onUpdateStatus,
   task,
 }: WorkflowTaskStatusEditorProps) {
   const [selectedStatus, setSelectedStatus] =
     useState<WorkflowStatus>(task.status);
   const [message, setMessage] = useState("");
-  const workflowStatuses =
+  const availableWorkflowStatuses =
     task.status === "Planned"
       ? plannedWorkflowStatuses
       : activeWorkflowStatuses;
+  const workflowStatuses = availableWorkflowStatuses.filter(
+    (status) =>
+      !isWaitingForPrerequisite ||
+      !["In progress", "Complete"].includes(status) ||
+      status === task.status,
+  );
 
   async function saveStatus() {
     setMessage("");

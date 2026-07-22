@@ -227,6 +227,12 @@ When this rule is installed, existing nonterminal Work Items assigned to a futur
 
 The current phase order is Lead, Proposal, Onboarding, Delivery, Approval, Payment, and Handoff. Dependencies explain execution order within or across those phases. When an unresolved prerequisite already blocks downstream work, reconciliation reports the prerequisite rather than charging Workflow Health for both rows.
 
+The Work Items UI presents that order as a queue. Items are sorted by phase and then creation time, with the first ready item shown as Current work and later items shown as Up next or Waiting. New nonterminal work automatically depends on the latest unfinished item in the same engagement and same or an earlier phase. Engagements that had no manually configured dependencies are backfilled into the same sequence when this rule is installed.
+
+Manual dependency editing is an advanced operation under Manage work order. Clearing an item's prerequisite set allows it to run in parallel. Existing manually configured engagement graphs are not overwritten by the automatic backfill.
+
+A Work Item with an unresolved prerequisite cannot move to In progress or Complete. It may remain Planned, Not started, Waiting, or Blocked, or be closed as Not needed. Work Item creation is serialized per engagement so concurrent commands cannot choose an inconsistent predecessor.
+
 Replacing a Work Item prerequisite set is one atomic command. Prerequisites must belong to the same engagement and be in the same or an earlier phase. Self-references, duplicate identifiers, dependency cycles, future-phase prerequisites, and stale task versions are rejected. A changed set writes one `Work item dependencies updated` Activity entry and reconciles only the selected engagement; an unchanged set and an idempotent replay create no duplicate Activity effect.
 
 ### Errors and diagnostics
@@ -250,7 +256,7 @@ User-facing errors include the command or query request ID. Console diagnostics 
 | Engagements | workspace engagements | none directly | create/update + Activity | Implemented; primary compatibility bridge active |
 | Follow-ups | workspace completion history | none directly | complete + schedule update + reconciliation + Activity | Implemented for all Active engagements |
 | Client records | workspace records | none directly | create/update + reconciliation + Activity | Implemented in second slice |
-| Work items | workspace work items and dependencies | none directly | engagement-scoped create/status/dependency update + reconciliation + Activity | All Active engagements; Planned, stage, dependency, and cycle guards implemented |
+| Work items | workspace work items and dependencies | none directly | engagement-scoped create/status/dependency update + reconciliation + Activity | Sequential queue default; parallel override, Planned, stage, dependency, and cycle guards implemented |
 | Handoff notes | workspace notes | none directly | engagement-scoped create + Activity | Implemented for all Active engagements |
 | Proposals | workspace/client proposals | none directly | engagement-scoped create/update/recommendation + reconciliation + Activity | Create/update enabled for all Active engagements; recommendation remains primary-only |
 | Invoices | workspace/client invoices | none directly | engagement-scoped create/update/recommendation + reconciliation + Activity | Create/update enabled for all Active engagements; recommendation remains primary-only |

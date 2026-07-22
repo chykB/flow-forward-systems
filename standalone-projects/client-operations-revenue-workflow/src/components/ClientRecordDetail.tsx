@@ -1,5 +1,6 @@
 "use client";
 
+import { ChevronDown } from "lucide-react";
 import { ClientEngagementWorkspace } from "@/components/ClientEngagementWorkspace";
 import { FollowUpCompletionForm } from "@/components/FollowUpCompletionForm";
 import { HandoffNoteForm } from "@/components/HandoffNoteForm";
@@ -46,10 +47,11 @@ import type {
   WorkflowTaskDependency,
 } from "@/lib/client-workflow-types";
 import {
-  getUnresolvedWorkItemPrerequisites,
+  getWorkItemQueueEntries,
   getWorkItemPrerequisiteIds,
   getWorkItemRootBlockers,
 } from "@/lib/work-item-dependencies";
+import type { WorkItemQueueState } from "@/lib/work-item-dependencies";
 import type {
   InvoiceRecordUpdates,
   NewInvoiceRecord,
@@ -165,6 +167,20 @@ const detailTabs: { key: DetailTab; label: string }[] = [
   { key: "handoff", label: "Handoff Notes" },
   { key: "activity", label: "Activity" },
 ];
+
+const queueStateLabels: Record<WorkItemQueueState, string> = {
+  current: "Current work",
+  "up-next": "Up next",
+  waiting: "Waiting",
+  complete: "Complete",
+};
+
+const queueStateClasses: Record<WorkItemQueueState, string> = {
+  current: "bg-[#174F42] text-white",
+  "up-next": "bg-[#EDF3EF] text-[#174F42]",
+  waiting: "bg-amber-50 text-amber-800",
+  complete: "bg-[#F1F3F1] text-[#5F6862]",
+};
 
 function DetailRow({
   label,
@@ -308,6 +324,10 @@ export function ClientRecordDetail({
       ),
   );
   const rootBlockers = getWorkItemRootBlockers(
+    recordTasks,
+    recordTaskDependencies,
+  );
+  const workItemQueue = getWorkItemQueueEntries(
     recordTasks,
     recordTaskDependencies,
   );
@@ -569,8 +589,8 @@ export function ClientRecordDetail({
         <div className="mt-5">
           <h3 className="font-bold">Work Items</h3>
           <p className="mt-2 text-sm leading-6 text-[#5F6862]">
-            Supporting tasks for follow-up, onboarding, delivery,
-            approvals, payments, or handoff.
+            Complete the current item first. Later work becomes ready
+            as earlier steps are finished.
           </p>
 
           {rootBlockers.length > 0 ? (
@@ -607,9 +627,7 @@ export function ClientRecordDetail({
                       </p>
                     </div>
                     <span className="w-fit rounded-md bg-amber-50 px-3 py-2 text-sm font-bold text-amber-800">
-                      {task.status === "Planned"
-                        ? "Planned prerequisite"
-                        : "Resolve first"}
+                      Resolve first
                     </span>
                   </div>
                 ))}
@@ -629,37 +647,35 @@ export function ClientRecordDetail({
             </p>
           ) : (
             <div className="mt-3 grid gap-3">
-              {recordTasks.length > 0 ? (
-                recordTasks.map((task) => {
-                  const unresolvedPrerequisites =
-                    getUnresolvedWorkItemPrerequisites(
-                      task.id,
-                      recordTasks,
-                      recordTaskDependencies,
-                    );
-                  const prerequisiteKey =
-                    getWorkItemPrerequisiteIds(
-                      task.id,
-                      recordTaskDependencies,
-                    )
-                      .sort()
-                      .join(":");
-
-                  return (
+              {workItemQueue.length > 0 ? (
+                workItemQueue.map(
+                  ({
+                    task,
+                    position,
+                    state,
+                    unresolvedPrerequisites,
+                  }) => (
                     <div
                       className="rounded-md border border-[#D9DED8] p-4"
                       key={task.id}
                     >
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                       <div>
+                        <p className="text-xs font-bold uppercase text-[#5F6862]">
+                          Step {position}
+                        </p>
                         <p className="font-bold">{task.title}</p>
                         <p className="mt-1 text-sm text-[#5F6862]">
                           {task.phase} phase | {task.type} | {task.owner}
                         </p>
                       </div>
-                      <p className="text-sm font-bold text-[#174F42]">
-                        {task.status}
-                      </p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span
+                          className={`rounded-md px-3 py-2 text-sm font-bold ${queueStateClasses[state]}`}
+                        >
+                          {queueStateLabels[state]}
+                        </span>
+                      </div>
                     </div>
                     <p className="mt-2 text-sm text-[#5F6862]">
                       Due: {task.dueDate} | Criticality:{" "}
@@ -677,11 +693,50 @@ export function ClientRecordDetail({
                         updatingTaskId === task.id ||
                         updatingTaskDependenciesId === task.id
                       }
+                      isWaitingForPrerequisite={
+                        unresolvedPrerequisites.length > 0
+                      }
                       onUpdateStatus={(update) =>
                         onUpdateTaskStatus(task.id, update)
                       }
                       task={task}
                     />
+                  </div>
+                  ),
+                )
+              ) : (
+                <p className="rounded-md bg-[#EDF3EF] p-4 text-[#5F6862]">
+                  No work items added yet.
+                </p>
+              )}
+            </div>
+          )}
+
+          {workItemQueue.length > 1 ? (
+            <details className="group mt-4 border-y border-[#D9DED8] py-4">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-bold text-[#174F42]">
+                <span>Manage work order</span>
+                <ChevronDown
+                  aria-hidden="true"
+                  className="transition-transform group-open:rotate-180"
+                  size={20}
+                />
+              </summary>
+              <p className="mt-2 text-sm leading-6 text-[#5F6862]">
+                Work is sequential by default. Adjust an item only when
+                it can run in parallel or must wait for a different step.
+              </p>
+              <div className="mt-3 divide-y divide-[#D9DED8]">
+                {workItemQueue.map(({ task }) => {
+                  const prerequisiteKey =
+                    getWorkItemPrerequisiteIds(
+                      task.id,
+                      recordTaskDependencies,
+                    )
+                      .sort()
+                      .join(":");
+
+                  return (
                     <WorkflowTaskDependencyEditor
                       dependencies={recordTaskDependencies}
                       isSaving={
@@ -698,16 +753,11 @@ export function ClientRecordDetail({
                       task={task}
                       tasks={recordTasks}
                     />
-                  </div>
                   );
-                })
-              ) : (
-                <p className="rounded-md bg-[#EDF3EF] p-4 text-[#5F6862]">
-                  No work items added yet.
-                </p>
-              )}
-            </div>
-          )}
+                })}
+              </div>
+            </details>
+          ) : null}
 
           <WorkflowTaskForm
             clientWorkflowRecordId={record.id}

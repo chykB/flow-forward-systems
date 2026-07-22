@@ -1408,6 +1408,17 @@ function WorkspaceDashboard({
         ...currentTasks,
       ]);
 
+      try {
+        const refreshedDependencies =
+          await workspaceApi.workItems.listDependencies();
+        setWorkflowTaskDependencies(refreshedDependencies);
+      } catch (dependencyError) {
+        console.error(
+          "Work Item order refresh failed after create",
+          dependencyError,
+        );
+      }
+
       applyRiskReconciliation(result.reconciliation);
       setRiskSignalsStatus("ready");
       setRiskSignalsMessage("");

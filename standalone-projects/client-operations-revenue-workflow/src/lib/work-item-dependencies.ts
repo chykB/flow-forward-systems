@@ -24,8 +24,44 @@ export type WorkItemRootBlocker = {
   impactedTasks: WorkflowTask[];
 };
 
+export type WorkItemQueueState =
+  | "current"
+  | "up-next"
+  | "waiting"
+  | "complete";
+
+export type WorkItemQueueEntry = {
+  task: WorkflowTask;
+  position: number;
+  state: WorkItemQueueState;
+  unresolvedPrerequisites: WorkflowTask[];
+};
+
 export function isWorkItemComplete(task: WorkflowTask) {
   return completedStatuses.has(task.status);
+}
+
+export function sortWorkItemsInSequence(
+  tasks: WorkflowTask[],
+) {
+  return [...tasks].sort((left, right) => {
+    const phaseDifference =
+      phaseRank[left.phase] - phaseRank[right.phase];
+
+    if (phaseDifference !== 0) {
+      return phaseDifference;
+    }
+
+    const createdDifference = left.createdAt.localeCompare(
+      right.createdAt,
+    );
+
+    if (createdDifference !== 0) {
+      return createdDifference;
+    }
+
+    return left.id.localeCompare(right.id);
+  });
 }
 
 export function getWorkItemPrerequisiteIds(
@@ -82,12 +118,57 @@ export function getEligibleWorkItemPrerequisites(
   tasks: WorkflowTask[],
   dependencies: WorkflowTaskDependency[],
 ) {
-  return tasks.filter(
-    (candidate) =>
-      candidate.id !== task.id &&
-      phaseRank[candidate.phase] <= phaseRank[task.phase] &&
-      !reachesTask(candidate.id, task.id, dependencies),
+  const orderedTasks = sortWorkItemsInSequence(tasks);
+  const taskIndex = orderedTasks.findIndex(
+    (candidate) => candidate.id === task.id,
   );
+  const existingPrerequisiteIds = new Set(
+    getWorkItemPrerequisiteIds(task.id, dependencies),
+  );
+
+  return orderedTasks.filter((candidate, candidateIndex) => {
+    const isEarlierInSequence =
+      taskIndex >= 0 && candidateIndex < taskIndex;
+
+    return (
+      candidate.id !== task.id &&
+      (isEarlierInSequence ||
+        existingPrerequisiteIds.has(candidate.id)) &&
+      phaseRank[candidate.phase] <= phaseRank[task.phase] &&
+      !reachesTask(candidate.id, task.id, dependencies)
+    );
+  });
+}
+
+export function getDefaultWorkItemPrerequisite(
+  task: WorkflowTask,
+  tasks: WorkflowTask[],
+  dependencies: WorkflowTaskDependency[],
+) {
+  const orderedTasks = sortWorkItemsInSequence(tasks);
+  const taskIndex = orderedTasks.findIndex(
+    (candidate) => candidate.id === task.id,
+  );
+  const eligibleIds = new Set(
+    getEligibleWorkItemPrerequisites(
+      task,
+      tasks,
+      dependencies,
+    ).map((candidate) => candidate.id),
+  );
+
+  for (let index = taskIndex - 1; index >= 0; index -= 1) {
+    const candidate = orderedTasks[index];
+
+    if (
+      eligibleIds.has(candidate.id) &&
+      !isWorkItemComplete(candidate)
+    ) {
+      return candidate;
+    }
+  }
+
+  return null;
 }
 
 export function getUnresolvedWorkItemPrerequisites(
@@ -103,6 +184,49 @@ export function getUnresolvedWorkItemPrerequisites(
       (task): task is WorkflowTask =>
         Boolean(task) && !isWorkItemComplete(task as WorkflowTask),
     );
+}
+
+export function getWorkItemQueueEntries(
+  tasks: WorkflowTask[],
+  dependencies: WorkflowTaskDependency[],
+): WorkItemQueueEntry[] {
+  const orderedTasks = sortWorkItemsInSequence(tasks);
+  const unresolvedByTask = new Map<string, WorkflowTask[]>(
+    orderedTasks.map((task) => [
+      task.id,
+      getUnresolvedWorkItemPrerequisites(
+        task.id,
+        orderedTasks,
+        dependencies,
+      ),
+    ]),
+  );
+  const currentTask = orderedTasks.find(
+    (task) =>
+      !isWorkItemComplete(task) &&
+      (unresolvedByTask.get(task.id) ?? []).length === 0,
+  );
+
+  return orderedTasks.map((task, index) => {
+    const unresolvedPrerequisites =
+      unresolvedByTask.get(task.id) ?? [];
+    let state: WorkItemQueueState = "up-next";
+
+    if (isWorkItemComplete(task)) {
+      state = "complete";
+    } else if (unresolvedPrerequisites.length > 0) {
+      state = "waiting";
+    } else if (task.id === currentTask?.id) {
+      state = "current";
+    }
+
+    return {
+      task,
+      position: index + 1,
+      state,
+      unresolvedPrerequisites,
+    };
+  });
 }
 
 export function getWorkItemRootBlockers(
@@ -143,6 +267,9 @@ export function getWorkItemRootBlockers(
   }
 
   return [...blockerIds]
+    .filter(
+      (taskId) => taskById.get(taskId)?.status === "Blocked",
+    )
     .filter(
       (taskId) =>
         getUnresolvedWorkItemPrerequisites(
