@@ -23,6 +23,7 @@ import type {
   NewProposalRecord,
   NewWorkflowTask,
   ProposalRecordUpdates,
+  RiskSignalStatusUpdate,
   WorkflowTaskStatusUpdate,
 } from "@/lib/application/workspace-api";
 import type {
@@ -46,10 +47,6 @@ import type {
   InvoiceRecordUpdates,
   NewInvoiceRecord,
 } from "@/lib/application/workspace-api";
-import type {
-  RiskSignalStatusUpdate,
-} from "@/lib/supabase/risk-signals";
-
 export type DetailTab =
   | "overview"
   | "workflow-health"

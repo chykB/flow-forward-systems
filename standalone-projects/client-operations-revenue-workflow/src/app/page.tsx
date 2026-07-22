@@ -38,6 +38,7 @@ import {
   type NewProposalRecord,
   type NewWorkflowTask,
   type ProposalRecordUpdates,
+  type RiskSignalStatusUpdate,
   type WorkflowTaskStatusUpdate,
 } from "@/lib/application/workspace-api";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser-client";
@@ -82,8 +83,6 @@ import {
 } from "@/lib/record-filters";
 import {
   reconcileClientRiskSignals,
-  updateRiskSignalStatus,
-  type RiskSignalStatusUpdate,
 } from "@/lib/supabase/risk-signals";
 function getRelatedClientRecords(
   records: ClientWorkflowRecord[],
@@ -1622,58 +1621,26 @@ function WorkspaceDashboard({
     setRiskSignalsMessage("");
 
     try {
-      const savedSignal = await updateRiskSignalStatus(
-        supabase,
-        workspaceId,
+      const command = {
+        commandId: createOperationRequestId(),
+        clientEngagementId:
+          existingSignal.clientEngagementId,
         riskSignalId,
-        update,
-      );
+        expectedUpdatedAt: existingSignal.updatedAt,
+        evaluationDate: new Date(),
+      };
+      const result =
+        update.status === "Reviewed"
+          ? await workspaceApi.riskSignals.review(command)
+          : await workspaceApi.riskSignals.dismiss({
+              ...command,
+              resolutionNote: update.resolutionNote,
+            });
 
-      setRiskSignals((currentSignals) =>
-        currentSignals.map((signal) =>
-          signal.id === savedSignal.id
-            ? savedSignal
-            : signal,
-        ),
-      );
-
-      try {
-        const result = await reconcileClientRiskSignals(
-          supabase,
-          workspaceId,
-          savedSignal.clientWorkflowRecordId,
-          savedSignal.clientEngagementId,
-        );
-
-        applyRiskReconciliation(result);
-        setRiskSignalsStatus("ready");
-
-        if (result.changed) {
-          await refreshActivityHistory();
-        }
-
-        const reconciledSignal = result.riskSignals.find(
-          (signal) => signal.id === savedSignal.id,
-        );
-
-        if (
-          update.status === "Resolved" &&
-          reconciledSignal?.status === "Open"
-        ) {
-          setRiskSignalsMessage(
-            "This risk remains open because the underlying issue is still present. Complete the recommended next step before resolving it.",
-          );
-        }
-      } catch (error) {
-        console.error(
-          "Workflow health refresh after review failed",
-          error,
-        );
-        setRiskSignalsStatus("error");
-        setRiskSignalsMessage(
-          "The review was saved, but the health score could not be refreshed. Refresh and try again.",
-        );
-      }
+      applyRiskReconciliation(result.reconciliation);
+      setRiskSignalsStatus("ready");
+      setRiskSignalsMessage("");
+      await refreshActivityHistory();
     } catch (error) {
       const riskError =
         error instanceof Error

@@ -8,7 +8,7 @@ import type {
 import { formatDateTime } from "@/lib/format-date";
 import type {
   RiskSignalStatusUpdate,
-} from "@/lib/supabase/risk-signals";
+} from "@/lib/application/workspace-api";
 import {
   getRiskSignalStatusLabel,
   getRiskSignalTypeLabel,

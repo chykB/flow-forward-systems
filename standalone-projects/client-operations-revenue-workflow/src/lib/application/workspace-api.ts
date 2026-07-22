@@ -7,6 +7,7 @@ import type {
   HandoffNote,
   InvoiceRecord,
   ProposalRecord,
+  RiskSignal,
   WorkItemPhase,
   WorkflowTask,
 } from "@/lib/client-workflow-types";
@@ -19,7 +20,10 @@ import type {
   ProposalWorkflowUpdates,
 } from "@/lib/proposal-workflow";
 import {
+  getWorkspaceRiskSignals,
+  mapRiskSignalRow,
   mapRiskSignalReconciliationResult,
+  type RiskSignalRow,
   type RiskSignalReconciliationResult,
 } from "@/lib/supabase/risk-signals";
 import {
@@ -242,6 +246,22 @@ export type InvoiceRecommendationCommandResult =
     alreadyApplied: boolean;
   };
 
+export type RiskSignalStatusUpdate =
+  | {
+      status: "Reviewed";
+      resolutionNote?: never;
+    }
+  | {
+      status: "Dismissed";
+      resolutionNote: string;
+    };
+
+export type RiskSignalCommandResult = {
+  requestId: string;
+  riskSignal: RiskSignal;
+  reconciliation: RiskSignalReconciliationResult;
+};
+
 export type CreateHandoffNoteCommand = {
   commandId: string;
   clientEngagementId: string;
@@ -353,6 +373,19 @@ export type CompleteFollowUpCommand = {
   evaluationDate?: Date;
 };
 
+export type ReviewRiskSignalCommand = {
+  commandId: string;
+  clientEngagementId: string;
+  riskSignalId: string;
+  expectedUpdatedAt: string;
+  evaluationDate?: Date;
+};
+
+export type DismissRiskSignalCommand =
+  ReviewRiskSignalCommand & {
+    resolutionNote: string;
+  };
+
 export type WorkspaceApplicationApi = {
   engagements: {
     list: () => Promise<ClientEngagement[]>;
@@ -407,6 +440,15 @@ export type WorkspaceApplicationApi = {
     applyRecommendation: (
       command: ApplyInvoiceRecommendationCommand,
     ) => Promise<InvoiceRecommendationCommandResult>;
+  };
+  riskSignals: {
+    list: () => Promise<RiskSignal[]>;
+    review: (
+      command: ReviewRiskSignalCommand,
+    ) => Promise<RiskSignalCommandResult>;
+    dismiss: (
+      command: DismissRiskSignalCommand,
+    ) => Promise<RiskSignalCommandResult>;
   };
   workItems: {
     list: () => Promise<WorkflowTask[]>;
@@ -477,6 +519,12 @@ type InvoiceRecommendationCommandRpcResult =
     clientRecord: ClientWorkflowRecordRow;
     alreadyApplied: boolean;
   };
+
+type RiskSignalCommandRpcResult = {
+  requestId: string;
+  riskSignal: RiskSignalRow;
+  reconciliation: unknown;
+};
 
 const engagementWorkflowStatuses = new Set<
   WorkflowTask["status"]
@@ -1084,6 +1132,34 @@ function mapInvoiceRecommendationCommandResult(
       result.clientRecord,
     ),
     alreadyApplied: result.alreadyApplied,
+    reconciliation: mapRiskSignalReconciliationResult(
+      result.reconciliation,
+    ),
+  };
+}
+
+function mapRiskSignalCommandResult(
+  data: unknown,
+  expectedRequestId: string,
+): RiskSignalCommandResult {
+  const result = data as RiskSignalCommandRpcResult | null;
+
+  if (
+    !result?.requestId ||
+    result.requestId !== expectedRequestId ||
+    !result.riskSignal ||
+    !result.reconciliation
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_response",
+      "The risk review returned an invalid response.",
+      expectedRequestId,
+    );
+  }
+
+  return {
+    requestId: result.requestId,
+    riskSignal: mapRiskSignalRow(result.riskSignal),
     reconciliation: mapRiskSignalReconciliationResult(
       result.reconciliation,
     ),
@@ -3005,6 +3081,67 @@ function normalizeInvoiceWorkflowUpdates(
   ) as InvoiceWorkflowUpdates;
 }
 
+function validateRiskSignalCommand(
+  workspaceId: string,
+  command: ReviewRiskSignalCommand,
+) {
+  assertRequestId(command.commandId);
+  assertUuid(
+    workspaceId,
+    "The workspace identifier",
+    command.commandId,
+  );
+  assertUuid(
+    command.clientEngagementId,
+    "The engagement identifier",
+    command.commandId,
+  );
+  assertUuid(
+    command.riskSignalId,
+    "The risk signal identifier",
+    command.commandId,
+  );
+
+  if (
+    !timestampPattern.test(command.expectedUpdatedAt) ||
+    Number.isNaN(Date.parse(command.expectedUpdatedAt))
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "The expected risk version is invalid.",
+      command.commandId,
+    );
+  }
+}
+
+function validateDismissRiskSignalCommand(
+  workspaceId: string,
+  command: DismissRiskSignalCommand,
+) {
+  validateRiskSignalCommand(workspaceId, command);
+
+  if (typeof command.resolutionNote !== "string") {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "The dismissal reason must be text.",
+      command.commandId,
+    );
+  }
+
+  assertMinimumText(
+    command.resolutionNote,
+    5,
+    "Add a short reason for dismissing this issue.",
+    command.commandId,
+  );
+  assertMaximumText(
+    command.resolutionNote,
+    1000,
+    "Keep the dismissal reason under 1,000 characters.",
+    command.commandId,
+  );
+}
+
 function validateStatusCommand(
   workspaceId: string,
   command: UpdateWorkItemStatusCommand,
@@ -3763,6 +3900,121 @@ export function createWorkspaceApplicationApi(
             error,
             command.commandId,
             "The recommended invoice step could not be applied.",
+          );
+        }
+      },
+    },
+    riskSignals: {
+      async list() {
+        const requestId = createOperationRequestId();
+
+        try {
+          assertUuid(
+            workspaceId,
+            "The workspace identifier",
+            requestId,
+          );
+          return await getWorkspaceRiskSignals(
+            supabase,
+            workspaceId,
+          );
+        } catch (error) {
+          console.error(
+            "Workspace API risk signal query failed",
+            { requestId, error },
+          );
+          throw mapOperationError(
+            error,
+            requestId,
+            "Workflow risks could not be loaded.",
+          );
+        }
+      },
+
+      async review(command) {
+        validateRiskSignalCommand(workspaceId, command);
+
+        try {
+          const { data, error } = await supabase.rpc(
+            "command_update_engagement_risk_signal_review",
+            {
+              p_workspace_id: workspaceId,
+              p_client_engagement_id:
+                command.clientEngagementId,
+              p_risk_signal_id: command.riskSignalId,
+              p_expected_updated_at: command.expectedUpdatedAt,
+              p_action: "review",
+              p_resolution_note: null,
+              p_evaluation_date: getLocalDateKey(
+                command.evaluationDate ?? new Date(),
+              ),
+              p_idempotency_key: command.commandId,
+            },
+          );
+
+          if (error) {
+            throw error;
+          }
+
+          return mapRiskSignalCommandResult(
+            data,
+            command.commandId,
+          );
+        } catch (error) {
+          console.error(
+            "Workspace API risk review failed",
+            { requestId: command.commandId, error },
+          );
+          throw mapOperationError(
+            error,
+            command.commandId,
+            "The risk could not be marked as reviewed.",
+          );
+        }
+      },
+
+      async dismiss(command) {
+        validateDismissRiskSignalCommand(
+          workspaceId,
+          command,
+        );
+
+        try {
+          const { data, error } = await supabase.rpc(
+            "command_update_engagement_risk_signal_review",
+            {
+              p_workspace_id: workspaceId,
+              p_client_engagement_id:
+                command.clientEngagementId,
+              p_risk_signal_id: command.riskSignalId,
+              p_expected_updated_at: command.expectedUpdatedAt,
+              p_action: "dismiss",
+              p_resolution_note:
+                command.resolutionNote.trim(),
+              p_evaluation_date: getLocalDateKey(
+                command.evaluationDate ?? new Date(),
+              ),
+              p_idempotency_key: command.commandId,
+            },
+          );
+
+          if (error) {
+            throw error;
+          }
+
+          return mapRiskSignalCommandResult(
+            data,
+            command.commandId,
+          );
+        } catch (error) {
+          console.error(
+            "Workspace API risk dismissal failed",
+            { requestId: command.commandId, error },
+          );
+          throw mapOperationError(
+            error,
+            command.commandId,
+            "The risk could not be dismissed.",
           );
         }
       },

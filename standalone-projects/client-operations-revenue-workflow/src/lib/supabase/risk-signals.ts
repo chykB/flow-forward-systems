@@ -30,11 +30,6 @@ export type RiskSignalRow = {
   updated_at: string;
 };
 
-export type RiskSignalStatusUpdate = {
-  status: RiskSignal["status"];
-  resolutionNote?: string;
-};
-
 export function mapRiskSignalRow(
   row: RiskSignalRow,
 ): RiskSignal {
@@ -75,45 +70,6 @@ export async function getWorkspaceRiskSignals(
   }
 
   return (data as RiskSignalRow[]).map(mapRiskSignalRow);
-}
-
-export async function updateRiskSignalStatus(
-  supabase: SupabaseClient,
-  workspaceId: string,
-  riskSignalId: string,
-  update: RiskSignalStatusUpdate,
-) {
-  const isClosing =
-    update.status === "Resolved" ||
-    update.status === "Dismissed";
-  const resolutionNote = update.resolutionNote?.trim() ?? "";
-
-  if (isClosing && resolutionNote.length < 5) {
-    throw new Error(
-      "Add a short note explaining how this risk signal was closed.",
-    );
-  }
-
-  const { data, error } = await supabase
-    .from("risk_signals")
-    .update({
-      status: update.status,
-      resolution_note: isClosing ? resolutionNote : null,
-    })
-    .eq("workspace_id", workspaceId)
-    .eq("id", riskSignalId)
-    .select("*")
-    .single();
-
-  if (error) {
-    console.error(
-      "Supabase risk signal status update failed",
-      error,
-    );
-    throw new Error(error.message);
-  }
-
-  return mapRiskSignalRow(data as RiskSignalRow);
 }
 
 type RiskSignalReconciliationRpcResult = {

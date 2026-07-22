@@ -2,7 +2,7 @@
 
 Status: Active technical contract
 
-Implemented slices: Work items, client records, follow-up completion, handoff notes, proposals, invoices, engagement ownership, engagement-scoped risk, and sequential Work Item controls
+Implemented slices: Work items, client records, follow-up completion, handoff notes, proposals, invoices, engagement ownership, engagement-scoped risk review, and sequential Work Item controls
 
 Public API status: None of the interfaces or database functions in this document are a versioned customer API.
 
@@ -50,6 +50,10 @@ The manual and rules-based product remains fully operational without an AI provi
 - `invoices.update(command)`
 - `invoices.applyRecommendation(command)`
 
+- `riskSignals.list()`
+- `riskSignals.review(command)`
+- `riskSignals.dismiss(command)`
+
 - `workItems.list()`
 - `workItems.create(command)`
 - `workItems.updateStatus(command)`
@@ -93,6 +97,8 @@ The current function names are:
 - `command_create_engagement_invoice_record`
 - `command_update_engagement_invoice_record`
 - `command_apply_engagement_invoice_workflow_recommendation`
+
+- `command_update_engagement_risk_signal_review`
 
 - `command_create_engagement_workflow_task`
 - `command_update_engagement_workflow_task_status`
@@ -176,9 +182,11 @@ Invoice creation and update validate:
 
 Invoice recommendation application accepts only payment status, priority, next action, and next follow-up date. Relationship concern cannot be changed by an Invoice recommendation. The command verifies the expected Invoice status and remains restricted to the primary compatibility engagement until those workflow updates are engagement-owned.
 
+Risk review accepts only two human decisions. Marking an Open signal as Reviewed acknowledges it while leaving the issue active and Workflow Health unchanged. Dismissing an Open or Reviewed signal requires a reason, closes that signal, recalculates only the selected engagement, and mirrors health to the compatibility Client Record only for the primary engagement. Generated signals cannot be manually marked Resolved; the source-specific workflow command must remove the underlying condition.
+
 ### Optimistic concurrency
 
-Work-item status updates include `expectedStatus`. Client-record, engagement, follow-up completion, Proposal, and Invoice updates include `expectedUpdatedAt`. The database refreshes those concurrency tokens with wall-clock time on every update, including multiple updates within one transaction. Proposal and Invoice recommendation application include `expectedStatus`. If another command changes an entity first, the command returns a conflict instead of overwriting newer data.
+Work-item status updates include `expectedStatus`. Client-record, engagement, follow-up completion, Proposal, Invoice, and risk-review updates include `expectedUpdatedAt`. The database refreshes those concurrency tokens with wall-clock time on every update, including multiple updates within one transaction. Proposal and Invoice recommendation application include `expectedStatus`. If another command changes an entity first, the command returns a conflict instead of overwriting newer data.
 
 ### Idempotency
 
@@ -205,6 +213,8 @@ Creating or updating a Proposal writes exactly one user-facing Proposal Activity
 Creating or updating an Invoice writes exactly one user-facing Invoice Activity entry and reconciles payment risks in the same transaction. Dispute transitions record whether a dispute was opened or resolved while database triggers own its timestamps and resolution rules. Applying an Invoice recommendation writes exactly one `Invoice payment step applied` entry when the recommendation is newly applied. An idempotent replay creates no duplicate Invoice, dispute, recommendation, risk, health, or Activity effects.
 
 Risk reconciliation is engagement-scoped and deterministic. Each engagement owns its signals and score; only the primary engagement mirrors its score to the compatibility Client Record summary. An unresolved prerequisite suppresses duplicate downstream Work Item risk, while the root issue remains actionable. Reconciliation may write `Workflow risk review updated` for the affected engagement when active issues or Workflow Health change.
+
+Risk review writes one `Risk marked reviewed` or `Risk dismissed` Activity entry for the selected engagement. Review keeps the signal in the active health calculation. Dismissal removes it from that calculation without pretending the source condition was completed. An idempotent replay creates no duplicate status, health, or Activity effects.
 
 ### Sequential Work Item rules
 
@@ -239,12 +249,12 @@ User-facing errors include the command or query request ID. Console diagnostics 
 | Handoff notes | workspace notes | none directly | engagement-scoped create + Activity | Implemented for all Active engagements |
 | Proposals | workspace/client proposals | none directly | engagement-scoped create/update/recommendation + reconciliation + Activity | Create/update enabled for all Active engagements; recommendation remains primary-only |
 | Invoices | workspace/client invoices | none directly | engagement-scoped create/update/recommendation + reconciliation + Activity | Create/update enabled for all Active engagements; recommendation remains primary-only |
-| Risk signals | workspace risk history | review status | engagement reconciliation | Engagement score isolation and primary summary mirror implemented; review command facade pending |
-| Activity | workspace history | direct inserts from legacy flows | command-owned audit writes | Client-record, work-item, handoff-note, Proposal, and Invoice audit implemented; other flows pending |
+| Risk signals | workspace risk history | none directly | engagement-scoped review/dismiss + isolated health + Activity | Implemented; source-driven resolution remains separate |
+| Activity | workspace history | direct inserts from legacy flows | command-owned audit writes | Client-record, work-item, handoff-note, Proposal, Invoice, and risk-review audit implemented; other flows pending |
 
 ## Assistant Eligibility
 
-The engagement, follow-up, client-record, work-item, handoff-note, Proposal, and Invoice commands are structurally suitable for a future protected assistant tool, but they are not exposed to an assistant yet. Assistant enablement also requires:
+The engagement, follow-up, client-record, work-item, handoff-note, Proposal, Invoice, and risk-review commands are structurally suitable for a future protected assistant tool, but they are not exposed to an assistant yet. Assistant enablement also requires:
 
 - explicit per-tool policy and plan entitlements;
 - user confirmation for consequential changes;
@@ -261,5 +271,4 @@ The assistant should use the same application command contract as the manual UI 
 2. Add dependency editing and a focused root-blocker view to the Work Item UI.
 3. Replace the primary-only Proposal recommendation with an engagement-owned recommendation update.
 4. Replace the primary-only Invoice recommendation with an engagement-owned recommendation update.
-5. Move risk review status changes behind an engagement-scoped command.
-6. Add a protected server tool layer only after the manual command surface is complete and tested.
+5. Add a protected server tool layer only after the manual command surface is complete and tested.
