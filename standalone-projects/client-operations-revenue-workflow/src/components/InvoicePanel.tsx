@@ -27,6 +27,7 @@ type InvoicePanelProps = {
   errorMessage: string;
   invoices: InvoiceRecord[];
   isLoading: boolean;
+  isReadOnly: boolean;
   isSaving: boolean;
   record: ClientWorkflowRecord;
   isApplyingRecommendation: boolean;
@@ -80,6 +81,7 @@ function InvoiceHistoryItem({
   invoice,
   isApplyingRecommendation,
   isPrimaryRecommendation,
+  isReadOnly,
   isSaving,
   onApplyRecommendation,
   onUpdate,
@@ -88,6 +90,7 @@ function InvoiceHistoryItem({
   invoice: InvoiceRecord;
   isApplyingRecommendation: boolean;
   isPrimaryRecommendation: boolean;
+  isReadOnly: boolean;
   isSaving: boolean;
   onApplyRecommendation: (
     invoice: InvoiceRecord,
@@ -210,21 +213,22 @@ function InvoiceHistoryItem({
           Open payment link
         </a>
       ) : null}
-      {isPrimaryRecommendation ? (
-    <InvoiceWorkflowRecommendation
-        invoice={invoice}
-        isApplying={isApplyingRecommendation}
-        onApply={onApplyRecommendation}
-        record={record}
-    />
-    ) : null}
+      {!isReadOnly && isPrimaryRecommendation ? (
+        <InvoiceWorkflowRecommendation
+          invoice={invoice}
+          isApplying={isApplyingRecommendation}
+          onApply={onApplyRecommendation}
+          record={record}
+        />
+      ) : null}
 
-      <div className="mt-4">
-        <button
+      {!isReadOnly ? (
+        <div className="mt-4">
+          <button
             className="rounded-md border border-[#174F42] px-4 py-2 font-bold text-[#174F42] hover:bg-[#EDF3EF]"
             type="button"
             onClick={() => setIsEditing((current) => !current)}
-        >
+          >
             {isEditing
               ? invoice.status === "Disputed"
                 ? "Close Resolution"
@@ -232,16 +236,17 @@ function InvoiceHistoryItem({
               : invoice.status === "Disputed"
                 ? "Resolve Dispute"
                 : "Update Invoice"}
-        </button>
+          </button>
 
-        {isEditing ? (
+          {isEditing ? (
             <InvoiceStatusEditor
-            invoice={invoice}
-            isSaving={isSaving || isApplyingRecommendation}
-            onUpdate={onUpdate}
+              invoice={invoice}
+              isSaving={isSaving || isApplyingRecommendation}
+              onUpdate={onUpdate}
             />
-        ) : null}
+          ) : null}
         </div>
+      ) : null}
     </article>
   );
 }
@@ -251,6 +256,7 @@ export function InvoicePanel({
   errorMessage,
   invoices,
   isLoading,
+  isReadOnly,
   isSaving,
   onCreate,
   onUpdate,
@@ -280,13 +286,15 @@ export function InvoicePanel({
           </p>
         </div>
 
-        <button
-          className="shrink-0 rounded-md bg-[#174F42] px-5 py-3 font-bold text-white hover:bg-[#1F6F5B]"
-          type="button"
-          onClick={() => setIsFormOpen((current) => !current)}
-        >
-          {isFormOpen ? "Close Form" : "Add Invoice"}
-        </button>
+        {!isReadOnly ? (
+          <button
+            className="shrink-0 rounded-md bg-[#174F42] px-5 py-3 font-bold text-white hover:bg-[#1F6F5B]"
+            type="button"
+            onClick={() => setIsFormOpen((current) => !current)}
+          >
+            {isFormOpen ? "Close Form" : "Add Invoice"}
+          </button>
+        ) : null}
       </div>
 
       {errorMessage ? (
@@ -295,7 +303,7 @@ export function InvoicePanel({
         </p>
       ) : null}
 
-      {isFormOpen ? (
+      {!isReadOnly && isFormOpen ? (
         <div className="mt-5">
           <InvoiceForm
             clientWorkflowRecordId={clientWorkflowRecordId}
@@ -323,6 +331,7 @@ export function InvoicePanel({
                 showWorkflowRecommendations &&
                 primaryInvoice?.id === invoice.id
               }
+              isReadOnly={isReadOnly}
               isSaving={isSaving}
               key={invoice.id}
               onApplyRecommendation={onApplyRecommendation}

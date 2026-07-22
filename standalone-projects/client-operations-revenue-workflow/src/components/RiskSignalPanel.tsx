@@ -19,6 +19,7 @@ import {
 type Props = {
   errorMessage: string;
   isLoading: boolean;
+  isReadOnly: boolean;
   isSaving: boolean;
   onOpenSource: (signal: RiskSignal) => void;
   onUpdateStatus: (
@@ -64,6 +65,7 @@ function getSourceActionLabel(signal: RiskSignal) {
 export function RiskSignalPanel({
   errorMessage,
   isLoading,
+  isReadOnly,
   isSaving,
   onOpenSource,
   onUpdateStatus,
@@ -111,9 +113,9 @@ export function RiskSignalPanel({
           Workflow Health
         </h3>
         <p className="mt-2 leading-7 text-[#5F6862]">
-          Open the source of each issue and complete the work that
-          clears it. Generated issues close automatically when the
-          underlying condition changes.
+          {isReadOnly
+            ? "Review the health history recorded for this job."
+            : "Open the source of each issue and complete the work that clears it. Generated issues close automatically when the underlying condition changes."}
         </p>
       </div>
 
@@ -195,14 +197,17 @@ export function RiskSignalPanel({
 
                 <div className="mt-4 border-l-4 border-[#174F42] pl-4">
                   <p className="text-sm font-bold text-[#17201C]">
-                    Recommended next step
+                    {isReadOnly
+                      ? "Recorded next step"
+                      : "Recommended next step"}
                   </p>
                   <p className="mt-1 leading-7 text-[#5F6862]">
                     {signal.recommendedAction}
                   </p>
                 </div>
 
-                <div className="mt-4 flex flex-wrap gap-2">
+                {!isReadOnly ? (
+                  <div className="mt-4 flex flex-wrap gap-2">
                   <button
                     className="rounded-md bg-[#174F42] px-4 py-2 font-bold text-white disabled:opacity-60"
                     disabled={isSaving}
@@ -237,9 +242,10 @@ export function RiskSignalPanel({
                   >
                     Dismiss
                   </button>
-                </div>
+                  </div>
+                ) : null}
 
-                {isDismissing ? (
+                {!isReadOnly && isDismissing ? (
                   <form
                     className="mt-4 grid gap-3 border-t border-[#D9DED8] pt-4"
                     onSubmit={(event) => {

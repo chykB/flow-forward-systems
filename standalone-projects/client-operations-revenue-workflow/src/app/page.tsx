@@ -426,6 +426,27 @@ function WorkspaceDashboard({
   );
 
   const recordOwners = useMemo(() => getRecordOwners(records), [records]);
+  const primaryEngagementByRecordId = useMemo(() => {
+    const engagementByRecordId = new Map<
+      string,
+      ClientEngagement
+    >();
+
+    engagements.forEach((engagement) => {
+      const currentEngagement = engagementByRecordId.get(
+        engagement.clientWorkflowRecordId,
+      );
+
+      if (!currentEngagement || engagement.isPrimary) {
+        engagementByRecordId.set(
+          engagement.clientWorkflowRecordId,
+          engagement,
+        );
+      }
+    });
+
+    return engagementByRecordId;
+  }, [engagements]);
 
   const prioritySections = useMemo(
     () =>
@@ -2533,6 +2554,9 @@ function WorkspaceDashboard({
 
                     {filteredRecords.map((record) => (
                       <ClientRecordCard
+                        engagement={primaryEngagementByRecordId.get(
+                          record.id,
+                        )}
                         isSelected={
                           record.id === selectedRecord?.id
                         }

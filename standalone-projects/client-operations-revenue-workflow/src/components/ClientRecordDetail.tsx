@@ -234,6 +234,30 @@ function getRiskClasses(
   return "bg-[#EDF3EF] text-[#174F42]";
 }
 
+function ClosedEngagementNotice({
+  status,
+}: {
+  status: ClientEngagement["engagementStatus"];
+}) {
+  const statusLabel =
+    status === "Completed" ? "complete" : "cancelled";
+
+  return (
+    <div
+      className="mt-5 border-y border-[#D9DED8] bg-[#F7F9F7] px-4 py-3"
+      role="status"
+    >
+      <p className="font-bold text-[#17201C]">
+        This job is {statusLabel}
+      </p>
+      <p className="mt-1 text-sm leading-6 text-[#5F6862]">
+        Its workflow history remains available, but changes to this
+        job are locked.
+      </p>
+    </div>
+  );
+}
+
 export function ClientRecordDetail({
   activeTab,
   onTabChange,
@@ -309,6 +333,16 @@ export function ClientRecordDetail({
     updatedAt: selectedEngagement.updatedAt,
   };
 
+  const isEngagementReadOnly =
+    selectedEngagement.engagementStatus !== "Active";
+  const visibleDetailTabs = isEngagementReadOnly
+    ? detailTabs.filter((tab) => tab.key !== "next-action")
+    : detailTabs;
+  const visibleActiveTab =
+    isEngagementReadOnly && activeTab === "next-action"
+      ? "overview"
+      : activeTab;
+
 
   const recordTasks = tasks.filter(
     (task) => task.clientWorkflowRecordId === record.id,
@@ -382,16 +416,22 @@ export function ClientRecordDetail({
         selectedEngagement={selectedEngagement}
       />
 
+      {isEngagementReadOnly ? (
+        <ClosedEngagementNotice
+          status={selectedEngagement.engagementStatus}
+        />
+      ) : null}
+
       <div
         aria-label="Client record sections"
         className="mt-5 flex gap-2 overflow-x-auto border-b border-[#D9DED8] pb-3 lg:flex-wrap lg:overflow-visible"
         role="tablist"
       >
-        {detailTabs.map((tab) => (
+        {visibleDetailTabs.map((tab) => (
           <button
-            aria-selected={activeTab === tab.key}
+            aria-selected={visibleActiveTab === tab.key}
             className={`shrink-0 rounded-md px-4 py-2 text-sm font-bold ${
-              activeTab === tab.key
+              visibleActiveTab === tab.key
                 ? "bg-[#174F42] text-white"
                 : "bg-[#EDF3EF] text-[#17201C] hover:bg-[#D9DED8]"
             }`}
@@ -405,7 +445,7 @@ export function ClientRecordDetail({
         ))}
       </div>
 
-      {activeTab === "overview" ? (
+      {visibleActiveTab === "overview" ? (
         <div className="mt-5">
           <div className="grid gap-4 md:grid-cols-2">
             <DetailRow
@@ -414,18 +454,42 @@ export function ClientRecordDetail({
                 workflowRecord.lifecycleStage,
               )}
             />
-            <DetailRow
-              label="Next action"
-              value={workflowRecord.nextAction}
-            />
-            <DetailRow
-              label="Follow-up date"
-              value={workflowRecord.nextFollowUpAt || "Not scheduled"}
-            />
-            <DetailRow
-              label="Owner"
-              value={workflowRecord.assignedTo}
-            />
+            {isEngagementReadOnly ? (
+              <>
+                <DetailRow
+                  label="Job status"
+                  value={selectedEngagement.engagementStatus}
+                />
+                <DetailRow
+                  label="Owner"
+                  value={workflowRecord.assignedTo}
+                />
+                <DetailRow
+                  label="Last updated"
+                  value={formatDateTime(
+                    selectedEngagement.updatedAt,
+                  )}
+                />
+              </>
+            ) : (
+              <>
+                <DetailRow
+                  label="Next action"
+                  value={workflowRecord.nextAction}
+                />
+                <DetailRow
+                  label="Follow-up date"
+                  value={
+                    workflowRecord.nextFollowUpAt ||
+                    "Not scheduled"
+                  }
+                />
+                <DetailRow
+                  label="Owner"
+                  value={workflowRecord.assignedTo}
+                />
+              </>
+            )}
           </div>
 
           <section className="mt-8 border-t border-[#D9DED8] pt-6">
@@ -470,17 +534,20 @@ export function ClientRecordDetail({
             </dl>
           </section>
 
-          <RecordStatusControls
-            onUpdateClientRecord={onUpdateClientRecord}
-            onUpdateEngagement={onUpdateEngagement}
-            record={workflowRecord}
-          />
+          {!isEngagementReadOnly ? (
+            <RecordStatusControls
+              onUpdateClientRecord={onUpdateClientRecord}
+              onUpdateEngagement={onUpdateEngagement}
+              record={workflowRecord}
+            />
+          ) : null}
         </div>
       ) : null}
-      {activeTab === "workflow-health" ? (
+      {visibleActiveTab === "workflow-health" ? (
         <div className="mt-5">
           <RiskSignalPanel
             errorMessage={riskSignalMessage}
+            isReadOnly={isEngagementReadOnly}
             isLoading={isRiskSignalsLoading}
             isSaving={isRiskSignalSaving}
             onOpenSource={(signal) => {
@@ -501,7 +568,7 @@ export function ClientRecordDetail({
         </div>
       ) : null}
 
-      {activeTab === "next-action" ? (
+      {visibleActiveTab === "next-action" ? (
         <div className="mt-5">
           <div className="rounded-md bg-[#EDF3EF] p-4">
             <h3 className="font-bold">Current Next Action</h3>
@@ -514,30 +581,34 @@ export function ClientRecordDetail({
             </p>
           </div>
 
-          <FollowUpCompletionForm
-            errorMessage={followUpMessage}
-            followUps={followUps}
-            isLoading={isFollowUpLoading}
-            isSubmitting={isFollowUpSaving}
-            key={`follow-up-${selectedEngagement.id}-${selectedEngagement.updatedAt}`}
-            onComplete={onCompleteFollowUp}
-            record={workflowRecord}
-          />
+          {!isEngagementReadOnly ? (
+            <>
+              <FollowUpCompletionForm
+                errorMessage={followUpMessage}
+                followUps={followUps}
+                isLoading={isFollowUpLoading}
+                isSubmitting={isFollowUpSaving}
+                key={`follow-up-${selectedEngagement.id}-${selectedEngagement.updatedAt}`}
+                onComplete={onCompleteFollowUp}
+                record={workflowRecord}
+              />
 
-          <details className="mt-6 border-t border-[#D9DED8] pt-5">
-            <summary className="cursor-pointer font-bold text-[#174F42]">
-              Update schedule without completing a follow-up
-            </summary>
-            <NextActionForm
-              key={`next-action-${selectedEngagement.id}-${selectedEngagement.updatedAt}`}
-              record={workflowRecord}
-              onUpdateRecord={onUpdateEngagement}
-            />
-          </details>
+              <details className="mt-6 border-t border-[#D9DED8] pt-5">
+                <summary className="cursor-pointer font-bold text-[#174F42]">
+                  Update schedule without completing a follow-up
+                </summary>
+                <NextActionForm
+                  key={`next-action-${selectedEngagement.id}-${selectedEngagement.updatedAt}`}
+                  record={workflowRecord}
+                  onUpdateRecord={onUpdateEngagement}
+                />
+              </details>
+            </>
+          ) : null}
         </div>
       ) : null}
 
-      {activeTab === "proposals" ? (
+      {visibleActiveTab === "proposals" ? (
         <div className="mt-5">
           <ProposalPanel
             clientWorkflowRecordId={record.id}
@@ -545,6 +616,7 @@ export function ClientRecordDetail({
             isApplyingRecommendation={
               isApplyingProposalRecommendation
             }
+            isReadOnly={isEngagementReadOnly}
             isLoading={isProposalLoading}
             isSaving={isProposalSaving}
             onApplyRecommendation={
@@ -561,7 +633,7 @@ export function ClientRecordDetail({
         </div>
       ) : null}
 
-      {activeTab === "invoices" ? (
+      {visibleActiveTab === "invoices" ? (
         <div className="mt-5">
           <InvoicePanel
             clientWorkflowRecordId={record.id}
@@ -570,6 +642,7 @@ export function ClientRecordDetail({
             isApplyingRecommendation={
               isApplyingInvoiceRecommendation
             }
+            isReadOnly={isEngagementReadOnly}
             isLoading={isInvoiceLoading}
             isSaving={isInvoiceSaving}
             onApplyRecommendation={
@@ -585,12 +658,13 @@ export function ClientRecordDetail({
         </div>
       ) : null}
 
-      {activeTab === "work-items" ? (
+      {visibleActiveTab === "work-items" ? (
         <div className="mt-5">
           <h3 className="font-bold">Work Items</h3>
           <p className="mt-2 text-sm leading-6 text-[#5F6862]">
-            Complete the current item first. Later work becomes ready
-            as earlier steps are finished.
+            {isEngagementReadOnly
+              ? "Review the work item history recorded for this job."
+              : "Complete the current item first. Later work becomes ready as earlier steps are finished."}
           </p>
 
           {rootBlockers.length > 0 ? (
@@ -627,7 +701,9 @@ export function ClientRecordDetail({
                       </p>
                     </div>
                     <span className="w-fit rounded-md bg-amber-50 px-3 py-2 text-sm font-bold text-amber-800">
-                      Resolve first
+                      {isEngagementReadOnly
+                        ? "Was blocking"
+                        : "Resolve first"}
                     </span>
                   </div>
                 ))}
@@ -688,19 +764,21 @@ export function ClientRecordDetail({
                         ).join(", ")}
                       </p>
                     ) : null}
-                    <WorkflowTaskStatusEditor
-                      isSaving={
-                        updatingTaskId === task.id ||
-                        updatingTaskDependenciesId === task.id
-                      }
-                      isWaitingForPrerequisite={
-                        unresolvedPrerequisites.length > 0
-                      }
-                      onUpdateStatus={(update) =>
-                        onUpdateTaskStatus(task.id, update)
-                      }
-                      task={task}
-                    />
+                    {!isEngagementReadOnly ? (
+                      <WorkflowTaskStatusEditor
+                        isSaving={
+                          updatingTaskId === task.id ||
+                          updatingTaskDependenciesId === task.id
+                        }
+                        isWaitingForPrerequisite={
+                          unresolvedPrerequisites.length > 0
+                        }
+                        onUpdateStatus={(update) =>
+                          onUpdateTaskStatus(task.id, update)
+                        }
+                        task={task}
+                      />
+                    ) : null}
                   </div>
                   ),
                 )
@@ -712,7 +790,7 @@ export function ClientRecordDetail({
             </div>
           )}
 
-          {workItemQueue.length > 1 ? (
+          {!isEngagementReadOnly && workItemQueue.length > 1 ? (
             <details className="group mt-4 border-y border-[#D9DED8] py-4">
               <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-bold text-[#174F42]">
                 <span>Manage work order</span>
@@ -759,15 +837,17 @@ export function ClientRecordDetail({
             </details>
           ) : null}
 
-          <WorkflowTaskForm
-            clientWorkflowRecordId={record.id}
-            isSubmitting={isTaskSaving}
-            onAddTask={onAddTask}
-          />
+          {!isEngagementReadOnly ? (
+            <WorkflowTaskForm
+              clientWorkflowRecordId={record.id}
+              isSubmitting={isTaskSaving}
+              onAddTask={onAddTask}
+            />
+          ) : null}
         </div>
       ) : null}
 
-      {activeTab === "handoff" ? (
+      {visibleActiveTab === "handoff" ? (
         <div className="mt-5">
           <h3 className="font-bold">Handoff Notes</h3>
           <p className="mt-2 text-sm leading-6 text-[#5F6862]">
@@ -802,22 +882,25 @@ export function ClientRecordDetail({
                 ))
               ) : (
                 <p className="rounded-md bg-[#EDF3EF] p-4 text-[#5F6862]">
-                  No handoff notes yet. Add context before
-                  delegating this client workflow.
+                  {isEngagementReadOnly
+                    ? "No handoff notes were recorded for this job."
+                    : "No handoff notes yet. Add context before delegating this client workflow."}
                 </p>
               )}
             </div>
           )}
 
-          <HandoffNoteForm
-            clientWorkflowRecordId={record.id}
-            isSubmitting={isHandoffSaving}
-            onAddNote={onAddHandoffNote}
-          />
+          {!isEngagementReadOnly ? (
+            <HandoffNoteForm
+              clientWorkflowRecordId={record.id}
+              isSubmitting={isHandoffSaving}
+              onAddNote={onAddHandoffNote}
+            />
+          ) : null}
         </div>
       ) : null}
 
-      {activeTab === "activity" ? (
+      {visibleActiveTab === "activity" ? (
         <div className="mt-5">
           <h3 className="font-bold">Activity History</h3>
           <p className="mt-2 text-sm leading-6 text-[#5F6862]">

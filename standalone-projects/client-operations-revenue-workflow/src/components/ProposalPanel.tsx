@@ -27,6 +27,7 @@ type ProposalPanelProps = {
   clientWorkflowRecordId: string;
   proposals: ProposalRecord[];
   isLoading: boolean;
+  isReadOnly: boolean;
   isSaving: boolean;
   errorMessage?: string;
   isApplyingRecommendation: boolean;
@@ -113,6 +114,7 @@ function ProposalEditor({
   record,
   isSaving,
   isApplyingRecommendation,
+  isReadOnly,
   showRecommendation,
   onUpdate,
   onApplyRecommendation,
@@ -121,6 +123,7 @@ function ProposalEditor({
   record: ClientWorkflowRecord;
   isSaving: boolean;
   isApplyingRecommendation: boolean;
+  isReadOnly: boolean;
   showRecommendation: boolean;
   onUpdate: ProposalPanelProps["onUpdate"];
   onApplyRecommendation:
@@ -311,32 +314,42 @@ function ProposalEditor({
         </dl>
       ) : null}
 
-      <div className="mt-5 grid gap-4">
-        <div className="grid gap-2">
-          <label
-            className="font-bold text-[#17201C]"
-            htmlFor={`proposal-status-${proposal.id}`}
-          >
-            Update proposal status
-          </label>
-          <select
-            id={`proposal-status-${proposal.id}`}
-            className="rounded-md border border-[#D9DED8] bg-white px-4 py-3 text-[#17201C]"
-            disabled={isSaving}
-            value={status}
-            onChange={(event) =>
-              updateStatus(
-                event.target.value as ProposalRecord["status"],
-              )
-            }
-          >
-            {proposalStatusOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+      {isReadOnly && proposal.notes ? (
+        <div className="mt-4">
+          <p className="text-sm font-bold text-[#17201C]">Notes</p>
+          <p className="mt-1 whitespace-pre-wrap leading-7 text-[#5F6862]">
+            {proposal.notes}
+          </p>
         </div>
+      ) : null}
+
+      {!isReadOnly ? (
+        <div className="mt-5 grid gap-4">
+          <div className="grid gap-2">
+            <label
+              className="font-bold text-[#17201C]"
+              htmlFor={`proposal-status-${proposal.id}`}
+            >
+              Update proposal status
+            </label>
+            <select
+              id={`proposal-status-${proposal.id}`}
+              className="rounded-md border border-[#D9DED8] bg-white px-4 py-3 text-[#17201C]"
+              disabled={isSaving}
+              value={status}
+              onChange={(event) =>
+                updateStatus(
+                  event.target.value as ProposalRecord["status"],
+                )
+              }
+            >
+              {proposalStatusOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
 
         {status === "Sent" ? (
           <div className="grid gap-4 sm:grid-cols-2">
@@ -489,7 +502,8 @@ function ProposalEditor({
             record={record}
           />
         ) : null}
-      </div>
+        </div>
+      ) : null}
     </article>
   );
 }
@@ -500,6 +514,7 @@ export function ProposalPanel({
   isApplyingRecommendation,
   showWorkflowRecommendations,
   isLoading,
+  isReadOnly,
   isSaving,
   errorMessage,
   record,
@@ -527,13 +542,15 @@ export function ProposalPanel({
           </p>
         </div>
 
-        <button
-          className="rounded-md bg-[#174F42] px-5 py-3 font-bold text-white hover:bg-[#1F6F5B]"
-          onClick={() => setIsFormOpen((isOpen) => !isOpen)}
-          type="button"
-        >
-          {isFormOpen ? "Close Form" : "Add Proposal Or Quote"}
-        </button>
+        {!isReadOnly ? (
+          <button
+            className="rounded-md bg-[#174F42] px-5 py-3 font-bold text-white hover:bg-[#1F6F5B]"
+            onClick={() => setIsFormOpen((isOpen) => !isOpen)}
+            type="button"
+          >
+            {isFormOpen ? "Close Form" : "Add Proposal Or Quote"}
+          </button>
+        ) : null}
       </div>
 
       {errorMessage ? (
@@ -542,7 +559,7 @@ export function ProposalPanel({
         </p>
       ) : null}
 
-      {isFormOpen ? (
+      {!isReadOnly && isFormOpen ? (
         <div className="mt-5">
           <ProposalForm
             clientWorkflowRecordId={clientWorkflowRecordId}
@@ -561,6 +578,7 @@ export function ProposalPanel({
           proposals.map((proposal, index) => (
             <ProposalEditor
               isApplyingRecommendation={isApplyingRecommendation}
+              isReadOnly={isReadOnly}
               isSaving={isSaving}
               key={proposal.id}
               onApplyRecommendation={onApplyRecommendation}

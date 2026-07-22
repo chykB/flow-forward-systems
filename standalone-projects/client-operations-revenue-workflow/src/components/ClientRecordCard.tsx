@@ -3,9 +3,13 @@ import {
   getLifecycleStageLabel,
   getRelationshipConcernLabel,
 } from "@/lib/client-workflow-display";
-import type { ClientWorkflowRecord } from "@/lib/client-workflow-types";
+import type {
+  ClientEngagement,
+  ClientWorkflowRecord,
+} from "@/lib/client-workflow-types";
 
 type ClientRecordCardProps = {
+  engagement?: ClientEngagement;
   isSelected: boolean;
   onSelect: () => void;
   record: ClientWorkflowRecord;
@@ -26,10 +30,20 @@ function getRiskClasses(
 }
 
 export function ClientRecordCard({
+  engagement,
   isSelected,
   onSelect,
   record,
 }: ClientRecordCardProps) {
+  const engagementStatus =
+    engagement?.engagementStatus ??
+    (record.lifecycleStage === "Completed"
+      ? "Completed"
+      : record.lifecycleStage === "Lost or inactive"
+        ? "Cancelled"
+        : "Active");
+  const isClosed = engagementStatus !== "Active";
+
   return (
     <button
       aria-pressed={isSelected}
@@ -69,17 +83,32 @@ export function ClientRecordCard({
       </div>
 
       <div className="mt-4 border-t border-[#D9DED8] pt-3">
-        <p className="text-xs font-bold text-[#5F6862]">
-          Next action
-        </p>
-        <p className="mt-1 line-clamp-2 leading-6 text-[#17201C]">
-          {record.nextAction || "No next action set"}
-        </p>
+        {isClosed ? (
+          <>
+            <p className="text-xs font-bold text-[#5F6862]">
+              Job status
+            </p>
+            <p className="mt-1 font-semibold leading-6 text-[#17201C]">
+              {engagementStatus === "Completed"
+                ? "Job completed"
+                : "Job cancelled"}
+            </p>
+          </>
+        ) : (
+          <>
+            <p className="text-xs font-bold text-[#5F6862]">
+              Next action
+            </p>
+            <p className="mt-1 line-clamp-2 leading-6 text-[#17201C]">
+              {record.nextAction || "No next action set"}
+            </p>
 
-        <p className="mt-3 inline-flex items-center gap-2 text-sm text-[#5F6862]">
-          <CalendarDays aria-hidden="true" className="size-4" />
-          Follow-up {record.nextFollowUpAt || "not scheduled"}
-        </p>
+            <p className="mt-3 inline-flex items-center gap-2 text-sm text-[#5F6862]">
+              <CalendarDays aria-hidden="true" className="size-4" />
+              Follow-up {record.nextFollowUpAt || "not scheduled"}
+            </p>
+          </>
+        )}
       </div>
     </button>
   );
