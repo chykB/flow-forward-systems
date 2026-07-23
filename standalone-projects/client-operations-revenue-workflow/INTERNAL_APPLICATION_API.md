@@ -171,7 +171,7 @@ Proposal creation and update validate:
 - an Active engagement that belongs to the referenced Client Record and workspace;
 - the final merged Proposal state for partial updates.
 
-Proposal recommendation application accepts only the workflow fields produced by the deterministic recommendation engine. Relationship concern cannot be changed by a Proposal recommendation. The command verifies the expected Proposal status and engagement version, updates the selected Active engagement, and reconciles only that engagement. Client type and returning-client status remain relationship-level fields and are accepted only for the primary engagement. Primary engagement fields are mirrored to the compatibility Client Record; secondary engagement recommendations leave the primary job and Client Record summary unchanged.
+Proposal recommendation application accepts only the workflow fields produced by the deterministic recommendation engine. Relationship concern cannot be changed by a Proposal recommendation. The command verifies the expected Proposal status and engagement version, updates the selected Active engagement, and reconciles only that engagement. A recommendation can advance lifecycle stage but cannot move the job backward. Client type and returning-client status remain relationship-level fields and are accepted only for the primary engagement. Primary engagement fields are mirrored to the compatibility Client Record; secondary engagement recommendations leave the primary job and Client Record summary unchanged.
 
 Invoice creation and update validate:
 

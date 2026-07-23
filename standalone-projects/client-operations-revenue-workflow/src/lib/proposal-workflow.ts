@@ -1,6 +1,7 @@
 import type {
   ClientEngagement,
   ClientWorkflowRecord,
+  LifecycleStage,
   PriorityLevel,
   ProposalRecord,
 } from "@/lib/client-workflow-types";
@@ -31,6 +32,21 @@ const priorityRank: Record<PriorityLevel, number> = {
   High: 3,
 };
 
+const lifecycleStageRank: Record<LifecycleStage, number> = {
+  "New lead": 1,
+  "Qualified lead": 2,
+  "Follow-up needed": 3,
+  "Discovery or call booked": 4,
+  "Proposal sent": 5,
+  "Won client": 6,
+  Onboarding: 7,
+  "In delivery": 8,
+  "Waiting for approval": 9,
+  "Payment follow-up": 10,
+  Completed: 11,
+  "Lost or inactive": 11,
+};
+
 function raisePriority(
   current: PriorityLevel,
   recommended: PriorityLevel,
@@ -38,6 +54,16 @@ function raisePriority(
   return priorityRank[current] >= priorityRank[recommended]
     ? current
     : recommended;
+}
+
+function forwardLifecycleStageUpdate(
+  current: LifecycleStage,
+  recommended: LifecycleStage,
+) {
+  return lifecycleStageRank[recommended] >
+    lifecycleStageRank[current]
+    ? { lifecycleStage: recommended }
+    : {};
 }
 
 function toDateInputValue(date: Date) {
@@ -114,7 +140,10 @@ export function getProposalWorkflowRecommendation(
       reason:
         "A sent proposal needs a clear follow-up date so the opportunity does not become inactive.",
       updates: {
-        lifecycleStage: "Proposal sent",
+        ...forwardLifecycleStageUpdate(
+          engagement.lifecycleStage,
+          "Proposal sent",
+        ),
         nextAction: "Follow up on the proposal decision.",
         nextFollowUpAt: chooseEarlierDate(
           threeDayFollowUp,
@@ -132,7 +161,10 @@ export function getProposalWorkflowRecommendation(
       reason:
         "The client has requested changes, so the proposal needs an owner and a clear next action.",
       updates: {
-        lifecycleStage: "Proposal sent",
+        ...forwardLifecycleStageUpdate(
+          engagement.lifecycleStage,
+          "Proposal sent",
+        ),
         nextAction:
           "Review the requested changes and prepare the revised proposal.",
         nextFollowUpAt: today,
@@ -174,7 +206,10 @@ export function getProposalWorkflowRecommendation(
           ? "The first proposal has been accepted, so this lead is now a confirmed new client."
           : "The proposal has been accepted, so the confirmed new client can move into onboarding.",
         updates: {
-          lifecycleStage: "Won client",
+          ...forwardLifecycleStageUpdate(
+            engagement.lifecycleStage,
+            "Won client",
+          ),
           ...(isLead ? { clientType: "New client" as const } : {}),
           onboardingStatus,
           nextAction:
@@ -192,7 +227,10 @@ export function getProposalWorkflowRecommendation(
         reason:
           "The client has accepted new work, so the returning engagement needs a clear owner and start plan.",
         updates: {
-          lifecycleStage: "Won client",
+          ...forwardLifecycleStageUpdate(
+            engagement.lifecycleStage,
+            "Won client",
+          ),
           ...(engagement.isPrimary &&
           record.clientType === "Past client"
             ? { clientType: "Returning client" as const }
@@ -245,7 +283,10 @@ export function getProposalWorkflowRecommendation(
     reason:
       "The proposal has expired and should not remain open without a decision.",
     updates: {
-      lifecycleStage: "Proposal sent",
+      ...forwardLifecycleStageUpdate(
+        engagement.lifecycleStage,
+        "Proposal sent",
+      ),
       nextAction:
         "Renew the proposal or close the opportunity.",
       nextFollowUpAt: today,
