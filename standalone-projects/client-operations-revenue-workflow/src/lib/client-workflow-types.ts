@@ -290,6 +290,7 @@ export type HandoffNote = {
   id: string;
   clientWorkflowRecordId: string;
   clientEngagementId: string;
+  workflowTaskId: string | null;
   title: string;
   note: string;
   owner: string;

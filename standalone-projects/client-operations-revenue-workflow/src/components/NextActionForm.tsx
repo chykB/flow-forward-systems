@@ -135,7 +135,8 @@ export function NextActionForm({
 
   return (
     <form
-      className="mt-6 rounded-md border border-[#D9DED8] bg-[#F7F8F6] p-4"
+      className="mt-6 scroll-mt-6 rounded-md border border-[#D9DED8] bg-[#F7F8F6] p-4"
+      id="next-action-update-form"
       onSubmit={submitForm}
     >
       <h3 className="font-bold">Update Next Action</h3>

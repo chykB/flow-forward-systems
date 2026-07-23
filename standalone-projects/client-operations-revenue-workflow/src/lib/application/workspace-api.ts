@@ -92,7 +92,10 @@ export type ClientWorkflowRecordUpdates = Partial<
 
 export type NewHandoffNote = Omit<
   HandoffNote,
-  "id" | "clientEngagementId" | "createdAt"
+  | "id"
+  | "clientEngagementId"
+  | "workflowTaskId"
+  | "createdAt"
 >;
 
 export type NewProposalRecord = Omit<
@@ -286,6 +289,7 @@ export type RiskSignalCommandResult = {
 export type CreateHandoffNoteCommand = {
   commandId: string;
   clientEngagementId: string;
+  workflowTaskId: string;
   note: NewHandoffNote;
 };
 
@@ -1964,11 +1968,16 @@ function validateCreateHandoffNoteCommand(
     "The engagement identifier",
     commandId,
   );
+  assertUuid(
+    command.workflowTaskId,
+    "The Handoff Work Item identifier",
+    commandId,
+  );
 
   if (!note || typeof note !== "object" || Array.isArray(note)) {
     throw new WorkspaceApiError(
       "invalid_request",
-      "Handoff note details are required.",
+      "Handoff context details are required.",
       commandId,
     );
   }
@@ -1985,7 +1994,7 @@ function validateCreateHandoffNoteCommand(
   ) {
     throw new WorkspaceApiError(
       "invalid_request",
-      "Handoff note details are incomplete or contain a protected field.",
+      "Handoff context details are incomplete or contain a protected field.",
       commandId,
     );
   }
@@ -1998,7 +2007,7 @@ function validateCreateHandoffNoteCommand(
   ) {
     throw new WorkspaceApiError(
       "invalid_request",
-      "Handoff note fields must use text values.",
+      "Handoff context fields must use text values.",
       commandId,
     );
   }
@@ -2036,13 +2045,13 @@ function validateCreateHandoffNoteCommand(
   assertMinimumText(
     note.owner,
     2,
-    "Enter who owns this note.",
+    "Enter who will receive this handoff.",
     commandId,
   );
   assertMaximumText(
     note.owner,
     200,
-    "Keep the owner under 200 characters.",
+    "Keep the receiving owner under 200 characters.",
     commandId,
   );
 }
@@ -3816,11 +3825,13 @@ export function createWorkspaceApplicationApi(
 
         try {
           const { data, error } = await supabase.rpc(
-            "command_create_engagement_handoff_note",
+            "command_create_work_item_handoff_context",
             {
               p_workspace_id: workspaceId,
               p_client_engagement_id:
                 command.clientEngagementId,
+              p_workflow_task_id:
+                command.workflowTaskId,
               p_note: {
                 clientWorkflowRecordId:
                   note.clientWorkflowRecordId,

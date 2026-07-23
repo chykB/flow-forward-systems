@@ -6,13 +6,19 @@ import {
   useRef,
   useState,
 } from "react";
-import { Plus, X } from "lucide-react";
+import {
+  ArrowRight,
+  ClipboardCheck,
+  Plus,
+  X,
+} from "lucide-react";
 import { ClientRecordCard } from "@/components/ClientRecordCard";
 import {
   ClientRecordDetail,
   type DetailTab,
 } from "@/components/ClientRecordDetail";
 import { WorkspaceHealthQueue } from "@/components/WorkspaceHealthQueue";
+import { WorkspaceReadinessQueue } from "@/components/WorkspaceReadinessQueue";
 import { WorkspaceActivity } from "@/components/WorkspaceActivity";
 import {
   WorkspaceShell,
@@ -85,6 +91,10 @@ import {
 import {
   reconcileClientRiskSignals,
 } from "@/lib/supabase/risk-signals";
+import {
+  getWorkflowReadinessItems,
+  type WorkflowReadinessItem,
+} from "@/lib/workflow-readiness";
 function getRelatedClientRecords(
   records: ClientWorkflowRecord[],
   relatedItems: Array<{
@@ -471,12 +481,34 @@ function WorkspaceDashboard({
   const clearPrioritySections = prioritySections.filter(
     (section) => section.count === 0,
   );
+  const readinessItems = useMemo(
+    () =>
+      getWorkflowReadinessItems(
+        engagements,
+        workflowTasks,
+        handoffNotes,
+      ),
+    [engagements, handoffNotes, workflowTasks],
+  );
+  const readinessJobCount = new Set(
+    readinessItems.map(
+      (item) => item.clientEngagementId,
+    ),
+  ).size;
   const isPriorityLoading =
     recordsStatus === "loading" ||
     workflowTasksStatus === "loading" ||
     proposalsStatus === "loading" ||
     invoicesStatus === "loading" ||
     riskSignalsStatus === "loading";
+  const isReadinessLoading =
+    recordsStatus === "loading" ||
+    workflowTasksStatus === "loading" ||
+    handoffNotesStatus === "loading";
+  const readinessErrorMessage =
+    recordsMessage ||
+    workflowTasksMessage ||
+    handoffNotesMessage;
 
   const selectedRecord =
     filteredRecords.find((record) => record.id === selectedRecordId) ||
@@ -816,6 +848,31 @@ function WorkspaceDashboard({
     rememberSelectedRecord(recordId, engagementId);
     setSelectedDetailTab("activity");
     navigateWorkspaceView("client-records");
+  }
+
+  function openReadinessItem(item: WorkflowReadinessItem) {
+    setRecordFilters(initialRecordFilters);
+    rememberSelectedRecord(
+      item.clientWorkflowRecordId,
+      item.clientEngagementId,
+    );
+    setSelectedDetailTab(item.destination);
+    navigateWorkspaceView("client-records");
+
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        const fieldId = item.workflowTaskId
+          ? `handoff-context-title-${item.workflowTaskId}`
+          : "next-action";
+        const field = document.getElementById(fieldId);
+
+        field?.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+        field?.focus();
+      });
+    });
   }
 
   useEffect(() => {
@@ -1372,6 +1429,7 @@ function WorkspaceDashboard({
   }
 
   async function addHandoffNote(
+    workflowTaskId: string,
     handoffNote: NewHandoffNote,
   ) {
     setIsSavingHandoffNote(true);
@@ -1384,6 +1442,7 @@ function WorkspaceDashboard({
       const result = await workspaceApi.handoffNotes.create({
         commandId: createOperationRequestId(),
         clientEngagementId: engagement.id,
+        workflowTaskId,
         note: handoffNote,
       });
       const savedHandoffNote = result.handoffNote;
@@ -2155,6 +2214,38 @@ function WorkspaceDashboard({
 
       setEngagements(currentEngagements);
 
+      if (
+        recommendation.updates.paymentStatus === undefined &&
+        ["Paid", "Voided", "Not needed"].includes(
+          recommendation.effectiveStatus,
+        )
+      ) {
+        const result = await workspaceApi.engagements.update({
+          commandId: createOperationRequestId(),
+          clientEngagementId: commandEngagement.id,
+          expectedUpdatedAt: commandEngagement.updatedAt,
+          updates: recommendation.updates,
+          activityNote:
+            `Invoice ${invoice.invoiceNumber || "without a number"} ` +
+            `is ${recommendation.effectiveStatus.toLowerCase()}; ` +
+            "the selected job's next action was updated.",
+        });
+
+        setEngagements((current) =>
+          current.map((engagement) =>
+            engagement.id === result.clientEngagement.id
+              ? result.clientEngagement
+              : engagement,
+          ),
+        );
+        await refreshRiskSignalsAfterChange(
+          invoice.clientWorkflowRecordId,
+          result.clientEngagement.id,
+        );
+        await refreshActivityHistory();
+        return;
+      }
+
       const result = await workspaceApi.invoices.applyRecommendation({
         commandId: createOperationRequestId(),
         clientEngagementId: invoice.clientEngagementId,
@@ -2430,6 +2521,70 @@ function WorkspaceDashboard({
               </>
             )}
           </section>
+
+          <section className="border-y border-[#D9DED8] py-5">
+            {isReadinessLoading ? (
+              <p className="font-semibold text-[#5F6862]">
+                Reviewing workflow readiness...
+              </p>
+            ) : readinessErrorMessage ? (
+              <p className="font-semibold text-red-700">
+                {readinessErrorMessage}
+              </p>
+            ) : readinessItems.length > 0 ? (
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-w-0 items-start gap-3">
+                  <ClipboardCheck
+                    aria-hidden="true"
+                    className="mt-1 size-5 shrink-0 text-[#2E7D5B]"
+                  />
+                  <div className="min-w-0">
+                    <h3 className="font-bold text-[#17201C]">
+                      Workflow readiness
+                    </h3>
+                    <p className="mt-1 text-sm leading-6 text-[#5F6862]">
+                      {readinessItems.length}{" "}
+                      {readinessItems.length === 1
+                        ? "item"
+                        : "items"}{" "}
+                      across {readinessJobCount}{" "}
+                      {readinessJobCount === 1 ? "job" : "jobs"}.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  className="inline-flex shrink-0 items-center justify-center gap-2 rounded-md border border-[#174F42] px-4 py-3 font-bold text-[#174F42] hover:bg-[#EDF3EF]"
+                  onClick={() =>
+                    navigateWorkspaceView("action-queue")
+                  }
+                  type="button"
+                >
+                  Review readiness
+                  <ArrowRight
+                    aria-hidden="true"
+                    className="size-4"
+                  />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-start gap-3">
+                <ClipboardCheck
+                  aria-hidden="true"
+                  className="mt-1 size-5 shrink-0 text-[#2E7D5B]"
+                />
+                <div>
+                  <h3 className="font-bold text-[#17201C]">
+                    Workflow readiness is clear
+                  </h3>
+                  <p className="mt-1 text-sm leading-6 text-[#5F6862]">
+                    Active jobs have specific next actions and
+                    context for active handoffs.
+                  </p>
+                </div>
+              </div>
+            )}
+          </section>
         </div>
       ) : null}
 
@@ -2466,6 +2621,14 @@ function WorkspaceDashboard({
             records={records}
             riskSignals={riskSignals}
           />
+          <WorkspaceReadinessQueue
+            engagements={engagements}
+            errorMessage={readinessErrorMessage}
+            isLoading={isReadinessLoading}
+            items={readinessItems}
+            onOpenItem={openReadinessItem}
+            records={records}
+          />
         </div>
       ) : null}
 
@@ -2493,7 +2656,7 @@ function WorkspaceDashboard({
                 </h2>
                 <p className="mt-3 leading-7 text-[#5F6862]">
                   Select a record to review workflow status, work
-                  items, handoff notes, and activity history.
+                  items, handoff context, and activity history.
                 </p>
               </div>
 
@@ -2555,7 +2718,7 @@ function WorkspaceDashboard({
                 </h3>
                 <p className="mt-3 max-w-2xl leading-7 text-[#5F6862]">
                   Add your first lead or client to start tracking
-                  follow-ups, work items, handoff notes, and
+                  follow-ups, work items, handoff context, and
                   activity history.
                 </p>
                 <button

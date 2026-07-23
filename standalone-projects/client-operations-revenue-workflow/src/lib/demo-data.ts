@@ -170,6 +170,7 @@ export const demoHandoffNotes: HandoffNote[] = [
     id: "handoff-001",
     clientWorkflowRecordId: "record-002",
     clientEngagementId: "engagement-002",
+    workflowTaskId: null,
     title: "Onboarding context",
     note: "Client prefers weekly Monday updates and wants all approvals summarized by email.",
     owner: "Operations assistant",

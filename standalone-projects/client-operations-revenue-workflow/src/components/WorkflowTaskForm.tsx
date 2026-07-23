@@ -13,6 +13,7 @@ import type {
 
 type WorkflowTaskFormProps = {
   clientWorkflowRecordId: string;
+  defaultPhase: WorkItemPhase;
   isSubmitting: boolean;
   onAddTask: (task: NewWorkflowTask) => Promise<void>;
 };
@@ -65,15 +66,17 @@ const criticalityLevels: TaskCriticality[] = [
   "Low",
 ];
 
-const initialValues: FormValues = {
-  title: "",
-  type: "Follow-up",
-  phase: "Lead",
-  owner: "",
-  dueDate: "",
-  status: "Not started",
-  criticality: "Medium",
-};
+function getInitialValues(defaultPhase: WorkItemPhase): FormValues {
+  return {
+    title: "",
+    type: "Follow-up",
+    phase: defaultPhase,
+    owner: "",
+    dueDate: "",
+    status: "Not started",
+    criticality: "Medium",
+  };
+}
 
 function validateForm(values: FormValues) {
   const errors: FormErrors = {};
@@ -103,11 +106,12 @@ function FieldError({ message }: { message?: string }) {
 
 export function WorkflowTaskForm({
   clientWorkflowRecordId,
+  defaultPhase,
   isSubmitting,
   onAddTask,
 }: WorkflowTaskFormProps) {
   const [values, setValues] =
-    useState<FormValues>(initialValues);
+    useState<FormValues>(() => getInitialValues(defaultPhase));
   const [errors, setErrors] = useState<FormErrors>({});
   const [formMessage, setFormMessage] = useState("");
 
@@ -148,7 +152,7 @@ export function WorkflowTaskForm({
         criticality: values.criticality,
       });
 
-      setValues(initialValues);
+      setValues(getInitialValues(defaultPhase));
       setErrors({});
     } catch (error) {
       setFormMessage(

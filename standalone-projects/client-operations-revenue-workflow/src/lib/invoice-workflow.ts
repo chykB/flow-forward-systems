@@ -182,10 +182,16 @@ export function getInvoiceWorkflowRecommendation(
   const disputeNextAction =
     `Review the dispute for ${reference} ` +
     "before sending any payment reminder.";
+  const invoiceDrivenNextActions = new Set([
+    `Prepare and send ${reference}.`,
+    `Monitor ${reference} and prepare payment follow-up near the due date.`,
+    `Review ${reference} and prepare a payment reminder for approval.`,
+    `Review ${reference} and send an approved overdue payment reminder.`,
+    disputeNextAction,
+  ]);
 
-  const shouldReplaceResolvedDisputeAction =
-    Boolean(invoice.disputeResolvedAt) &&
-    engagement.nextAction === disputeNextAction;
+  const shouldReplaceInvoiceAction =
+    invoiceDrivenNextActions.has(engagement.nextAction);
   const today = dateKey(currentDate);
 
   if (effectiveStatus === "Draft needed") {
@@ -207,7 +213,7 @@ export function getInvoiceWorkflowRecommendation(
       paymentStatus: "Waiting",
     };
 
-    if (shouldReplaceResolvedDisputeAction) {
+    if (shouldReplaceInvoiceAction) {
       updates.nextAction =
         `Monitor ${reference} and prepare payment follow-up ` +
         "near the due date.";
@@ -267,31 +273,27 @@ export function getInvoiceWorkflowRecommendation(
   }
 
   if (effectiveStatus === "Paid") {
-    const updates: InvoiceWorkflowUpdates = {
-      paymentStatus: "Complete",
-    };
+    const updates: InvoiceWorkflowUpdates = {};
 
-    if (shouldReplaceResolvedDisputeAction) {
+    if (shouldReplaceInvoiceAction) {
       updates.nextAction =
         getPostPaymentNextAction(engagement);
       updates.nextFollowUpAt = futureDateKey(currentDate, 1);
     }
 
     return {
-      title: "Complete the payment workflow",
+      title: "Continue after the received payment",
       reason:
-        "Payment was received. Other client work should continue unchanged.",
+        "Payment was received. Continue from the job's next open step.",
       effectiveStatus,
       updates,
     };
   }
 
   if (effectiveStatus === "Voided") {
-    const updates: InvoiceWorkflowUpdates = {
-      paymentStatus: "Not needed",
-    };
+    const updates: InvoiceWorkflowUpdates = {};
 
-    if (shouldReplaceResolvedDisputeAction) {
+    if (shouldReplaceInvoiceAction) {
       updates.nextAction =
         "Confirm whether a replacement invoice is needed, " +
         "then continue the client workflow.";
@@ -308,9 +310,15 @@ export function getInvoiceWorkflowRecommendation(
     };
   }
   return {
-    title: "Close the payment workflow",
-    reason: "This client workflow does not require an invoice.",
+    title: "Continue without this invoice",
+    reason:
+      "This invoice is not required. Continue from the job's next open step.",
     effectiveStatus,
-    updates: { paymentStatus: "Not needed" },
+    updates: shouldReplaceInvoiceAction
+      ? {
+          nextAction: getPostPaymentNextAction(engagement),
+          nextFollowUpAt: futureDateKey(currentDate, 1),
+        }
+      : {},
   };
 }

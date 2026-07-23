@@ -4,11 +4,16 @@ import { useState } from "react";
 import type {
   NewHandoffNote,
 } from "@/lib/application/workspace-api";
+import type { WorkflowTask } from "@/lib/client-workflow-types";
 
 type HandoffNoteFormProps = {
   clientWorkflowRecordId: string;
   isSubmitting: boolean;
-  onAddNote: (note: NewHandoffNote) => Promise<void>;
+  onAddNote: (
+    workflowTaskId: string,
+    note: NewHandoffNote,
+  ) => Promise<void>;
+  task: WorkflowTask;
 };
 
 type FormValues = {
@@ -21,11 +26,13 @@ type FormErrors = Partial<
   Record<keyof FormValues, string>
 >;
 
-const initialValues: FormValues = {
-  title: "",
-  note: "",
-  owner: "",
-};
+function getInitialValues(task: WorkflowTask): FormValues {
+  return {
+    title: task.title,
+    note: "",
+    owner: task.owner,
+  };
+}
 
 function validateForm(values: FormValues) {
   const errors: FormErrors = {};
@@ -39,7 +46,7 @@ function validateForm(values: FormValues) {
   }
 
   if (values.owner.trim().length < 2) {
-    errors.owner = "Enter who owns this note.";
+    errors.owner = "Enter who will receive this handoff.";
   }
 
   return errors;
@@ -61,9 +68,10 @@ export function HandoffNoteForm({
   clientWorkflowRecordId,
   isSubmitting,
   onAddNote,
+  task,
 }: HandoffNoteFormProps) {
   const [values, setValues] =
-    useState<FormValues>(initialValues);
+    useState<FormValues>(() => getInitialValues(task));
   const [errors, setErrors] =
     useState<FormErrors>({});
   const [formMessage, setFormMessage] = useState("");
@@ -95,14 +103,14 @@ export function HandoffNoteForm({
     }
 
     try {
-      await onAddNote({
+      await onAddNote(task.id, {
         clientWorkflowRecordId,
         title: values.title.trim(),
         note: values.note.trim(),
         owner: values.owner.trim(),
       });
 
-      setValues(initialValues);
+      setValues(getInitialValues(task));
       setErrors({});
     } catch (error) {
       setFormMessage(
@@ -115,29 +123,30 @@ export function HandoffNoteForm({
 
   return (
     <form
-      className="mt-4 rounded-md border border-[#D9DED8] bg-[#F7F8F6] p-4"
+      className="mt-4 scroll-mt-6 rounded-md border border-[#D9DED8] bg-[#F7F8F6] p-4"
+      id={`handoff-context-form-${task.id}`}
       onSubmit={(event) => {
         event.preventDefault();
         void submitNote();
       }}
     >
-      <h4 className="font-bold">Add Handoff Note</h4>
+      <h4 className="font-bold">Add handoff context</h4>
       <p className="mt-2 text-sm leading-6 text-[#5F6862]">
-        Add the context someone else would need to continue this
-        client workflow.
+        Record what the receiving owner needs to continue this
+        Work Item.
       </p>
 
       <div className="mt-4 grid gap-3">
         <div className="grid gap-2">
           <label
             className="font-bold"
-            htmlFor="handoff-title"
+            htmlFor={`handoff-context-title-${task.id}`}
           >
-            Note title
+            Handoff title
           </label>
           <input
             className="rounded-md border border-[#D9DED8] bg-white px-4 py-3 outline-none focus:border-[#174F42]"
-            id="handoff-title"
+            id={`handoff-context-title-${task.id}`}
             maxLength={200}
             value={values.title}
             onChange={(event) =>
@@ -150,13 +159,13 @@ export function HandoffNoteForm({
         <div className="grid gap-2">
           <label
             className="font-bold"
-            htmlFor="handoff-note"
+            htmlFor={`handoff-context-note-${task.id}`}
           >
             Handoff context
           </label>
           <textarea
             className="min-h-24 rounded-md border border-[#D9DED8] bg-white px-4 py-3 outline-none focus:border-[#174F42]"
-            id="handoff-note"
+            id={`handoff-context-note-${task.id}`}
             maxLength={5000}
             value={values.note}
             onChange={(event) =>
@@ -169,13 +178,13 @@ export function HandoffNoteForm({
         <div className="grid gap-2">
           <label
             className="font-bold"
-            htmlFor="handoff-owner"
+            htmlFor={`handoff-context-owner-${task.id}`}
           >
-            Owner
+            Receiving owner
           </label>
           <input
             className="rounded-md border border-[#D9DED8] bg-white px-4 py-3 outline-none focus:border-[#174F42]"
-            id="handoff-owner"
+            id={`handoff-context-owner-${task.id}`}
             maxLength={200}
             placeholder="Example: Founder, VA, assistant"
             value={values.owner}
@@ -198,7 +207,7 @@ export function HandoffNoteForm({
         disabled={isSubmitting}
         type="submit"
       >
-        {isSubmitting ? "Saving..." : "Add Handoff Note"}
+        {isSubmitting ? "Saving..." : "Save handoff context"}
       </button>
     </form>
   );

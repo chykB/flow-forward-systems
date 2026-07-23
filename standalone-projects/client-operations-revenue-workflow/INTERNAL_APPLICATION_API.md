@@ -2,7 +2,7 @@
 
 Status: Active technical contract
 
-Implemented slices: Work items, client records, follow-up completion, handoff notes, proposals, engagement-owned Proposal recommendations, proposal-linked Invoice billing, invoices, engagement ownership, engagement-scoped risk review, sequential Work Item controls, and Work Item dependency editing
+Implemented slices: Work items, client records, follow-up completion, Work Item handoff context, proposals, engagement-owned Proposal recommendations, proposal-linked Invoice billing, invoices, engagement ownership, engagement-scoped risk review, sequential Work Item controls, and Work Item dependency editing
 
 Public API status: None of the interfaces or database functions in this document are a versioned customer API.
 
@@ -75,7 +75,7 @@ The implemented migrations expose authenticated `security definer` command funct
 - engagement create/update;
 - engagement-scoped follow-up completion;
 - client-record create/update;
-- engagement-scoped handoff-note creation;
+- Work Item-linked handoff-context creation;
 - engagement-scoped Proposal create/update/recommendation;
 - engagement-scoped Invoice create/update/recommendation;
 - engagement-scoped Work Item create/status/dependency update.
@@ -90,7 +90,7 @@ The current function names are:
 - `command_create_client_workflow_record`
 - `command_update_client_workflow_record`
 
-- `command_create_engagement_handoff_note`
+- `command_create_work_item_handoff_context`
 
 - `command_create_engagement_proposal_record`
 - `command_update_engagement_proposal_record`
@@ -106,7 +106,7 @@ The current function names are:
 - `command_update_engagement_workflow_task_status`
 - `command_replace_engagement_workflow_task_dependencies`
 
-Each function explicitly verifies that `auth.uid()` owns the workspace, validates its input, and performs the write with its durable Activity entry before committing. Child operations verify that the engagement belongs to the supplied client and workspace. Commands that can change deterministic workflow conditions also reconcile risk signals and Workflow Health. Creating a context-only handoff note does not change risk or health.
+Each function explicitly verifies that `auth.uid()` owns the workspace, validates its input, and performs the write with its durable Activity entry before committing. Child operations verify that the engagement belongs to the supplied client and workspace. Commands that can change deterministic workflow conditions also reconcile risk signals and Workflow Health. Creating context for a Handoff Work Item does not change risk or health.
 
 Proposal and Invoice create/update/recommendation operations and Work Item create/status operations are available for every Active engagement. Each operation carries explicit engagement context into deterministic reconciliation, so one job cannot change another job's workflow state, risk, or health.
 
@@ -159,9 +159,9 @@ Work-item creation validates:
 
 The work-item status command additionally validates the expected current status and rejects no-op status changes.
 
-Handoff-note creation validates the exact writable field set, client identifier, title, context, and owner. IDs, timestamps, workspace ownership, and other protected fields cannot be supplied.
+Handoff-context creation validates the exact writable field set, client identifier, title, context, and receiving owner. IDs, timestamps, workspace ownership, and other protected fields cannot be supplied.
 
-The command additionally verifies engagement ownership and records both client and engagement identifiers on the note and Activity entry.
+The command additionally verifies that the referenced Work Item belongs to the selected active engagement, is a Handoff item, and is currently active. It records the client, engagement, and Work Item identifiers on the context. Existing unlinked handoff notes remain readable as job history, but they do not satisfy a new Work Item's readiness requirement.
 
 Proposal creation and update validate:
 
@@ -213,7 +213,7 @@ Completing a follow-up writes one immutable `engagement_follow_ups` row and one 
 
 Creating active work writes exactly one `Work item added` Activity entry. Creating future work as `Planned` writes exactly one `Work item planned` entry. Activating it writes exactly one `Work item activated` entry. Planned work does not create risk or reduce Workflow Health.
 
-Creating a handoff note writes exactly one `Handoff note added` Activity entry in the same transaction. It does not recalculate Workflow Health because recording delegation context does not itself create or resolve a workflow issue.
+Creating handoff context writes exactly one `Handoff context added` Activity entry in the same transaction. It does not recalculate Workflow Health because recording delegation context does not itself create or resolve a workflow issue.
 
 Creating or updating a Proposal writes exactly one user-facing Proposal Activity entry and reconciles Proposal risks in the same transaction. Applying a Proposal recommendation writes exactly one `Proposal next step applied` entry when the recommendation is newly applied. An idempotent replay creates no duplicate Proposal, recommendation, risk, health, or Activity effects.
 
@@ -271,15 +271,15 @@ User-facing errors include the command or query request ID. Console diagnostics 
 | Follow-ups | workspace completion history | none directly | complete + schedule update + reconciliation + Activity | Implemented for all Active engagements |
 | Client records | workspace records | none directly | create/update + reconciliation + Activity | Implemented in second slice |
 | Work items | workspace work items and dependencies | none directly | engagement-scoped create/status/dependency update + reconciliation + Activity | Sequential queue default; parallel override, Planned, stage, dependency, and cycle guards implemented |
-| Handoff notes | workspace notes | none directly | engagement-scoped create + Activity | Implemented for all Active engagements |
+| Handoff context | workspace notes linked to Work Items | none directly | Work Item-linked create + Activity | New context requires an active Handoff Work Item; unlinked legacy notes remain readable |
 | Proposals | workspace/client proposals | none directly | engagement-scoped create/update/recommendation + reconciliation + Activity | Create, update, and recommendation application implemented for all Active engagements |
 | Invoices | workspace/client invoices | none directly | engagement-scoped create/update/recommendation + optional accepted-Proposal billing + reconciliation + Activity | Implemented for all Active engagements |
 | Risk signals | workspace risk history | none directly | engagement-scoped review/dismiss + isolated health + Activity | Implemented; source-driven resolution remains separate |
-| Activity | workspace history | direct inserts from legacy flows | command-owned audit writes | Client-record, work-item, handoff-note, Proposal, Invoice, and risk-review audit implemented; other flows pending |
+| Activity | workspace history | direct inserts from legacy flows | command-owned audit writes | Client-record, work-item, handoff-context, Proposal, Invoice, and risk-review audit implemented; other flows pending |
 
 ## Assistant Eligibility
 
-The engagement, follow-up, client-record, work-item, handoff-note, Proposal, Invoice, and risk-review commands are structurally suitable for a future protected assistant tool, but they are not exposed to an assistant yet. Assistant enablement also requires:
+The engagement, follow-up, client-record, work-item, handoff-context, Proposal, Invoice, and risk-review commands are structurally suitable for a future protected assistant tool, but they are not exposed to an assistant yet. Assistant enablement also requires:
 
 - explicit per-tool policy and plan entitlements;
 - user confirmation for consequential changes;

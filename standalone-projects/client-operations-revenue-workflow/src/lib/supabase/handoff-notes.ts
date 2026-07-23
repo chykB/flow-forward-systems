@@ -6,6 +6,7 @@ export type HandoffNoteRow = {
   workspace_id: string;
   client_workflow_record_id: string;
   client_engagement_id: string;
+  workflow_task_id: string | null;
   title: string;
   note: string;
   owner: string;
@@ -20,6 +21,7 @@ export function mapHandoffNoteRow(
     clientWorkflowRecordId:
       row.client_workflow_record_id,
     clientEngagementId: row.client_engagement_id,
+    workflowTaskId: row.workflow_task_id,
     title: row.title,
     note: row.note,
     owner: row.owner,

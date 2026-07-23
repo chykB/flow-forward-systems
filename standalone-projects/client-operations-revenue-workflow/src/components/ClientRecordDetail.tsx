@@ -41,8 +41,10 @@ import type {
   EngagementFollowUp,
   HandoffNote,
   InvoiceRecord,
+  LifecycleStage,
   ProposalRecord,
   RiskSignal,
+  WorkItemPhase,
   WorkflowTask,
   WorkflowTaskDependency,
 } from "@/lib/client-workflow-types";
@@ -52,6 +54,10 @@ import {
   getWorkItemRootBlockers,
 } from "@/lib/work-item-dependencies";
 import type { WorkItemQueueState } from "@/lib/work-item-dependencies";
+import {
+  hasClearNextAction,
+  isActiveHandoffRequirement,
+} from "@/lib/workflow-readiness";
 import type {
   InvoiceRecordUpdates,
   NewInvoiceRecord,
@@ -63,8 +69,30 @@ export type DetailTab =
   | "proposals"
   | "invoices"
   | "work-items"
-  | "handoff"
   | "activity";
+
+function getDefaultWorkItemPhase(
+  lifecycleStage: LifecycleStage,
+): WorkItemPhase {
+  switch (lifecycleStage) {
+    case "Proposal sent":
+      return "Proposal";
+    case "Won client":
+    case "Onboarding":
+      return "Onboarding";
+    case "In delivery":
+      return "Delivery";
+    case "Waiting for approval":
+      return "Approval";
+    case "Payment follow-up":
+      return "Payment";
+    case "Completed":
+    case "Lost or inactive":
+      return "Handoff";
+    default:
+      return "Lead";
+  }
+}
 
 type ClientRecordDetailProps = {
   activeTab: DetailTab;
@@ -78,6 +106,7 @@ type ClientRecordDetailProps = {
   isProposalLoading: boolean;
   isProposalSaving: boolean;
   onAddHandoffNote: (
+    workflowTaskId: string,
     note: NewHandoffNote,
   ) => Promise<void>;
   isHandoffSaving: boolean;
@@ -164,7 +193,6 @@ const detailTabs: { key: DetailTab; label: string }[] = [
   { key: "proposals", label: "Proposals & Quotes" },
   { key: "invoices", label: "Invoices" },
   { key: "work-items", label: "Work Items" },
-  { key: "handoff", label: "Handoff Notes" },
   { key: "activity", label: "Activity" },
 ];
 
@@ -373,6 +401,21 @@ export function ClientRecordDetail({
   const recordHandoffNotes = handoffNotes.filter(
     (note) => note.clientWorkflowRecordId === record.id,
   );
+  const handoffNotesByTaskId = new Map<
+    string,
+    HandoffNote[]
+  >();
+
+  recordHandoffNotes.forEach((note) => {
+    if (!note.workflowTaskId) {
+      return;
+    }
+
+    const taskNotes =
+      handoffNotesByTaskId.get(note.workflowTaskId) ?? [];
+    taskNotes.push(note);
+    handoffNotesByTaskId.set(note.workflowTaskId, taskNotes);
+  });
 
 
 
@@ -593,7 +636,14 @@ export function ClientRecordDetail({
                 record={workflowRecord}
               />
 
-              <details className="mt-6 border-t border-[#D9DED8] pt-5">
+              <details
+                className="mt-6 border-t border-[#D9DED8] pt-5"
+                open={
+                  !hasClearNextAction(
+                    workflowRecord.nextAction,
+                  )
+                }
+              >
                 <summary className="cursor-pointer font-bold text-[#174F42]">
                   Update schedule without completing a follow-up
                 </summary>
@@ -712,6 +762,11 @@ export function ClientRecordDetail({
               {tasksMessage}
             </p>
           ) : null}
+          {handoffMessage ? (
+            <p className="mt-4 rounded-md bg-red-50 p-4 font-semibold text-red-700">
+              {handoffMessage}
+            </p>
+          ) : null}
 
           {isTasksLoading ? (
             <p className="mt-4 text-[#5F6862]">
@@ -726,7 +781,17 @@ export function ClientRecordDetail({
                     position,
                     state,
                     unresolvedPrerequisites,
-                  }) => (
+                  }) => {
+                    const taskHandoffNotes =
+                      handoffNotesByTaskId.get(task.id) ?? [];
+                    const isHandoffTask =
+                      task.type === "Handoff" ||
+                      task.phase === "Handoff";
+                    const needsHandoffContext =
+                      isActiveHandoffRequirement(task) &&
+                      taskHandoffNotes.length === 0;
+
+                    return (
                     <div
                       className="rounded-md border border-[#D9DED8] p-4"
                       key={task.id}
@@ -775,8 +840,54 @@ export function ClientRecordDetail({
                         task={task}
                       />
                     ) : null}
+                    {isHandoffTask ? (
+                      <section className="mt-4 border-t border-[#D9DED8] pt-4">
+                        <p className="text-sm font-bold uppercase text-[#5F6862]">
+                          Handoff context
+                        </p>
+                        {isHandoffLoading ? (
+                          <p className="mt-3 text-sm text-[#5F6862]">
+                            Loading handoff context...
+                          </p>
+                        ) : taskHandoffNotes.length > 0 ? (
+                          <div className="mt-2 divide-y divide-[#D9DED8]">
+                            {taskHandoffNotes.map((note) => (
+                              <div
+                                className="py-3 first:pt-0 last:pb-0"
+                                key={note.id}
+                              >
+                                <p className="font-bold">
+                                  {note.title}
+                                </p>
+                                <p className="mt-2 leading-7 text-[#5F6862]">
+                                  {note.note}
+                                </p>
+                                <p className="mt-2 text-sm text-[#5F6862]">
+                                  Receiving owner: {note.owner}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        ) : needsHandoffContext &&
+                          !isEngagementReadOnly ? (
+                          <HandoffNoteForm
+                            clientWorkflowRecordId={record.id}
+                            isSubmitting={isHandoffSaving}
+                            key={`handoff-context-${task.id}`}
+                            onAddNote={onAddHandoffNote}
+                            task={task}
+                          />
+                        ) : (
+                          <p className="mt-2 text-sm text-[#5F6862]">
+                            No handoff context was recorded for this
+                            Work Item.
+                          </p>
+                        )}
+                      </section>
+                    ) : null}
                   </div>
-                  ),
+                    );
+                  },
                 )
               ) : (
                 <p className="rounded-md bg-[#EDF3EF] p-4 text-[#5F6862]">
@@ -785,6 +896,49 @@ export function ClientRecordDetail({
               )}
             </div>
           )}
+
+          {recordHandoffNotes.length > 0 ? (
+            <details className="group mt-4 border-y border-[#D9DED8] py-4">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-bold text-[#174F42]">
+                <span>
+                  Handoff history ({recordHandoffNotes.length})
+                </span>
+                <ChevronDown
+                  aria-hidden="true"
+                  className="transition-transform group-open:rotate-180"
+                  size={20}
+                />
+              </summary>
+              <div className="mt-3 divide-y divide-[#D9DED8]">
+                {recordHandoffNotes.map((note) => {
+                  const linkedTask = recordTasks.find(
+                    (task) => task.id === note.workflowTaskId,
+                  );
+
+                  return (
+                    <div className="py-4" key={note.id}>
+                      <p className="font-bold">{note.title}</p>
+                      {linkedTask ? (
+                        <p className="mt-1 text-sm font-semibold text-[#174F42]">
+                          Work Item: {linkedTask.title}
+                        </p>
+                      ) : (
+                        <p className="mt-1 text-sm font-semibold text-[#5F6862]">
+                          Earlier job-level note
+                        </p>
+                      )}
+                      <p className="mt-2 leading-7 text-[#5F6862]">
+                        {note.note}
+                      </p>
+                      <p className="mt-2 text-sm text-[#5F6862]">
+                        Receiving owner: {note.owner}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            </details>
+          ) : null}
 
           {!isEngagementReadOnly && workItemQueue.length > 1 ? (
             <details className="group mt-4 border-y border-[#D9DED8] py-4">
@@ -836,61 +990,15 @@ export function ClientRecordDetail({
           {!isEngagementReadOnly ? (
             <WorkflowTaskForm
               clientWorkflowRecordId={record.id}
-              isSubmitting={isTaskSaving}
-              onAddTask={onAddTask}
-            />
-          ) : null}
-        </div>
-      ) : null}
-
-      {visibleActiveTab === "handoff" ? (
-        <div className="mt-5">
-          <h3 className="font-bold">Handoff Notes</h3>
-          <p className="mt-2 text-sm leading-6 text-[#5F6862]">
-            Notes that help a VA, assistant, or teammate continue
-            the work with enough context.
-          </p>
-          {handoffMessage ? (
-            <p className="mt-4 rounded-md bg-red-50 p-4 font-semibold text-red-700">
-              {handoffMessage}
-            </p>
-          ) : null}
-          {isHandoffLoading ? (
-            <p className="mt-4 text-[#5F6862]">
-              Loading handoff notes...
-            </p>
-          ) : (
-            <div className="mt-3 grid gap-3">
-              {recordHandoffNotes.length > 0 ? (
-                recordHandoffNotes.map((note) => (
-                  <div
-                    className="rounded-md border border-[#D9DED8] p-4"
-                    key={note.id}
-                  >
-                    <p className="font-bold">{note.title}</p>
-                    <p className="mt-2 leading-7 text-[#5F6862]">
-                      {note.note}
-                    </p>
-                    <p className="mt-2 text-sm text-[#5F6862]">
-                      Owner: {note.owner}
-                    </p>
-                  </div>
-                ))
-              ) : (
-                <p className="rounded-md bg-[#EDF3EF] p-4 text-[#5F6862]">
-                  {isEngagementReadOnly
-                    ? "No handoff notes were recorded for this job."
-                    : "No handoff notes yet. Add context before delegating this client workflow."}
-                </p>
+              defaultPhase={getDefaultWorkItemPhase(
+                selectedEngagement.lifecycleStage,
               )}
-            </div>
-          )}
-
-          {!isEngagementReadOnly ? (
-            <HandoffNoteForm
-              clientWorkflowRecordId={record.id}
-              isSubmitting={isHandoffSaving}
-              onAddNote={onAddHandoffNote}
+              isSubmitting={isTaskSaving}
+              key={
+                `work-item-form-${selectedEngagement.id}-` +
+                selectedEngagement.lifecycleStage
+              }
+              onAddTask={onAddTask}
             />
           ) : null}
         </div>
