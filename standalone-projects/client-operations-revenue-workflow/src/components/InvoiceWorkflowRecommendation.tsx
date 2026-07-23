@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { formatDateTime } from "@/lib/format-date";
 import type {
-  ClientWorkflowRecord,
+  ClientEngagement,
   InvoiceRecord,
 } from "@/lib/client-workflow-types";
 import {
@@ -12,8 +12,8 @@ import {
 } from "@/lib/invoice-workflow";
 
 type Props = {
+  engagement: ClientEngagement;
   invoice: InvoiceRecord;
-  record: ClientWorkflowRecord;
   isApplying: boolean;
   onApply: (
     invoice: InvoiceRecord,
@@ -30,11 +30,11 @@ const changeFields = [
 
 function buildChangeSummary(
   recommendation: RecommendationData,
-  record: ClientWorkflowRecord,
+  engagement: ClientEngagement,
 ) {
   return changeFields.flatMap(([field, label]) => {
     const recommendedValue = recommendation.updates[field];
-    const currentValue = record[field];
+    const currentValue = engagement[field];
 
     return recommendedValue !== undefined &&
       recommendedValue !== currentValue
@@ -46,17 +46,20 @@ function buildChangeSummary(
 
 
 export function InvoiceWorkflowRecommendation({
+  engagement,
   invoice,
-  record,
   isApplying,
   onApply,
 }: Props) {
   const [message, setMessage] = useState("");
   const recommendation = getInvoiceWorkflowRecommendation(
     invoice,
-    record,
+    engagement,
   );
-  const changes = buildChangeSummary(recommendation, record);
+  const changes = buildChangeSummary(
+    recommendation,
+    engagement,
+  );
   const wasAppliedForCurrentStatus =
     invoice.workflowActionAppliedStatus ===
     recommendation.effectiveStatus;
@@ -69,7 +72,7 @@ export function InvoiceWorkflowRecommendation({
             </p>
             <p className="mt-2 leading-7 text-[#5F6862]">
                 This invoice condition has already been reviewed and
-                applied to the client workflow.
+                applied to the selected job.
             </p>
             {invoice.workflowActionAppliedAt ? (
                 <p className="mt-2 text-sm text-[#5F6862]">
@@ -90,7 +93,7 @@ export function InvoiceWorkflowRecommendation({
                 Payment workflow already matches
             </p>
             <p className="mt-2 leading-7 text-[#5F6862]">
-                The client record already reflects this recommended
+                The selected job already reflects this recommended
                 payment step, so no update is required.
             </p>
             </div>
@@ -103,9 +106,11 @@ export function InvoiceWorkflowRecommendation({
     try {
       await onApply(invoice, recommendation);
       setMessage("Recommended payment step applied.");
-    } catch {
+    } catch (error) {
       setMessage(
-        "The recommended payment step could not be applied.",
+        error instanceof Error
+          ? error.message
+          : "The recommended payment step could not be applied.",
       );
     }
   }
@@ -134,7 +139,13 @@ export function InvoiceWorkflowRecommendation({
       </div>
 
       {message ? (
-        <p className="mt-4 rounded-md bg-white p-3 font-semibold text-[#5F6862]">
+        <p
+          className={`mt-4 rounded-md bg-white p-3 font-semibold ${
+            message === "Recommended payment step applied."
+              ? "text-[#174F42]"
+              : "text-red-700"
+          }`}
+        >
           {message}
         </p>
       ) : null}

@@ -256,6 +256,7 @@ export type InvoiceCommandResult = {
 export type InvoiceRecommendationCommandResult =
   InvoiceCommandResult & {
     clientRecord: ClientWorkflowRecord;
+    clientEngagement: ClientEngagement;
     alreadyApplied: boolean;
   };
 
@@ -331,6 +332,7 @@ export type ApplyInvoiceRecommendationCommand = {
   clientWorkflowRecordId: string;
   expectedStatus: InvoiceRecord["status"];
   effectiveStatus: InvoiceRecord["status"];
+  expectedEngagementUpdatedAt: string;
   updates: InvoiceWorkflowUpdates;
   evaluationDate?: Date;
 };
@@ -551,6 +553,7 @@ type InvoiceCommandRpcResult = {
 type InvoiceRecommendationCommandRpcResult =
   InvoiceCommandRpcResult & {
     clientRecord: ClientWorkflowRecordRow;
+    clientEngagement: ClientEngagementRow;
     alreadyApplied: boolean;
   };
 
@@ -1188,6 +1191,7 @@ function mapInvoiceRecommendationCommandResult(
     result.requestId !== expectedRequestId ||
     !result.invoice ||
     !result.clientRecord ||
+    !result.clientEngagement ||
     typeof result.alreadyApplied !== "boolean" ||
     !result.reconciliation
   ) {
@@ -1203,6 +1207,9 @@ function mapInvoiceRecommendationCommandResult(
     invoice: mapInvoiceRow(result.invoice),
     clientRecord: mapClientWorkflowRecordRow(
       result.clientRecord,
+    ),
+    clientEngagement: mapClientEngagementRow(
+      result.clientEngagement,
     ),
     alreadyApplied: result.alreadyApplied,
     reconciliation: mapRiskSignalReconciliationResult(
@@ -3155,6 +3162,21 @@ function validateApplyInvoiceRecommendationCommand(
     );
   }
 
+  if (
+    !timestampPattern.test(
+      command.expectedEngagementUpdatedAt,
+    ) ||
+    Number.isNaN(
+      Date.parse(command.expectedEngagementUpdatedAt),
+    )
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Refresh the job before applying this recommendation.",
+      command.commandId,
+    );
+  }
+
   validateInvoiceWorkflowUpdates(command);
 }
 
@@ -4030,6 +4052,8 @@ export function createWorkspaceApplicationApi(
                 command.clientWorkflowRecordId,
               p_expected_invoice_status: command.expectedStatus,
               p_effective_invoice_status: command.effectiveStatus,
+              p_expected_engagement_updated_at:
+                command.expectedEngagementUpdatedAt,
               p_updates: normalizeInvoiceWorkflowUpdates(
                 command.updates,
               ),

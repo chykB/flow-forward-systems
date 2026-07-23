@@ -7,11 +7,11 @@ import { InvoiceWorkflowRecommendation } from "@/components/InvoiceWorkflowRecom
 import { formatDateTime } from "@/lib/format-date";
 import {
   getEffectiveInvoiceStatus,
-  getPrimaryInvoiceWorkflowTarget,
+  getInvoiceWorkflowTarget,
   type InvoiceWorkflowRecommendation as RecommendationData,
 } from "@/lib/invoice-workflow";
 import type {
-  ClientWorkflowRecord,
+  ClientEngagement,
   InvoiceRecord,
 } from "@/lib/client-workflow-types";
 import type {
@@ -24,14 +24,13 @@ import {
 
 type InvoicePanelProps = {
   clientWorkflowRecordId: string;
+  engagement: ClientEngagement;
   errorMessage: string;
   invoices: InvoiceRecord[];
   isLoading: boolean;
   isReadOnly: boolean;
   isSaving: boolean;
-  record: ClientWorkflowRecord;
   isApplyingRecommendation: boolean;
-  showWorkflowRecommendations: boolean;
   onApplyRecommendation: (
     invoice: InvoiceRecord,
     recommendation: RecommendationData,
@@ -78,18 +77,19 @@ function formatDate(value: string) {
 }
 
 function InvoiceHistoryItem({
+  engagement,
   invoice,
   isApplyingRecommendation,
-  isPrimaryRecommendation,
+  isRecommendationTarget,
   isReadOnly,
   isSaving,
   onApplyRecommendation,
   onUpdate,
-  record,
 }: {
+  engagement: ClientEngagement;
   invoice: InvoiceRecord;
   isApplyingRecommendation: boolean;
-  isPrimaryRecommendation: boolean;
+  isRecommendationTarget: boolean;
   isReadOnly: boolean;
   isSaving: boolean;
   onApplyRecommendation: (
@@ -100,7 +100,6 @@ function InvoiceHistoryItem({
     invoiceId: string,
     updates: InvoiceRecordUpdates,
   ) => Promise<void>;
-  record: ClientWorkflowRecord;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const effectiveStatus = getEffectiveInvoiceStatus(
@@ -213,12 +212,12 @@ function InvoiceHistoryItem({
           Open payment link
         </a>
       ) : null}
-      {!isReadOnly && isPrimaryRecommendation ? (
+      {!isReadOnly && isRecommendationTarget ? (
         <InvoiceWorkflowRecommendation
+          engagement={engagement}
           invoice={invoice}
           isApplying={isApplyingRecommendation}
           onApply={onApplyRecommendation}
-          record={record}
         />
       ) : null}
 
@@ -253,6 +252,7 @@ function InvoiceHistoryItem({
 
 export function InvoicePanel({
   clientWorkflowRecordId,
+  engagement,
   errorMessage,
   invoices,
   isLoading,
@@ -261,13 +261,11 @@ export function InvoicePanel({
   onCreate,
   onUpdate,
   isApplyingRecommendation,
-  showWorkflowRecommendations,
   onApplyRecommendation,
-  record,
 }: InvoicePanelProps) {
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const primaryInvoice =
-    getPrimaryInvoiceWorkflowTarget(invoices);
+  const recommendationTarget =
+    getInvoiceWorkflowTarget(invoices);
   async function createInvoice(invoice: NewInvoiceRecord) {
     await onCreate(invoice);
     setIsFormOpen(false);
@@ -325,18 +323,17 @@ export function InvoicePanel({
         <div className="mt-6">
           {invoices.map((invoice) => (
             <InvoiceHistoryItem
+              engagement={engagement}
               invoice={invoice}
               isApplyingRecommendation={isApplyingRecommendation}
-              isPrimaryRecommendation={
-                showWorkflowRecommendations &&
-                primaryInvoice?.id === invoice.id
+              isRecommendationTarget={
+                recommendationTarget?.id === invoice.id
               }
               isReadOnly={isReadOnly}
               isSaving={isSaving}
               key={invoice.id}
               onApplyRecommendation={onApplyRecommendation}
               onUpdate={onUpdate}
-              record={record}
             />
           ))}
         </div>

@@ -635,6 +635,7 @@ export function ClientRecordDetail({
         <div className="mt-5">
           <InvoicePanel
             clientWorkflowRecordId={record.id}
+            engagement={selectedEngagement}
             errorMessage={invoiceMessage}
             invoices={invoices}
             isApplyingRecommendation={
@@ -648,10 +649,6 @@ export function ClientRecordDetail({
             }
             onCreate={onAddInvoice}
             onUpdate={onUpdateInvoice}
-            record={workflowRecord}
-            showWorkflowRecommendations={
-              selectedEngagement.isPrimary
-            }
           />
         </div>
       ) : null}

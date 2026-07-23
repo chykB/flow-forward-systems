@@ -108,7 +108,7 @@ The current function names are:
 
 Each function explicitly verifies that `auth.uid()` owns the workspace, validates its input, and performs the write with its durable Activity entry before committing. Child operations verify that the engagement belongs to the supplied client and workspace. Commands that can change deterministic workflow conditions also reconcile risk signals and Workflow Health. Creating a context-only handoff note does not change risk or health.
 
-Proposal and Invoice create/update operations and Work Item create/status operations are available for every Active engagement. Proposal recommendation application is also engagement-owned. Each operation carries explicit engagement context into deterministic reconciliation, so one job cannot change another job's risk or health. Invoice recommendation application remains primary-only until its workflow updates are moved from the compatibility Client Record to the selected engagement.
+Proposal and Invoice create/update/recommendation operations and Work Item create/status operations are available for every Active engagement. Each operation carries explicit engagement context into deterministic reconciliation, so one job cannot change another job's workflow state, risk, or health.
 
 These database functions are internal implementation details. Granting `authenticated` execution does not make them a supported external API.
 
@@ -183,13 +183,13 @@ Invoice creation and update validate:
 - an Active engagement that belongs to the referenced Client Record and workspace;
 - the final merged Invoice state for partial updates.
 
-Invoice recommendation application accepts only payment status, priority, next action, and next follow-up date. Relationship concern cannot be changed by an Invoice recommendation. The command verifies the expected Invoice status and remains restricted to the primary compatibility engagement until those workflow updates are engagement-owned.
+Invoice recommendation application accepts only payment status, priority, next action, and next follow-up date. Relationship concern and lifecycle stage cannot be changed by an Invoice recommendation. The command verifies the expected Invoice status and selected engagement version, updates the selected Active engagement, and reconciles only that engagement. Automatic lifecycle progression remains forward-only. Primary engagement fields are mirrored to the compatibility Client Record; secondary engagement recommendations leave the primary job and Client Record summary unchanged.
 
 Risk review accepts only two human decisions. Marking an Open signal as Reviewed acknowledges it while leaving the issue active and Workflow Health unchanged. Dismissing an Open or Reviewed signal requires a reason, closes that signal, recalculates only the selected engagement, and mirrors health to the compatibility Client Record only for the primary engagement. Generated signals cannot be manually marked Resolved; the source-specific workflow command must remove the underlying condition.
 
 ### Optimistic concurrency
 
-Work-item status updates include `expectedStatus`. Client-record, engagement, follow-up completion, Proposal, Invoice, and risk-review updates include `expectedUpdatedAt`. The database refreshes those concurrency tokens with wall-clock time on every update, including multiple updates within one transaction. Proposal recommendation application includes the expected Proposal status and selected engagement version. Invoice recommendation application includes the expected Invoice status. If another command changes an entity first, the command returns a conflict instead of overwriting newer data.
+Work-item status updates include `expectedStatus`. Client-record, engagement, follow-up completion, Proposal, Invoice, and risk-review updates include `expectedUpdatedAt`. The database refreshes those concurrency tokens with wall-clock time on every update, including multiple updates within one transaction. Proposal and Invoice recommendation application include the expected child-record status and selected engagement version. If another command changes an entity first, the command returns a conflict instead of overwriting newer data.
 
 ### Idempotency
 
@@ -269,7 +269,7 @@ User-facing errors include the command or query request ID. Console diagnostics 
 | Work items | workspace work items and dependencies | none directly | engagement-scoped create/status/dependency update + reconciliation + Activity | Sequential queue default; parallel override, Planned, stage, dependency, and cycle guards implemented |
 | Handoff notes | workspace notes | none directly | engagement-scoped create + Activity | Implemented for all Active engagements |
 | Proposals | workspace/client proposals | none directly | engagement-scoped create/update/recommendation + reconciliation + Activity | Create, update, and recommendation application implemented for all Active engagements |
-| Invoices | workspace/client invoices | none directly | engagement-scoped create/update/recommendation + reconciliation + Activity | Create/update enabled for all Active engagements; recommendation remains primary-only |
+| Invoices | workspace/client invoices | none directly | engagement-scoped create/update/recommendation + reconciliation + Activity | Implemented for all Active engagements |
 | Risk signals | workspace risk history | none directly | engagement-scoped review/dismiss + isolated health + Activity | Implemented; source-driven resolution remains separate |
 | Activity | workspace history | direct inserts from legacy flows | command-owned audit writes | Client-record, work-item, handoff-note, Proposal, Invoice, and risk-review audit implemented; other flows pending |
 
@@ -288,6 +288,5 @@ The assistant should use the same application command contract as the manual UI 
 
 ## Next Slices
 
-1. Replace the primary-only Invoice recommendation with an engagement-owned recommendation update.
-2. Move remaining legacy Activity writes behind command-owned audit effects.
-3. Add a protected server tool layer only after the manual command surface is complete and tested.
+1. Move remaining legacy Activity writes behind command-owned audit effects.
+2. Add a protected server tool layer only after the manual command surface is complete and tested.

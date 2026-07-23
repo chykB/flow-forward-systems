@@ -1694,6 +1694,19 @@ function WorkspaceDashboard({
     }
   }
 
+  async function refreshInvoiceEngagementVersions() {
+    try {
+      setEngagements(
+        await workspaceApi.engagements.list(),
+      );
+    } catch (error) {
+      console.error(
+        "Invoice job version refresh failed",
+        error,
+      );
+    }
+  }
+
   function applyRiskReconciliation(
     result: Awaited<
       ReturnType<typeof reconcileClientRiskSignals>
@@ -2041,6 +2054,7 @@ function WorkspaceDashboard({
       applyRiskReconciliation(result.reconciliation);
       setRiskSignalsStatus("ready");
       setRiskSignalsMessage("");
+      await refreshInvoiceEngagementVersions();
       await refreshActivityHistory();
     } catch (error) {
       const invoiceError =
@@ -2090,6 +2104,7 @@ function WorkspaceDashboard({
       applyRiskReconciliation(result.reconciliation);
       setRiskSignalsStatus("ready");
       setRiskSignalsMessage("");
+      await refreshInvoiceEngagementVersions();
       await refreshActivityHistory();
     } catch (error) {
       const invoiceError =
@@ -2111,12 +2126,11 @@ function WorkspaceDashboard({
     if (
       !selectedRecord ||
       !selectedEngagement ||
-      !selectedEngagement.isPrimary ||
       invoice.clientWorkflowRecordId !== selectedRecord.id ||
       invoice.clientEngagementId !== selectedEngagement.id
     ) {
       throw new Error(
-        "Payment recommendations are available only for the selected primary job.",
+        "The invoice recommendation does not belong to the selected job.",
       );
     }
 
@@ -2124,6 +2138,23 @@ function WorkspaceDashboard({
     setInvoicesMessage("");
 
     try {
+      const currentEngagements =
+        await workspaceApi.engagements.list();
+      const commandEngagement = currentEngagements.find(
+        (engagement) =>
+          engagement.id === invoice.clientEngagementId &&
+          engagement.clientWorkflowRecordId ===
+            invoice.clientWorkflowRecordId,
+      );
+
+      if (!commandEngagement) {
+        throw new Error(
+          "The selected job is no longer available. Refresh and try again.",
+        );
+      }
+
+      setEngagements(currentEngagements);
+
       const result = await workspaceApi.invoices.applyRecommendation({
         commandId: createOperationRequestId(),
         clientEngagementId: invoice.clientEngagementId,
@@ -2131,6 +2162,8 @@ function WorkspaceDashboard({
         clientWorkflowRecordId: invoice.clientWorkflowRecordId,
         expectedStatus: invoice.status,
         effectiveStatus: recommendation.effectiveStatus,
+        expectedEngagementUpdatedAt:
+          commandEngagement.updatedAt,
         updates: recommendation.updates,
       });
 
@@ -2149,8 +2182,12 @@ function WorkspaceDashboard({
             : item,
         ),
       );
-      setEngagements(
-        await workspaceApi.engagements.list(),
+      setEngagements((current) =>
+        current.map((engagement) =>
+          engagement.id === result.clientEngagement.id
+            ? result.clientEngagement
+            : engagement,
+        ),
       );
       applyRiskReconciliation(result.reconciliation);
       setRiskSignalsStatus("ready");
@@ -2164,7 +2201,6 @@ function WorkspaceDashboard({
               "The recommended payment step could not be applied.",
             );
 
-      setInvoicesMessage(invoiceError.message);
       throw invoiceError;
     } finally {
       setIsApplyingInvoiceRecommendation(false);

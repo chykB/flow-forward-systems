@@ -1,12 +1,12 @@
 import type {
-  ClientWorkflowRecord,
+  ClientEngagement,
   InvoiceRecord,
   InvoiceStatus,
 } from "@/lib/client-workflow-types";
 
 export type InvoiceWorkflowUpdates = Partial<
   Pick<
-    ClientWorkflowRecord,
+    ClientEngagement,
     | "paymentStatus"
     | "priority"
     | "nextAction"
@@ -59,15 +59,15 @@ function futureDateKey(date: Date, days: number) {
 }
 
 function getPostPaymentNextAction(
-  record: ClientWorkflowRecord,
+  engagement: ClientEngagement,
 ) {
-  if (record.onboardingStatus === "Not started") {
+  if (engagement.onboardingStatus === "Not started") {
     return "Start client onboarding and confirm the first delivery steps.";
   }
 
   if (
     ["In progress", "Waiting", "Blocked"].includes(
-      record.onboardingStatus,
+      engagement.onboardingStatus,
     )
   ) {
     return "Continue client onboarding and resolve its next open step.";
@@ -75,7 +75,7 @@ function getPostPaymentNextAction(
 
   if (
     ["Not started", "In progress", "Waiting", "Blocked"].includes(
-      record.deliveryStatus,
+      engagement.deliveryStatus,
     )
   ) {
     return "Continue the next open client delivery step.";
@@ -83,7 +83,7 @@ function getPostPaymentNextAction(
 
   if (
     ["Not started", "In progress", "Waiting", "Blocked"].includes(
-      record.approvalStatus,
+      engagement.approvalStatus,
     )
   ) {
     return "Review the next open client approval step.";
@@ -116,7 +116,7 @@ export function getEffectiveInvoiceStatus(
   return invoice.status;
 }
 
-export function getPrimaryInvoiceWorkflowTarget(
+export function getInvoiceWorkflowTarget(
   invoices: InvoiceRecord[],
   currentDate = new Date(),
 ) {
@@ -172,20 +172,20 @@ export function getPrimaryInvoiceWorkflowTarget(
 
 export function getInvoiceWorkflowRecommendation(
   invoice: InvoiceRecord,
-  record: ClientWorkflowRecord,
+  engagement: ClientEngagement,
   currentDate = new Date(),
 ): InvoiceWorkflowRecommendation {
   const effectiveStatus = getEffectiveInvoiceStatus(invoice, currentDate);
   const reference = invoice.invoiceNumber
     ? `invoice ${invoice.invoiceNumber}`
     : "the invoice";
-    const disputeNextAction =
+  const disputeNextAction =
     `Review the dispute for ${reference} ` +
     "before sending any payment reminder.";
 
   const shouldReplaceResolvedDisputeAction =
     Boolean(invoice.disputeResolvedAt) &&
-    record.nextAction === disputeNextAction;
+    engagement.nextAction === disputeNextAction;
   const today = dateKey(currentDate);
 
   if (effectiveStatus === "Draft needed") {
@@ -195,7 +195,7 @@ export function getInvoiceWorkflowRecommendation(
       effectiveStatus,
       updates: {
         paymentStatus: "Not started",
-        priority: atLeast(record.priority, "Medium"),
+        priority: atLeast(engagement.priority, "Medium"),
         nextAction: `Prepare and send ${reference}.`,
         nextFollowUpAt: futureDateKey(currentDate, 1),
       },
@@ -231,7 +231,7 @@ export function getInvoiceWorkflowRecommendation(
       effectiveStatus,
       updates: {
         paymentStatus: "Waiting",
-        priority: atLeast(record.priority, "Medium"),
+        priority: atLeast(engagement.priority, "Medium"),
         nextAction: `Review ${reference} and prepare a payment reminder for approval.`,
         nextFollowUpAt: invoice.dueDate,
       },
@@ -272,7 +272,8 @@ export function getInvoiceWorkflowRecommendation(
     };
 
     if (shouldReplaceResolvedDisputeAction) {
-      updates.nextAction = getPostPaymentNextAction(record);
+      updates.nextAction =
+        getPostPaymentNextAction(engagement);
       updates.nextFollowUpAt = futureDateKey(currentDate, 1);
     }
 
@@ -312,6 +313,4 @@ export function getInvoiceWorkflowRecommendation(
     effectiveStatus,
     updates: { paymentStatus: "Not needed" },
   };
-
-  
 }
