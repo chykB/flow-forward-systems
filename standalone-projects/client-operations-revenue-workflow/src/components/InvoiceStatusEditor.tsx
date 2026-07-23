@@ -85,6 +85,7 @@ function StandardInvoiceStatusEditor({
   const invoiceNeeded = status !== "Not needed";
   const invoiceIssued =
     invoiceStatusRequiresIssuedDetails(status);
+  const isProposalLinked = Boolean(invoice.proposalRecordId);
   const fieldPrefix = `invoice-status-${invoice.id}`;
 
   async function submit(
@@ -264,8 +265,11 @@ function StandardInvoiceStatusEditor({
                 : "Invoice amount (optional until issued)"}
               <input
                 id={`${fieldPrefix}-amount`}
-                className="rounded-md border border-[#D9DED8] bg-white px-4 py-3"
+                className={`rounded-md border border-[#D9DED8] px-4 py-3 ${
+                  isProposalLinked ? "bg-[#F7F8F6]" : "bg-white"
+                }`}
                 min="0"
+                readOnly={isProposalLinked}
                 step="0.01"
                 type="number"
                 value={amount}
@@ -280,8 +284,11 @@ function StandardInvoiceStatusEditor({
               Currency
               <input
                 id={`${fieldPrefix}-currency`}
-                className="rounded-md border border-[#D9DED8] bg-white px-4 py-3 uppercase"
+                className={`rounded-md border border-[#D9DED8] px-4 py-3 uppercase ${
+                  isProposalLinked ? "bg-[#F7F8F6]" : "bg-white"
+                }`}
                 maxLength={3}
+                readOnly={isProposalLinked}
                 value={currency}
                 onChange={(event) =>
                   setCurrency(event.target.value)
@@ -289,6 +296,12 @@ function StandardInvoiceStatusEditor({
               />
             </label>
           </div>
+          {isProposalLinked ? (
+            <p className="text-sm leading-6 text-[#5F6862]">
+              The billed value is preserved from the proposal. Void
+              this invoice and issue a replacement to change it.
+            </p>
+          ) : null}
         </div>
       ) : null}
 

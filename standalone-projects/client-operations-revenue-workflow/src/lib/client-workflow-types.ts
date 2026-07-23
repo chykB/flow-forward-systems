@@ -170,10 +170,22 @@ export type ProposalRecord = {
   updatedAt: string;
 };
 
+export type InvoiceBillingBasis =
+  | "Custom"
+  | "Full proposal"
+  | "Deposit"
+  | "Milestone"
+  | "Remaining balance";
+
 export type InvoiceRecord = {
   id: string;
   clientWorkflowRecordId: string;
   clientEngagementId: string;
+  proposalRecordId: string;
+  proposalTitleSnapshot: string;
+  proposalAmountSnapshot: number | null;
+  billingBasis: InvoiceBillingBasis;
+  billingPercentage: number | null;
   invoiceNumber: string;
   amount: number;
   currency: string;

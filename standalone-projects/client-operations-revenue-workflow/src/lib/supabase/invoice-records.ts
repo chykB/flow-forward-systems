@@ -6,6 +6,11 @@ export type InvoiceRecordRow = {
   workspace_id: string;
   client_workflow_record_id: string;
   client_engagement_id: string;
+  proposal_record_id: string | null;
+  proposal_title_snapshot: string;
+  proposal_amount_snapshot: number | string | null;
+  billing_basis: InvoiceRecord["billingBasis"];
+  billing_percentage: number | string | null;
   invoice_number: string | null;
   amount: number | string;
   currency: string;
@@ -37,6 +42,17 @@ export function mapInvoiceRow(
     id: row.id,
     clientWorkflowRecordId: row.client_workflow_record_id,
     clientEngagementId: row.client_engagement_id,
+    proposalRecordId: row.proposal_record_id ?? "",
+    proposalTitleSnapshot: row.proposal_title_snapshot ?? "",
+    proposalAmountSnapshot:
+      row.proposal_amount_snapshot === null
+        ? null
+        : Number(row.proposal_amount_snapshot),
+    billingBasis: row.billing_basis,
+    billingPercentage:
+      row.billing_percentage === null
+        ? null
+        : Number(row.billing_percentage),
     invoiceNumber: row.invoice_number ?? "",
     amount: Number(row.amount ?? 0),
     currency: row.currency,

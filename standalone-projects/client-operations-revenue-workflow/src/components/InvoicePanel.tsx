@@ -13,6 +13,7 @@ import {
 import type {
   ClientEngagement,
   InvoiceRecord,
+  ProposalRecord,
 } from "@/lib/client-workflow-types";
 import type {
   InvoiceRecordUpdates,
@@ -31,6 +32,7 @@ type InvoicePanelProps = {
   isReadOnly: boolean;
   isSaving: boolean;
   isApplyingRecommendation: boolean;
+  proposals: ProposalRecord[];
   onApplyRecommendation: (
     invoice: InvoiceRecord,
     recommendation: RecommendationData,
@@ -156,6 +158,28 @@ function InvoiceHistoryItem({
         </div>
       ) : null}
 
+      {invoice.proposalRecordId ? (
+        <div className="mt-4 border-y border-[#D9DED8] py-3 text-sm text-[#5F6862]">
+          <p>
+            <span className="font-bold text-[#17201C]">
+              Based on proposal:
+            </span>{" "}
+            {invoice.proposalTitleSnapshot}
+          </p>
+          <p className="mt-1">
+            {invoice.billingBasis}
+            {invoice.billingPercentage !== null
+              ? ` (${invoice.billingPercentage}%)`
+              : ""}
+            {" of "}
+            {formatAmount(
+              invoice.proposalAmountSnapshot ?? 0,
+              invoice.currency,
+            )}
+          </p>
+        </div>
+      ) : null}
+
       {invoice.status === "Disputed" && invoice.disputeReason ? (
         <div className="mt-4 rounded-md bg-red-50 p-4">
           <p className="font-bold text-red-700">
@@ -262,6 +286,7 @@ export function InvoicePanel({
   onUpdate,
   isApplyingRecommendation,
   onApplyRecommendation,
+  proposals,
 }: InvoicePanelProps) {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const recommendationTarget =
@@ -305,8 +330,10 @@ export function InvoicePanel({
         <div className="mt-5">
           <InvoiceForm
             clientWorkflowRecordId={clientWorkflowRecordId}
+            invoices={invoices}
             isSubmitting={isSaving}
             onCreate={createInvoice}
+            proposals={proposals}
           />
         </div>
       ) : null}

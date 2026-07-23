@@ -2,7 +2,7 @@
 
 Status: Active technical contract
 
-Implemented slices: Work items, client records, follow-up completion, handoff notes, proposals, engagement-owned Proposal recommendations, invoices, engagement ownership, engagement-scoped risk review, sequential Work Item controls, and Work Item dependency editing
+Implemented slices: Work items, client records, follow-up completion, handoff notes, proposals, engagement-owned Proposal recommendations, proposal-linked Invoice billing, invoices, engagement ownership, engagement-scoped risk review, sequential Work Item controls, and Work Item dependency editing
 
 Public API status: None of the interfaces or database functions in this document are a versioned customer API.
 
@@ -177,6 +177,10 @@ Invoice creation and update validate:
 
 - the exact writable field set, excluding IDs, timestamps, workspace ownership, dispute lifecycle timestamps, and recommendation markers;
 - invoice number, amount, currency, description, status, payment link, and date requirements;
+- optional accepted-Proposal ownership within the same job, with full-value, deposit, milestone, remaining-balance, or custom billing;
+- proposal title and value snapshots so later Proposal edits cannot rewrite the Invoice's original billing context;
+- serialized remaining-balance calculation that excludes voided and not-needed Invoices and prevents the proposal value from being invoiced twice;
+- immutable billed value and currency for proposal-linked Invoices; corrections require voiding the Invoice and issuing a replacement;
 - date-derived payment tracking: `Due soon` is valid from the due date through seven days before it, while `Overdue` is valid only after the due date; commands preserve the contractual due date and reject mismatched status/date combinations;
 - dispute reason and resolution outcome requirements;
 - the referenced Client Record and workspace relationship;
@@ -213,7 +217,7 @@ Creating a handoff note writes exactly one `Handoff note added` Activity entry i
 
 Creating or updating a Proposal writes exactly one user-facing Proposal Activity entry and reconciles Proposal risks in the same transaction. Applying a Proposal recommendation writes exactly one `Proposal next step applied` entry when the recommendation is newly applied. An idempotent replay creates no duplicate Proposal, recommendation, risk, health, or Activity effects.
 
-Creating or updating an Invoice writes exactly one user-facing Invoice Activity entry and reconciles payment risks in the same transaction. Dispute transitions record whether a dispute was opened or resolved while database triggers own its timestamps and resolution rules. Applying an Invoice recommendation writes exactly one `Invoice payment step applied` entry when the recommendation is newly applied. An idempotent replay creates no duplicate Invoice, dispute, recommendation, risk, health, or Activity effects.
+Creating or updating an Invoice writes exactly one user-facing Invoice Activity entry and reconciles payment risks in the same transaction. A proposal-linked Invoice records its billing basis and immutable Proposal title/value snapshots in that entry and row; ad-hoc Invoices remain supported. Dispute transitions record whether a dispute was opened or resolved while database triggers own its timestamps and resolution rules. Applying an Invoice recommendation writes exactly one `Invoice payment step applied` entry when the recommendation is newly applied. An idempotent replay creates no duplicate Invoice, dispute, recommendation, risk, health, or Activity effects.
 
 Risk reconciliation is engagement-scoped and deterministic. Each engagement owns its signals and score; only the primary engagement mirrors its score to the compatibility Client Record summary. An unresolved prerequisite suppresses duplicate downstream Work Item risk, while the root issue remains actionable. Reconciliation may write `Workflow risk review updated` for the affected engagement when active issues or Workflow Health change.
 
@@ -269,7 +273,7 @@ User-facing errors include the command or query request ID. Console diagnostics 
 | Work items | workspace work items and dependencies | none directly | engagement-scoped create/status/dependency update + reconciliation + Activity | Sequential queue default; parallel override, Planned, stage, dependency, and cycle guards implemented |
 | Handoff notes | workspace notes | none directly | engagement-scoped create + Activity | Implemented for all Active engagements |
 | Proposals | workspace/client proposals | none directly | engagement-scoped create/update/recommendation + reconciliation + Activity | Create, update, and recommendation application implemented for all Active engagements |
-| Invoices | workspace/client invoices | none directly | engagement-scoped create/update/recommendation + reconciliation + Activity | Implemented for all Active engagements |
+| Invoices | workspace/client invoices | none directly | engagement-scoped create/update/recommendation + optional accepted-Proposal billing + reconciliation + Activity | Implemented for all Active engagements |
 | Risk signals | workspace risk history | none directly | engagement-scoped review/dismiss + isolated health + Activity | Implemented; source-driven resolution remains separate |
 | Activity | workspace history | direct inserts from legacy flows | command-owned audit writes | Client-record, work-item, handoff-note, Proposal, Invoice, and risk-review audit implemented; other flows pending |
 

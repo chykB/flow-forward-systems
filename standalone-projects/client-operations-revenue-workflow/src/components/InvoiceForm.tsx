@@ -1,25 +1,41 @@
 "use client";
 
 import { useState } from "react";
-import type { InvoiceRecord } from "@/lib/client-workflow-types";
+import type {
+  InvoiceBillingBasis,
+  InvoiceRecord,
+  ProposalRecord,
+} from "@/lib/client-workflow-types";
+import type { NewInvoiceRecord } from "@/lib/application/workspace-api";
 import {
   invoiceStatusOptions,
   invoiceStatusRequiresDisputeReason,
   invoiceStatusRequiresDueDate,
+  invoiceStatusRequiresIssuedDetails,
   invoiceStatusRequiresPaidDate,
   invoiceStatusRequiresSentDate,
-  invoiceStatusRequiresIssuedDetails,
 } from "@/lib/invoice-options";
-import type { NewInvoiceRecord } from "@/lib/application/workspace-api";
 import { getEffectiveInvoiceStatus } from "@/lib/invoice-workflow";
+import {
+  getDefaultProposalBillingBasis,
+  getProposalInvoiceAmount,
+  getProposalInvoicedAmount,
+  getProposalRemainingAmount,
+  proposalInvoiceBillingOptions,
+} from "@/lib/proposal-invoice-billing";
 
 type InvoiceFormProps = {
   clientWorkflowRecordId: string;
+  invoices: InvoiceRecord[];
   isSubmitting: boolean;
   onCreate: (invoice: NewInvoiceRecord) => Promise<void>;
+  proposals: ProposalRecord[];
 };
 
 type InvoiceFormValues = {
+  proposalRecordId: string;
+  billingBasis: InvoiceBillingBasis;
+  billingPercentage: string;
   invoiceNumber: string;
   amount: string;
   currency: string;
@@ -36,18 +52,70 @@ type InvoiceFormErrors = Partial<
   Record<keyof InvoiceFormValues, string>
 >;
 
-const initialValues: InvoiceFormValues = {
-  invoiceNumber: "",
-  amount: "",
-  currency: "USD",
-  description: "",
-  status: "Draft needed",
-  paymentLink: "",
-  sentAt: "",
-  dueDate: "",
-  paidAt: "",
-  disputeReason: "",
-};
+function formatAmount(amount: number, currency: string) {
+  try {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency,
+    }).format(amount);
+  } catch {
+    return `${currency} ${amount.toFixed(2)}`;
+  }
+}
+
+function amountInputValue(amount: number | null) {
+  return amount === null
+    ? ""
+    : amount.toFixed(2).replace(/\.00$/, "");
+}
+
+function getEligibleProposals(proposals: ProposalRecord[]) {
+  return proposals.filter(
+    (proposal) => proposal.status === "Accepted",
+  );
+}
+
+function getInitialValues(
+  proposals: ProposalRecord[],
+  invoices: InvoiceRecord[],
+): InvoiceFormValues {
+  const eligibleProposals = getEligibleProposals(proposals);
+  const billableProposals = eligibleProposals.filter(
+    (proposal) =>
+      getProposalRemainingAmount(proposal, invoices) > 0,
+  );
+  const proposal =
+    billableProposals.length === 1
+      ? billableProposals[0]
+      : undefined;
+  const billingBasis = proposal
+    ? getDefaultProposalBillingBasis(proposal, invoices)
+    : "Custom";
+  const amount = proposal
+    ? getProposalInvoiceAmount(
+        proposal,
+        invoices,
+        billingBasis,
+        null,
+      )
+    : null;
+
+  return {
+    proposalRecordId: proposal?.id ?? "",
+    billingBasis,
+    billingPercentage: "",
+    invoiceNumber: "",
+    amount: amountInputValue(amount),
+    currency: proposal?.currency ?? "USD",
+    description: proposal?.title ?? "",
+    status: "Draft needed",
+    paymentLink: "",
+    sentAt: "",
+    dueDate: "",
+    paidAt: "",
+    disputeReason: "",
+  };
+}
 
 function getTodayDateInputValue() {
   const today = new Date();
@@ -68,7 +136,11 @@ function isValidPaymentLink(value: string) {
   }
 }
 
-function validateInvoice(values: InvoiceFormValues) {
+function validateInvoice(
+  values: InvoiceFormValues,
+  proposals: ProposalRecord[],
+  invoices: InvoiceRecord[],
+) {
   const errors: InvoiceFormErrors = {};
   const invoiceNeeded = values.status !== "Not needed";
   const invoiceIssued =
@@ -76,28 +148,85 @@ function validateInvoice(values: InvoiceFormValues) {
   const amount = values.amount.trim()
     ? Number(values.amount)
     : 0;
+  const proposal = proposals.find(
+    (candidate) =>
+      candidate.id === values.proposalRecordId &&
+      candidate.status === "Accepted",
+  );
+
+  if (values.proposalRecordId && !proposal) {
+    errors.proposalRecordId =
+      "Choose an accepted proposal from this job.";
+  }
 
   if (
-    invoiceIssued &&
-    values.invoiceNumber.trim().length < 2
+    invoiceNeeded &&
+    proposal &&
+    values.billingBasis === "Deposit"
+  ) {
+    const percentage = Number(values.billingPercentage);
+
+    if (
+      !values.billingPercentage.trim() ||
+      !Number.isFinite(percentage) ||
+      percentage <= 0 ||
+      percentage > 100
     ) {
-    errors.invoiceNumber =
-        "Enter the invoice number before issuing it.";
-    } else if (values.invoiceNumber.trim().length > 80) {
-    errors.invoiceNumber =
-        "Invoice number must be 80 characters or less.";
+      errors.billingPercentage =
+        "Enter a deposit percentage greater than zero and no more than 100.";
+    }
+  }
+
+  if (invoiceNeeded && proposal) {
+    const invoicedAmount = getProposalInvoicedAmount(
+      proposal.id,
+      invoices,
+    );
+    const remainingAmount = getProposalRemainingAmount(
+      proposal,
+      invoices,
+    );
+
+    if (
+      values.billingBasis === "Full proposal" &&
+      invoicedAmount > 0
+    ) {
+      errors.billingBasis =
+        "Part of this proposal has already been invoiced. Use the remaining balance or another partial amount.";
     }
 
     if (
+      values.billingBasis === "Remaining balance" &&
+      remainingAmount <= 0
+    ) {
+      errors.billingBasis =
+        "This proposal has no remaining balance to invoice.";
+    }
+
+    if (amount > remainingAmount + 0.005) {
+      errors.amount =
+        "The invoice amount cannot exceed the proposal balance.";
+    }
+  }
+
+  if (invoiceIssued && values.invoiceNumber.trim().length < 2) {
+    errors.invoiceNumber =
+      "Enter the invoice number before issuing it.";
+  } else if (values.invoiceNumber.trim().length > 80) {
+    errors.invoiceNumber =
+      "Invoice number must be 80 characters or less.";
+  }
+
+  if (
     invoiceNeeded &&
     values.amount.trim() &&
     (Number.isNaN(amount) || amount < 0)
-    ) {
+  ) {
     errors.amount = "Enter a valid invoice amount.";
-    } else if (invoiceIssued && amount <= 0) {
+  } else if (invoiceIssued && amount <= 0) {
     errors.amount =
-        "Enter an amount greater than zero before issuing the invoice.";
-    }
+      "Enter an amount greater than zero before issuing the invoice.";
+  }
 
   if (
     invoiceNeeded &&
@@ -179,14 +308,32 @@ function validateInvoice(values: InvoiceFormValues) {
 
 export function InvoiceForm({
   clientWorkflowRecordId,
+  invoices,
   isSubmitting,
   onCreate,
+  proposals,
 }: InvoiceFormProps) {
-  const [values, setValues] =
-    useState<InvoiceFormValues>(initialValues);
+  const [values, setValues] = useState<InvoiceFormValues>(() =>
+    getInitialValues(proposals, invoices),
+  );
   const [errors, setErrors] =
     useState<InvoiceFormErrors>({});
   const [formMessage, setFormMessage] = useState("");
+  const eligibleProposals = getEligibleProposals(proposals);
+  const selectedProposal = eligibleProposals.find(
+    (proposal) => proposal.id === values.proposalRecordId,
+  );
+  const invoicedAmount = selectedProposal
+    ? getProposalInvoicedAmount(selectedProposal.id, invoices)
+    : 0;
+  const remainingAmount = selectedProposal
+    ? getProposalRemainingAmount(selectedProposal, invoices)
+    : 0;
+  const amountIsCalculated =
+    Boolean(selectedProposal) &&
+    ["Full proposal", "Deposit", "Remaining balance"].includes(
+      values.billingBasis,
+    );
 
   function updateField<K extends keyof InvoiceFormValues>(
     field: K,
@@ -196,12 +343,105 @@ export function InvoiceForm({
       ...currentValues,
       [field]: value,
     }));
-
     setErrors((currentErrors) => ({
       ...currentErrors,
       [field]: undefined,
     }));
+    setFormMessage("");
+  }
 
+  function selectProposal(proposalRecordId: string) {
+    const proposal = eligibleProposals.find(
+      (candidate) => candidate.id === proposalRecordId,
+    );
+
+    if (!proposal) {
+      setValues((currentValues) => ({
+        ...currentValues,
+        proposalRecordId: "",
+        billingBasis: "Custom",
+        billingPercentage: "",
+        amount: "",
+      }));
+      setErrors({});
+      setFormMessage("");
+      return;
+    }
+
+    const billingBasis = getDefaultProposalBillingBasis(
+      proposal,
+      invoices,
+    );
+    const amount = getProposalInvoiceAmount(
+      proposal,
+      invoices,
+      billingBasis,
+      null,
+    );
+
+    setValues((currentValues) => ({
+      ...currentValues,
+      proposalRecordId: proposal.id,
+      billingBasis,
+      billingPercentage: "",
+      amount: amountInputValue(amount),
+      currency: proposal.currency,
+      description: proposal.title,
+    }));
+    setErrors({});
+    setFormMessage("");
+  }
+
+  function selectBillingBasis(billingBasis: InvoiceBillingBasis) {
+    if (!selectedProposal) {
+      return;
+    }
+
+    const billingPercentage =
+      billingBasis === "Deposit" ? "25" : "";
+    const amount = getProposalInvoiceAmount(
+      selectedProposal,
+      invoices,
+      billingBasis,
+      billingBasis === "Deposit" ? 25 : null,
+    );
+
+    setValues((currentValues) => ({
+      ...currentValues,
+      billingBasis,
+      billingPercentage,
+      amount: amountInputValue(amount),
+    }));
+    setErrors((currentErrors) => ({
+      ...currentErrors,
+      billingBasis: undefined,
+      billingPercentage: undefined,
+      amount: undefined,
+    }));
+    setFormMessage("");
+  }
+
+  function updateDepositPercentage(value: string) {
+    const percentage = value.trim() ? Number(value) : null;
+    const amount = selectedProposal
+      ? getProposalInvoiceAmount(
+          selectedProposal,
+          invoices,
+          "Deposit",
+          percentage,
+        )
+      : null;
+
+    setValues((currentValues) => ({
+      ...currentValues,
+      billingPercentage: value,
+      amount: amountInputValue(amount),
+    }));
+    setErrors((currentErrors) => ({
+      ...currentErrors,
+      billingPercentage: undefined,
+      amount: undefined,
+    }));
     setFormMessage("");
   }
 
@@ -210,6 +450,19 @@ export function InvoiceForm({
 
     setValues((currentValues) => ({
       ...currentValues,
+      proposalRecordId:
+        status === "Not needed"
+          ? ""
+          : currentValues.proposalRecordId,
+      billingBasis:
+        status === "Not needed"
+          ? "Custom"
+          : currentValues.billingBasis,
+      billingPercentage:
+        status === "Not needed"
+          ? ""
+          : currentValues.billingPercentage,
+      amount: status === "Not needed" ? "" : currentValues.amount,
       status,
       sentAt: invoiceStatusRequiresSentDate(status)
         ? currentValues.sentAt ||
@@ -230,13 +483,16 @@ export function InvoiceForm({
           ? ""
           : currentValues.paymentLink,
     }));
-
     setErrors({});
     setFormMessage("");
   }
 
   async function submitInvoice() {
-    const validationErrors = validateInvoice(values);
+    const validationErrors = validateInvoice(
+      values,
+      eligibleProposals,
+      invoices,
+    );
     setErrors(validationErrors);
 
     if (Object.keys(validationErrors).length > 0) {
@@ -249,17 +505,26 @@ export function InvoiceForm({
       values,
       new Date(),
     );
-    // const invoiceIssued =
-    //     invoiceStatusRequiresIssuedDetails(values.status);
 
     try {
       await onCreate({
         clientWorkflowRecordId,
+        proposalRecordId: invoiceNeeded
+          ? values.proposalRecordId
+          : "",
+        billingBasis: invoiceNeeded
+          ? values.billingBasis
+          : "Custom",
+        billingPercentage:
+          invoiceNeeded &&
+          values.billingBasis === "Deposit"
+            ? Number(values.billingPercentage)
+            : null,
         invoiceNumber: invoiceNeeded
-        ? values.invoiceNumber.trim()
-        : "",
+          ? values.invoiceNumber.trim()
+          : "",
         amount:
-        invoiceNeeded && values.amount.trim()
+          invoiceNeeded && values.amount.trim()
             ? Number(values.amount)
             : 0,
         currency: values.currency.trim().toUpperCase(),
@@ -274,7 +539,7 @@ export function InvoiceForm({
         disputeReason: values.disputeReason.trim(),
       });
 
-      setValues(initialValues);
+      setValues(getInitialValues(proposals, invoices));
       setErrors({});
       setFormMessage("");
     } catch {
@@ -304,8 +569,8 @@ export function InvoiceForm({
           Add An Invoice
         </h4>
         <p className="mt-2 leading-7 text-[#5F6862]">
-          Record the invoice value, payment dates, current status,
-          and payment link.
+          Use an accepted proposal to prefill the value, or record a
+          custom invoice for this job.
         </p>
       </div>
 
@@ -339,8 +604,146 @@ export function InvoiceForm({
       {invoiceNeeded ? (
         <>
           <div className="grid gap-2">
+            <label className="font-bold" htmlFor="invoice-proposal">
+              Invoice source
+            </label>
+            <select
+              id="invoice-proposal"
+              className="rounded-md border border-[#D9DED8] bg-white px-4 py-3"
+              value={values.proposalRecordId}
+              onChange={(event) =>
+                selectProposal(event.target.value)
+              }
+            >
+              <option value="">No proposal - custom invoice</option>
+              {eligibleProposals.map((proposal) => (
+                <option
+                  disabled={
+                    getProposalRemainingAmount(
+                      proposal,
+                      invoices,
+                    ) <= 0
+                  }
+                  key={proposal.id}
+                  value={proposal.id}
+                >
+                  {proposal.title} (
+                  {formatAmount(proposal.amount, proposal.currency)})
+                  {getProposalRemainingAmount(
+                    proposal,
+                    invoices,
+                  ) <= 0
+                    ? " - fully invoiced"
+                    : ""}
+                </option>
+              ))}
+            </select>
+            <FieldError message={errors.proposalRecordId} />
+            {eligibleProposals.length === 0 ? (
+              <p className="text-sm leading-6 text-[#5F6862]">
+                Accepted proposals from this job will appear here.
+              </p>
+            ) : null}
+          </div>
+
+          {selectedProposal ? (
+            <>
+              <div className="grid gap-3 border-y border-[#D9DED8] py-4 text-sm sm:grid-cols-3">
+                <p>
+                  <span className="block font-bold text-[#17201C]">
+                    Proposal value
+                  </span>
+                  {formatAmount(
+                    selectedProposal.amount,
+                    selectedProposal.currency,
+                  )}
+                </p>
+                <p>
+                  <span className="block font-bold text-[#17201C]">
+                    Already invoiced
+                  </span>
+                  {formatAmount(
+                    invoicedAmount,
+                    selectedProposal.currency,
+                  )}
+                </p>
+                <p>
+                  <span className="block font-bold text-[#17201C]">
+                    Remaining
+                  </span>
+                  {formatAmount(
+                    remainingAmount,
+                    selectedProposal.currency,
+                  )}
+                </p>
+              </div>
+
+              <div className="grid gap-2">
+                <label
+                  className="font-bold"
+                  htmlFor="invoice-billing-basis"
+                >
+                  Amount to invoice
+                </label>
+                <select
+                  id="invoice-billing-basis"
+                  className="rounded-md border border-[#D9DED8] bg-white px-4 py-3"
+                  value={values.billingBasis}
+                  onChange={(event) =>
+                    selectBillingBasis(
+                      event.target.value as InvoiceBillingBasis,
+                    )
+                  }
+                >
+                  {proposalInvoiceBillingOptions.map((option) => (
+                    <option
+                      disabled={
+                        (option.value === "Full proposal" &&
+                          invoicedAmount > 0) ||
+                        (option.value === "Remaining balance" &&
+                          remainingAmount <= 0)
+                      }
+                      key={option.value}
+                      value={option.value}
+                    >
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <FieldError message={errors.billingBasis} />
+              </div>
+
+              {values.billingBasis === "Deposit" ? (
+                <div className="grid gap-2">
+                  <label
+                    className="font-bold"
+                    htmlFor="invoice-billing-percentage"
+                  >
+                    Deposit percentage
+                  </label>
+                  <input
+                    id="invoice-billing-percentage"
+                    className="rounded-md border border-[#D9DED8] px-4 py-3"
+                    max="100"
+                    min="0.01"
+                    step="0.01"
+                    type="number"
+                    value={values.billingPercentage}
+                    onChange={(event) =>
+                      updateDepositPercentage(event.target.value)
+                    }
+                  />
+                  <FieldError
+                    message={errors.billingPercentage}
+                  />
+                </div>
+              ) : null}
+            </>
+          ) : null}
+
+          <div className="grid gap-2">
             <label className="font-bold" htmlFor="invoice-number">
-            {invoiceIssued
+              {invoiceIssued
                 ? "Invoice number"
                 : "Invoice number (optional until issued)"}
             </label>
@@ -353,9 +756,9 @@ export function InvoiceForm({
               }
               placeholder={
                 invoiceIssued
-                    ? "Example: INV-2026-001"
-                    : "Add when the invoice is prepared"
-                }
+                  ? "Example: INV-2026-001"
+                  : "Add when the invoice is prepared"
+              }
             />
             <FieldError message={errors.invoiceNumber} />
           </div>
@@ -364,17 +767,20 @@ export function InvoiceForm({
             <div className="grid gap-2">
               <label className="font-bold" htmlFor="invoice-amount">
                 {invoiceIssued
-                    ? "Invoice amount"
-                    : "Invoice amount (optional until issued)"}
+                  ? "Invoice amount"
+                  : "Invoice amount (optional until issued)"}
               </label>
               <input
                 id="invoice-amount"
-                className="rounded-md border border-[#D9DED8] px-4 py-3"
+                className={`rounded-md border border-[#D9DED8] px-4 py-3 ${
+                  amountIsCalculated ? "bg-[#F7F8F6]" : ""
+                }`}
                 value={values.amount}
                 onChange={(event) =>
                   updateField("amount", event.target.value)
                 }
                 min="0"
+                readOnly={amountIsCalculated}
                 step="0.01"
                 placeholder="0.00"
                 type="number"
@@ -388,13 +794,16 @@ export function InvoiceForm({
               </label>
               <input
                 id="invoice-currency"
-                className="rounded-md border border-[#D9DED8] px-4 py-3 uppercase"
+                className={`rounded-md border border-[#D9DED8] px-4 py-3 uppercase ${
+                  selectedProposal ? "bg-[#F7F8F6]" : ""
+                }`}
                 value={values.currency}
                 onChange={(event) =>
                   updateField("currency", event.target.value)
                 }
                 maxLength={3}
                 placeholder="USD"
+                readOnly={Boolean(selectedProposal)}
               />
               <FieldError message={errors.currency} />
             </div>

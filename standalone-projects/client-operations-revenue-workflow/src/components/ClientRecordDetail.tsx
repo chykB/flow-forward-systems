@@ -649,6 +649,7 @@ export function ClientRecordDetail({
             }
             onCreate={onAddInvoice}
             onUpdate={onUpdateInvoice}
+            proposals={proposals}
           />
         </div>
       ) : null}

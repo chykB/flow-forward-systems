@@ -122,6 +122,8 @@ export type NewInvoiceRecord = Omit<
   InvoiceRecord,
   | "id"
   | "clientEngagementId"
+  | "proposalTitleSnapshot"
+  | "proposalAmountSnapshot"
   | "createdAt"
   | "updatedAt"
   | "workflowActionAppliedStatus"
@@ -138,6 +140,11 @@ export type InvoiceRecordUpdates = Partial<
     | "id"
     | "clientWorkflowRecordId"
     | "clientEngagementId"
+    | "proposalRecordId"
+    | "proposalTitleSnapshot"
+    | "proposalAmountSnapshot"
+    | "billingBasis"
+    | "billingPercentage"
     | "createdAt"
     | "updatedAt"
     | "workflowActionAppliedStatus"
@@ -779,6 +786,9 @@ const proposalWorkflowFields = new Set<
 ]);
 const invoiceFields = new Set<keyof NewInvoiceRecord>([
   "clientWorkflowRecordId",
+  "proposalRecordId",
+  "billingBasis",
+  "billingPercentage",
   "invoiceNumber",
   "amount",
   "currency",
@@ -2660,6 +2670,10 @@ function validateInvoiceState(
 ) {
   if (
     typeof invoice.clientWorkflowRecordId !== "string" ||
+    typeof invoice.proposalRecordId !== "string" ||
+    typeof invoice.billingBasis !== "string" ||
+    (invoice.billingPercentage !== null &&
+      typeof invoice.billingPercentage !== "number") ||
     typeof invoice.invoiceNumber !== "string" ||
     typeof invoice.amount !== "number" ||
     typeof invoice.currency !== "string" ||
@@ -2683,6 +2697,78 @@ function validateInvoiceState(
     "The client record identifier",
     requestId,
   );
+
+  if (invoice.proposalRecordId) {
+    assertUuid(
+      invoice.proposalRecordId,
+      "The proposal identifier",
+      requestId,
+    );
+  }
+
+  const invoiceBillingBases = new Set([
+    "Custom",
+    "Full proposal",
+    "Deposit",
+    "Milestone",
+    "Remaining balance",
+  ]);
+
+  if (!invoiceBillingBases.has(invoice.billingBasis)) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Choose a valid proposal billing option.",
+      requestId,
+    );
+  }
+
+  if (
+    !invoice.proposalRecordId &&
+    (invoice.billingBasis !== "Custom" ||
+      invoice.billingPercentage !== null)
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "An invoice without a proposal must use a custom amount.",
+      requestId,
+    );
+  }
+
+  if (
+    invoice.billingBasis === "Deposit" &&
+    (invoice.billingPercentage === null ||
+      !Number.isFinite(invoice.billingPercentage) ||
+      invoice.billingPercentage <= 0 ||
+      invoice.billingPercentage > 100)
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Enter a deposit percentage greater than zero and no more than 100.",
+      requestId,
+    );
+  }
+
+  if (
+    invoice.billingBasis !== "Deposit" &&
+    invoice.billingPercentage !== null
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "A billing percentage can only be used for a deposit.",
+      requestId,
+    );
+  }
+
+  if (
+    invoice.status === "Not needed" &&
+    invoice.proposalRecordId
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "An invoice marked not needed cannot be linked to a proposal.",
+      requestId,
+    );
+  }
 
   if (!invoiceStatuses.has(invoice.status)) {
     throw new WorkspaceApiError(
