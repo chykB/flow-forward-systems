@@ -183,9 +183,11 @@ export function ProposalWorkflowRecommendation({
     try {
       await onApply(proposal, availableRecommendation);
       setMessage("Recommended next step applied.");
-    } catch {
+    } catch (error) {
       setMessage(
-        "The recommended next step could not be applied. Please try again.",
+        error instanceof Error
+          ? error.message
+          : "The recommended next step could not be applied. Please try again.",
       );
     }
   }

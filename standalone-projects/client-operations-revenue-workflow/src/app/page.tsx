@@ -1658,7 +1658,7 @@ function WorkspaceDashboard({
     );
   }
 
-    async function refreshActivityHistory() {
+  async function refreshActivityHistory() {
     try {
       const workspaceActivityLogs =
         await getWorkspaceActivityLogs(
@@ -1677,6 +1677,19 @@ function WorkspaceDashboard({
       setActivityLogsStatus("error");
       setActivityLogsMessage(
         "Activity history could not be refreshed. Refresh and try again.",
+      );
+    }
+  }
+
+  async function refreshProposalEngagementVersions() {
+    try {
+      setEngagements(
+        await workspaceApi.engagements.list(),
+      );
+    } catch (error) {
+      console.error(
+        "Proposal job version refresh failed",
+        error,
       );
     }
   }
@@ -1990,6 +2003,7 @@ function WorkspaceDashboard({
       applyRiskReconciliation(result.reconciliation);
       setRiskSignalsStatus("ready");
       setRiskSignalsMessage("");
+      await refreshProposalEngagementVersions();
       await refreshActivityHistory();
     } catch (error) {
       const proposalError =
@@ -2195,6 +2209,7 @@ function WorkspaceDashboard({
       applyRiskReconciliation(result.reconciliation);
       setRiskSignalsStatus("ready");
       setRiskSignalsMessage("");
+      await refreshProposalEngagementVersions();
       await refreshActivityHistory();
     } catch (error) {
       const proposalError =
@@ -2233,6 +2248,23 @@ function WorkspaceDashboard({
     setRecordsMessage("");
 
     try {
+      const currentEngagements =
+        await workspaceApi.engagements.list();
+      const commandEngagement = currentEngagements.find(
+        (engagement) =>
+          engagement.id === proposal.clientEngagementId &&
+          engagement.clientWorkflowRecordId ===
+            proposal.clientWorkflowRecordId,
+      );
+
+      if (!commandEngagement) {
+        throw new Error(
+          "The selected job is no longer available. Refresh and try again.",
+        );
+      }
+
+      setEngagements(currentEngagements);
+
       const result =
         await workspaceApi.proposals.applyRecommendation({
           commandId: createOperationRequestId(),
@@ -2242,7 +2274,7 @@ function WorkspaceDashboard({
             proposal.clientWorkflowRecordId,
           expectedStatus: proposal.status,
           expectedEngagementUpdatedAt:
-            selectedEngagement.updatedAt,
+            commandEngagement.updatedAt,
           updates: recommendation.updates,
         });
 
@@ -2265,7 +2297,6 @@ function WorkspaceDashboard({
               "The recommended next step could not be applied.",
             );
 
-      setProposalsMessage(applicationError.message);
       throw applicationError;
     } finally {
       setIsApplyingProposalRecommendation(false);
