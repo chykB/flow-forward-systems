@@ -243,6 +243,7 @@ export type ProposalCommandResult = {
 export type ProposalRecommendationCommandResult =
   ProposalCommandResult & {
     clientRecord: ClientWorkflowRecord;
+    clientEngagement: ClientEngagement;
     alreadyApplied: boolean;
   };
 
@@ -302,6 +303,7 @@ export type ApplyProposalRecommendationCommand = {
   proposalId: string;
   clientWorkflowRecordId: string;
   expectedStatus: ProposalRecord["status"];
+  expectedEngagementUpdatedAt: string;
   updates: ProposalWorkflowUpdates;
   evaluationDate?: Date;
 };
@@ -536,6 +538,7 @@ type ProposalCommandRpcResult = {
 type ProposalRecommendationCommandRpcResult =
   ProposalCommandRpcResult & {
     clientRecord: ClientWorkflowRecordRow;
+    clientEngagement: ClientEngagementRow;
     alreadyApplied: boolean;
   };
 
@@ -1118,6 +1121,7 @@ function mapProposalRecommendationCommandResult(
     result.requestId !== expectedRequestId ||
     !result.proposal ||
     !result.clientRecord ||
+    !result.clientEngagement ||
     typeof result.alreadyApplied !== "boolean" ||
     !result.reconciliation
   ) {
@@ -1133,6 +1137,9 @@ function mapProposalRecommendationCommandResult(
     proposal: mapProposalRow(result.proposal),
     clientRecord: mapClientWorkflowRecordRow(
       result.clientRecord,
+    ),
+    clientEngagement: mapClientEngagementRow(
+      result.clientEngagement,
     ),
     alreadyApplied: result.alreadyApplied,
     reconciliation: mapRiskSignalReconciliationResult(
@@ -2583,6 +2590,21 @@ function validateApplyProposalRecommendationCommand(
     );
   }
 
+  if (
+    !timestampPattern.test(
+      command.expectedEngagementUpdatedAt,
+    ) ||
+    Number.isNaN(
+      Date.parse(command.expectedEngagementUpdatedAt),
+    )
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Refresh the job before applying this recommendation.",
+      command.commandId,
+    );
+  }
+
   validateProposalWorkflowUpdates(command);
 }
 
@@ -3850,6 +3872,8 @@ export function createWorkspaceApplicationApi(
                 command.clientWorkflowRecordId,
               p_expected_proposal_status:
                 command.expectedStatus,
+              p_expected_engagement_updated_at:
+                command.expectedEngagementUpdatedAt,
               p_updates: normalizeProposalWorkflowUpdates(
                 command.updates,
               ),

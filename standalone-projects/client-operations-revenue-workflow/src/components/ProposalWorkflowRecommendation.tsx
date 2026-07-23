@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type {
+  ClientEngagement,
   ClientWorkflowRecord,
   ProposalRecord,
 } from "@/lib/client-workflow-types";
@@ -13,6 +14,7 @@ import {
 
 type ProposalWorkflowRecommendationProps = {
   isApplying: boolean;
+  engagement: ClientEngagement;
   proposal: ProposalRecord;
   record: ClientWorkflowRecord;
   onApply: (
@@ -39,13 +41,14 @@ function buildChangeSummary(
   recommendation: ProposalWorkflowRecommendation,
   proposal: ProposalRecord,
   record: ClientWorkflowRecord,
+  engagement: ClientEngagement,
 ) {
   const changes: string[] = [];
   const updates = recommendation.updates;
 
   if (
     updates.lifecycleStage &&
-    updates.lifecycleStage !== record.lifecycleStage
+    updates.lifecycleStage !== engagement.lifecycleStage
   ) {
     changes.push(
       `Lifecycle stage: ${getLifecycleStageLabel(
@@ -63,22 +66,22 @@ function buildChangeSummary(
   if (
     updates.returningClientStatus &&
     updates.returningClientStatus !== record.returningClientStatus
-    ) {
+  ) {
     changes.push(
-        `Returning client status: ${updates.returningClientStatus}`,
+      `Returning client status: ${updates.returningClientStatus}`,
     );
-  } 
+  }
 
   if (
     updates.nextAction &&
-    updates.nextAction !== record.nextAction
+    updates.nextAction !== engagement.nextAction
   ) {
     changes.push(`Next action: ${updates.nextAction}`);
   }
 
   if (
     updates.nextFollowUpAt &&
-    updates.nextFollowUpAt !== record.nextFollowUpAt
+    updates.nextFollowUpAt !== engagement.nextFollowUpAt
   ) {
     changes.push(
       `Next follow-up date: ${updates.nextFollowUpAt}`,
@@ -87,7 +90,7 @@ function buildChangeSummary(
 
   if (
     updates.onboardingStatus &&
-    updates.onboardingStatus !== record.onboardingStatus
+    updates.onboardingStatus !== engagement.onboardingStatus
   ) {
     changes.push(
       `Onboarding status: ${updates.onboardingStatus}`,
@@ -96,17 +99,17 @@ function buildChangeSummary(
 
   if (
     updates.priority &&
-    updates.priority !== record.priority
+    updates.priority !== engagement.priority
   ) {
     changes.push(`Priority: ${updates.priority}`);
   }
 
   if (
     updates.estimatedValue !== undefined &&
-    updates.estimatedValue !== record.estimatedValue
+    updates.estimatedValue !== engagement.estimatedValue
   ) {
     changes.push(
-      `Estimated client value: ${formatEstimatedValue(
+      `Estimated job value: ${formatEstimatedValue(
         updates.estimatedValue,
         proposal.currency,
       )}`,
@@ -118,6 +121,7 @@ function buildChangeSummary(
 
 export function ProposalWorkflowRecommendation({
   isApplying,
+  engagement,
   proposal,
   record,
   onApply,
@@ -126,50 +130,52 @@ export function ProposalWorkflowRecommendation({
   const currentStatusAlreadyApplied =
     proposal.workflowActionAppliedStatus === proposal.status;
 
-    if (currentStatusAlreadyApplied) {
+  if (currentStatusAlreadyApplied) {
     return (
-        <div className="mt-5 rounded-md bg-[#EDF3EF] p-4">
+      <div className="mt-5 rounded-md bg-[#EDF3EF] p-4">
         <p className="font-bold text-[#174F42]">
-            Client workflow is up to date
+          Job workflow is up to date
         </p>
         <p className="mt-2 leading-7 text-[#5F6862]">
-            The recommended client workflow update for this proposal
-            status has already been applied.
+          The recommended job workflow update for this proposal
+          status has already been applied.
         </p>
-        </div>
+      </div>
     );
-    }
+  }
 
   const recommendation = getProposalWorkflowRecommendation(
     proposal,
     record,
+    engagement,
   );
 
   if (!recommendation) {
     return null;
-    }
+  }
 
-    const availableRecommendation = recommendation;
+  const availableRecommendation = recommendation;
 
-    const changeSummary = buildChangeSummary(
-        availableRecommendation,
-        proposal,
-        record,
+  const changeSummary = buildChangeSummary(
+    availableRecommendation,
+    proposal,
+    record,
+    engagement,
+  );
+
+  if (changeSummary.length === 0) {
+    return (
+      <div className="mt-5 rounded-md bg-[#EDF3EF] p-4">
+        <p className="font-bold text-[#174F42]">
+          Job workflow is up to date
+        </p>
+        <p className="mt-2 leading-7 text-[#5F6862]">
+          This job already reflects the current proposal status and
+          recommended next step.
+        </p>
+      </div>
     );
-
-    if (changeSummary.length === 0) {
-        return (
-            <div className="mt-5 rounded-md bg-[#EDF3EF] p-4">
-            <p className="font-bold text-[#174F42]">
-                Client workflow is up to date
-            </p>
-            <p className="mt-2 leading-7 text-[#5F6862]">
-                This client record already reflects the current proposal
-                status and recommended next step.
-            </p>
-            </div>
-        );
-    }
+  }
 
   async function applyRecommendation() {
     setMessage("");

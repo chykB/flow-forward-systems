@@ -612,6 +612,7 @@ export function ClientRecordDetail({
         <div className="mt-5">
           <ProposalPanel
             clientWorkflowRecordId={record.id}
+            engagement={selectedEngagement}
             errorMessage={proposalMessage}
             isApplyingRecommendation={
               isApplyingProposalRecommendation
@@ -626,9 +627,6 @@ export function ClientRecordDetail({
             onUpdate={onUpdateProposal}
             proposals={proposals}
             record={workflowRecord}
-            showWorkflowRecommendations={
-              selectedEngagement.isPrimary
-            }
           />
         </div>
       ) : null}

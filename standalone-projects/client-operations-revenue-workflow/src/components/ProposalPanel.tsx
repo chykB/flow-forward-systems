@@ -6,6 +6,7 @@ import {
   ProposalWorkflowRecommendation as ProposalRecommendationCard,
 } from "@/components/ProposalWorkflowRecommendation";
 import type {
+  ClientEngagement,
   ClientWorkflowRecord,
   ProposalRecord,
 } from "@/lib/client-workflow-types";
@@ -25,13 +26,13 @@ import type {
 
 type ProposalPanelProps = {
   clientWorkflowRecordId: string;
+  engagement: ClientEngagement;
   proposals: ProposalRecord[];
   isLoading: boolean;
   isReadOnly: boolean;
   isSaving: boolean;
   errorMessage?: string;
   isApplyingRecommendation: boolean;
-  showWorkflowRecommendations: boolean;
   record: ClientWorkflowRecord;
   onApplyRecommendation: (
     proposal: ProposalRecord,
@@ -112,6 +113,7 @@ function ProposalDateField({
 function ProposalEditor({
   proposal,
   record,
+  engagement,
   isSaving,
   isApplyingRecommendation,
   isReadOnly,
@@ -121,6 +123,7 @@ function ProposalEditor({
 }: {
   proposal: ProposalRecord;
   record: ClientWorkflowRecord;
+  engagement: ClientEngagement;
   isSaving: boolean;
   isApplyingRecommendation: boolean;
   isReadOnly: boolean;
@@ -351,25 +354,86 @@ function ProposalEditor({
             </select>
           </div>
 
-        {status === "Sent" ? (
-          <div className="grid gap-4 sm:grid-cols-2">
+          {status === "Sent" ? (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <ProposalDateField
+                disabled={isSaving}
+                error={fieldErrors.sentAt}
+                id={`proposal-sent-at-${proposal.id}`}
+                label="Sent date"
+                onChange={(value) => {
+                  setSentAt(value);
+                  setFieldErrors({});
+                  setMessage("");
+                }}
+                value={sentAt}
+              />
+              <ProposalDateField
+                disabled={isSaving}
+                error={fieldErrors.expiresAt}
+                id={`proposal-valid-until-${proposal.id}`}
+                label="Valid until (optional)"
+                onChange={(value) => {
+                  setExpiresAt(value);
+                  setFieldErrors({});
+                  setMessage("");
+                }}
+                value={expiresAt}
+              />
+            </div>
+          ) : null}
+
+          {status === "Revision requested" ? (
             <ProposalDateField
               disabled={isSaving}
-              error={fieldErrors.sentAt}
-              id={`proposal-sent-at-${proposal.id}`}
-              label="Sent date"
+              error={fieldErrors.revisionRequestedAt}
+              id={`proposal-revision-date-${proposal.id}`}
+              label="Revision request date"
               onChange={(value) => {
-                setSentAt(value);
+                setRevisionRequestedAt(value);
                 setFieldErrors({});
                 setMessage("");
               }}
-              value={sentAt}
+              value={revisionRequestedAt}
             />
+          ) : null}
+
+          {status === "Accepted" ? (
+            <ProposalDateField
+              disabled={isSaving}
+              error={fieldErrors.acceptedAt}
+              id={`proposal-accepted-date-${proposal.id}`}
+              label="Acceptance date"
+              onChange={(value) => {
+                setAcceptedAt(value);
+                setFieldErrors({});
+                setMessage("");
+              }}
+              value={acceptedAt}
+            />
+          ) : null}
+
+          {status === "Rejected" ? (
+            <ProposalDateField
+              disabled={isSaving}
+              error={fieldErrors.rejectedAt}
+              id={`proposal-rejected-date-${proposal.id}`}
+              label="Rejection date"
+              onChange={(value) => {
+                setRejectedAt(value);
+                setFieldErrors({});
+                setMessage("");
+              }}
+              value={rejectedAt}
+            />
+          ) : null}
+
+          {status === "Expired" ? (
             <ProposalDateField
               disabled={isSaving}
               error={fieldErrors.expiresAt}
-              id={`proposal-valid-until-${proposal.id}`}
-              label="Valid until (optional)"
+              id={`proposal-expiry-date-${proposal.id}`}
+              label="Expiry date"
               onChange={(value) => {
                 setExpiresAt(value);
                 setFieldErrors({});
@@ -377,131 +441,71 @@ function ProposalEditor({
               }}
               value={expiresAt}
             />
+          ) : null}
+
+          <div className="grid gap-2">
+            <label
+              className="font-bold text-[#17201C]"
+              htmlFor={`proposal-notes-${proposal.id}`}
+            >
+              {decisionNoteRequired
+                ? "Decision note"
+                : "Notes (optional)"}
+            </label>
+            <textarea
+              id={`proposal-notes-${proposal.id}`}
+              className="min-h-24 rounded-md border border-[#D9DED8] px-4 py-3 text-[#17201C]"
+              disabled={isSaving}
+              maxLength={1000}
+              value={notes}
+              onChange={(event) => {
+                setNotes(event.target.value);
+                setFieldErrors({});
+                setMessage("");
+              }}
+              placeholder={
+                decisionNoteRequired
+                  ? "Explain the requested revision or reason for rejection."
+                  : "Add useful proposal or decision context."
+              }
+            />
+            {fieldErrors.notes ? (
+              <p className="text-sm font-semibold text-red-700">
+                {fieldErrors.notes}
+              </p>
+            ) : null}
           </div>
-        ) : null}
 
-        {status === "Revision requested" ? (
-          <ProposalDateField
-            disabled={isSaving}
-            error={fieldErrors.revisionRequestedAt}
-            id={`proposal-revision-date-${proposal.id}`}
-            label="Revision request date"
-            onChange={(value) => {
-              setRevisionRequestedAt(value);
-              setFieldErrors({});
-              setMessage("");
-            }}
-            value={revisionRequestedAt}
-          />
-        ) : null}
-
-        {status === "Accepted" ? (
-          <ProposalDateField
-            disabled={isSaving}
-            error={fieldErrors.acceptedAt}
-            id={`proposal-accepted-date-${proposal.id}`}
-            label="Acceptance date"
-            onChange={(value) => {
-              setAcceptedAt(value);
-              setFieldErrors({});
-              setMessage("");
-            }}
-            value={acceptedAt}
-          />
-        ) : null}
-
-        {status === "Rejected" ? (
-          <ProposalDateField
-            disabled={isSaving}
-            error={fieldErrors.rejectedAt}
-            id={`proposal-rejected-date-${proposal.id}`}
-            label="Rejection date"
-            onChange={(value) => {
-              setRejectedAt(value);
-              setFieldErrors({});
-              setMessage("");
-            }}
-            value={rejectedAt}
-          />
-        ) : null}
-
-        {status === "Expired" ? (
-          <ProposalDateField
-            disabled={isSaving}
-            error={fieldErrors.expiresAt}
-            id={`proposal-expiry-date-${proposal.id}`}
-            label="Expiry date"
-            onChange={(value) => {
-              setExpiresAt(value);
-              setFieldErrors({});
-              setMessage("");
-            }}
-            value={expiresAt}
-          />
-        ) : null}
-
-        <div className="grid gap-2">
-          <label
-            className="font-bold text-[#17201C]"
-            htmlFor={`proposal-notes-${proposal.id}`}
-          >
-            {decisionNoteRequired
-              ? "Decision note"
-              : "Notes (optional)"}
-          </label>
-          <textarea
-            id={`proposal-notes-${proposal.id}`}
-            className="min-h-24 rounded-md border border-[#D9DED8] px-4 py-3 text-[#17201C]"
-            disabled={isSaving}
-            maxLength={1000}
-            value={notes}
-            onChange={(event) => {
-              setNotes(event.target.value);
-              setFieldErrors({});
-              setMessage("");
-            }}
-            placeholder={
-              decisionNoteRequired
-                ? "Explain the requested revision or reason for rejection."
-                : "Add useful proposal or decision context."
-            }
-          />
-          {fieldErrors.notes ? (
-            <p className="text-sm font-semibold text-red-700">
-              {fieldErrors.notes}
+          {message ? (
+            <p
+              className={`rounded-md p-3 font-semibold ${
+                message === "Proposal updated."
+                  ? "bg-[#EDF3EF] text-[#174F42]"
+                  : "bg-red-50 text-red-700"
+              }`}
+            >
+              {message}
             </p>
           ) : null}
-        </div>
 
-        {message ? (
-          <p
-            className={`rounded-md p-3 font-semibold ${
-              message === "Proposal updated."
-                ? "bg-[#EDF3EF] text-[#174F42]"
-                : "bg-red-50 text-red-700"
-            }`}
+          <button
+            className="w-fit rounded-md border border-[#174F42] px-5 py-3 font-bold text-[#174F42] hover:bg-[#EDF3EF] disabled:cursor-not-allowed disabled:opacity-70"
+            disabled={isSaving}
+            onClick={() => void saveChanges()}
+            type="button"
           >
-            {message}
-          </p>
-        ) : null}
+            {isSaving ? "Saving..." : "Save Proposal Update"}
+          </button>
 
-        <button
-          className="w-fit rounded-md border border-[#174F42] px-5 py-3 font-bold text-[#174F42] hover:bg-[#EDF3EF] disabled:cursor-not-allowed disabled:opacity-70"
-          disabled={isSaving}
-          onClick={() => void saveChanges()}
-          type="button"
-        >
-          {isSaving ? "Saving..." : "Save Proposal Update"}
-        </button>
-
-        {showRecommendation ? (
-          <ProposalRecommendationCard
-            isApplying={isApplyingRecommendation}
-            onApply={onApplyRecommendation}
-            proposal={proposal}
-            record={record}
-          />
-        ) : null}
+          {showRecommendation ? (
+            <ProposalRecommendationCard
+              engagement={engagement}
+              isApplying={isApplyingRecommendation}
+              onApply={onApplyRecommendation}
+              proposal={proposal}
+              record={record}
+            />
+          ) : null}
         </div>
       ) : null}
     </article>
@@ -510,9 +514,9 @@ function ProposalEditor({
 
 export function ProposalPanel({
   clientWorkflowRecordId,
+  engagement,
   proposals,
   isApplyingRecommendation,
-  showWorkflowRecommendations,
   isLoading,
   isReadOnly,
   isSaving,
@@ -577,6 +581,7 @@ export function ProposalPanel({
         ) : proposals.length > 0 ? (
           proposals.map((proposal, index) => (
             <ProposalEditor
+              engagement={engagement}
               isApplyingRecommendation={isApplyingRecommendation}
               isReadOnly={isReadOnly}
               isSaving={isSaving}
@@ -585,9 +590,7 @@ export function ProposalPanel({
               onUpdate={onUpdate}
               proposal={proposal}
               record={record}
-              showRecommendation={
-                showWorkflowRecommendations && index === 0
-              }
+              showRecommendation={index === 0}
             />
           ))
         ) : (

@@ -1,4 +1,5 @@
 import type {
+  ClientEngagement,
   ClientWorkflowRecord,
   PriorityLevel,
   ProposalRecord,
@@ -80,6 +81,7 @@ function estimatedValueUpdate(proposal: ProposalRecord) {
 export function getProposalWorkflowRecommendation(
   proposal: ProposalRecord,
   record: ClientWorkflowRecord,
+  engagement: ClientEngagement,
   now = new Date(),
 ): ProposalWorkflowRecommendation | null {
   const today = toDateInputValue(now);
@@ -95,7 +97,7 @@ export function getProposalWorkflowRecommendation(
         "The opportunity cannot move to a client decision until the proposal or quote is ready.",
       updates: {
         nextAction: "Prepare the proposal or quote.",
-        priority: raisePriority(record.priority, "Medium"),
+        priority: raisePriority(engagement.priority, "Medium"),
         ...estimatedValueUpdate(proposal),
       },
     };
@@ -118,7 +120,7 @@ export function getProposalWorkflowRecommendation(
           threeDayFollowUp,
           proposal.expiresAt.slice(0, 10),
         ),
-        priority: raisePriority(record.priority, "Medium"),
+        priority: raisePriority(engagement.priority, "Medium"),
         ...estimatedValueUpdate(proposal),
       },
     };
@@ -134,87 +136,94 @@ export function getProposalWorkflowRecommendation(
         nextAction:
           "Review the requested changes and prepare the revised proposal.",
         nextFollowUpAt: today,
-        priority: raisePriority(record.priority, "High"),
+        priority: raisePriority(engagement.priority, "High"),
         ...estimatedValueUpdate(proposal),
       },
     };
   }
 
   if (proposal.status === "Accepted") {
-    const isLead = record.clientType === "Lead";
+    const isLead =
+      engagement.isPrimary && record.clientType === "Lead";
 
     const isNewClientAtProposalStage =
-        record.clientType === "New client" &&
-        [
+      engagement.isPrimary &&
+      record.clientType === "New client" &&
+      [
         "New lead",
         "Qualified lead",
         "Follow-up needed",
         "Discovery or call booked",
         "Proposal sent",
-        ].includes(record.lifecycleStage);
+      ].includes(engagement.lifecycleStage);
 
     const isReturningEngagement =
-        record.clientType === "Returning client" ||
-        record.clientType === "Past client";
+      record.clientType === "Returning client" ||
+      record.clientType === "Past client";
 
     if (isLead || isNewClientAtProposalStage) {
-        const onboardingStatus =
-        record.onboardingStatus === "In progress" ||
-        record.onboardingStatus === "Complete"
-            ? record.onboardingStatus
-            : "Not started";
+      const onboardingStatus =
+        engagement.onboardingStatus === "In progress" ||
+        engagement.onboardingStatus === "Complete"
+          ? engagement.onboardingStatus
+          : "Not started";
 
-        return {
+      return {
         title: "Start client onboarding",
         reason: isLead
-            ? "The first proposal has been accepted, so this lead is now a confirmed new client."
-            : "The proposal has been accepted, so the confirmed new client can move into onboarding.",
+          ? "The first proposal has been accepted, so this lead is now a confirmed new client."
+          : "The proposal has been accepted, so the confirmed new client can move into onboarding.",
         updates: {
-            lifecycleStage: "Won client",
-            ...(isLead ? { clientType: "New client" as const } : {}),
-            onboardingStatus,
-            nextAction:
+          lifecycleStage: "Won client",
+          ...(isLead ? { clientType: "New client" as const } : {}),
+          onboardingStatus,
+          nextAction:
             "Start client onboarding and confirm the first delivery steps.",
-            nextFollowUpAt: today,
-            priority: raisePriority(record.priority, "High"),
-            ...estimatedValueUpdate(proposal),
+          nextFollowUpAt: today,
+          priority: raisePriority(engagement.priority, "High"),
+          ...estimatedValueUpdate(proposal),
         },
-        };
+      };
     }
 
     if (isReturningEngagement) {
-        return {
+      return {
         title: "Start the returning client engagement",
         reason:
-            "The client has accepted new work, so the returning engagement needs a clear owner and start plan.",
+          "The client has accepted new work, so the returning engagement needs a clear owner and start plan.",
         updates: {
-            lifecycleStage: "Won client",
-            ...(record.clientType === "Past client"
+          lifecycleStage: "Won client",
+          ...(engagement.isPrimary &&
+          record.clientType === "Past client"
             ? { clientType: "Returning client" as const }
             : {}),
-            returningClientStatus: "Reactivated",
-            nextAction:
+          ...(engagement.isPrimary
+            ? {
+                returningClientStatus: "Reactivated" as const,
+              }
+            : {}),
+          nextAction:
             "Confirm the returning engagement scope, owner, start date, and delivery steps.",
-            nextFollowUpAt: today,
-            priority: raisePriority(record.priority, "High"),
-            ...estimatedValueUpdate(proposal),
+          nextFollowUpAt: today,
+          priority: raisePriority(engagement.priority, "High"),
+          ...estimatedValueUpdate(proposal),
         },
-        };
+      };
     }
 
     return {
-        title: "Confirm the accepted work",
-        reason:
+      title: "Confirm the accepted work",
+      reason:
         "An existing client has accepted additional work, so the scope, owner, and delivery start should be confirmed.",
-        updates: {
+      updates: {
         nextAction:
-            "Confirm the accepted scope, owner, start date, and delivery steps.",
+          "Confirm the accepted scope, owner, start date, and delivery steps.",
         nextFollowUpAt: today,
-        priority: raisePriority(record.priority, "High"),
+        priority: raisePriority(engagement.priority, "High"),
         ...estimatedValueUpdate(proposal),
-        },
+      },
     };
-    }
+  }
 
   if (proposal.status === "Rejected") {
     return {
@@ -225,7 +234,7 @@ export function getProposalWorkflowRecommendation(
         nextAction:
           "Review the client feedback and decide whether to revise or close the opportunity.",
         nextFollowUpAt: today,
-        priority: raisePriority(record.priority, "High"),
+        priority: raisePriority(engagement.priority, "High"),
         ...estimatedValueUpdate(proposal),
       },
     };
@@ -240,7 +249,7 @@ export function getProposalWorkflowRecommendation(
       nextAction:
         "Renew the proposal or close the opportunity.",
       nextFollowUpAt: today,
-      priority: raisePriority(record.priority, "High"),
+      priority: raisePriority(engagement.priority, "High"),
       ...estimatedValueUpdate(proposal),
     },
   };

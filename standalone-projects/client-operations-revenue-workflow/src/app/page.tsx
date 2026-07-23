@@ -2216,12 +2216,11 @@ function WorkspaceDashboard({
     if (
       !selectedRecord ||
       !selectedEngagement ||
-      !selectedEngagement.isPrimary ||
       proposal.clientWorkflowRecordId !== selectedRecord.id ||
       proposal.clientEngagementId !== selectedEngagement.id
     ) {
       throw new Error(
-        "Proposal recommendations are available only for the selected primary job.",
+        "The proposal recommendation does not belong to the selected job.",
       );
     }
 
@@ -2242,16 +2241,10 @@ function WorkspaceDashboard({
           clientWorkflowRecordId:
             proposal.clientWorkflowRecordId,
           expectedStatus: proposal.status,
+          expectedEngagementUpdatedAt:
+            selectedEngagement.updatedAt,
           updates: recommendation.updates,
         });
-
-      setRecords((currentRecords) =>
-        currentRecords.map((record) =>
-          record.id === result.clientRecord.id
-            ? result.clientRecord
-            : record,
-        ),
-      );
 
       setProposals((currentProposals) =>
         currentProposals.map((currentProposal) =>
@@ -2259,9 +2252,6 @@ function WorkspaceDashboard({
             ? result.proposal
             : currentProposal,
         ),
-      );
-      setEngagements(
-        await workspaceApi.engagements.list(),
       );
       applyRiskReconciliation(result.reconciliation);
       setRiskSignalsStatus("ready");
