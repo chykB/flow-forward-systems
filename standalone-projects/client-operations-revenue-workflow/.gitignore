@@ -15,10 +15,17 @@
 
 # next.js
 /.next/
+/.open-next/
 /out/
 
 # production
 /build
+
+# cloudflare
+/.wrangler/
+.dev.vars*
+!.dev.vars.example
+cloudflare-env.d.ts
 
 # misc
 .DS_Store

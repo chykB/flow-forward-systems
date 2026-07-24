@@ -27,6 +27,7 @@ existing client operations workflow.
 ## Architecture
 
 - Next.js 16 App Router with TypeScript and Tailwind CSS.
+- Cloudflare Workers deployment through the OpenNext adapter.
 - Supabase Auth and PostgreSQL.
 - Row-level security on workspace data.
 - Reviewed SQL migrations under `supabase/migrations`.
@@ -39,6 +40,7 @@ existing client operations workflow.
 
 - Node.js 20.9 or later.
 - npm.
+- A Cloudflare account with Workers enabled.
 - A linked Supabase project with the repository migrations applied.
 
 ## Environment
@@ -72,6 +74,7 @@ Open `http://localhost:3000`.
 ```bash
 npm run lint
 npm run build
+npm run build:cloudflare
 ./node_modules/.bin/supabase migration list --linked
 ./node_modules/.bin/supabase db push --linked --dry-run
 ```
@@ -81,15 +84,42 @@ is promoted.
 
 ## Deployment
 
-Deploy as a Next.js Node.js application. In a monorepo host, set the project
-root to:
+Private V1 deploys to Cloudflare Workers through `@opennextjs/cloudflare`.
+Cloudflare Pages is not used for this full Next.js application.
+
+The application root in the monorepo is:
 
 `standalone-projects/client-operations-revenue-workflow`
 
-Configure the required environment variables for Preview and Production. After
-the production URL exists, set the Supabase Auth Site URL to that exact HTTPS
-URL and add only the redirect URLs required for local development and approved
-deployment previews.
+The `NEXT_PUBLIC_*` variables are embedded into the browser bundle during the
+build. Keep the approved values in the uncommitted `.env.local` before running a
+preview or deployment. They are public application configuration, not
+server-side secrets.
+
+Authenticate Wrangler and test the Worker runtime locally:
+
+```bash
+./node_modules/.bin/wrangler login
+npm run preview
+```
+
+The preview normally runs at `http://localhost:8787`. Complete the signed-out
+and signed-in smoke tests there before deploying.
+
+Deploy the exact reviewed source:
+
+```bash
+npm run deploy
+```
+
+Record the resulting `workers.dev` URL and deployed commit SHA. Then set the
+Supabase Auth Site URL to that exact HTTPS origin and add only the redirect URLs
+required for local development and approved deployment previews. A custom
+domain can replace the `workers.dev` Site URL after it is attached and tested.
+
+Cloudflare hosts the Next.js application only. The planned Python/FastAPI agent
+and external API services remain separate backend components and can be added
+without moving this frontend.
 
 Use [PRIVATE_V1_RELEASE_CHECKLIST.md](PRIVATE_V1_RELEASE_CHECKLIST.md) for the
 complete deployment and acceptance review.

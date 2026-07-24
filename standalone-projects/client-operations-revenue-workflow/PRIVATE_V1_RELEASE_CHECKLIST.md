@@ -26,21 +26,50 @@ public launch.
 ## Build
 
 - [ ] Use Node.js 20.9 or later.
-- [ ] Run `npm ci`.
+- [ ] Run `npm install` once after adding the Cloudflare deployment
+      dependencies and commit the resulting lockfile.
+- [ ] Use `npm ci` for subsequent clean release builds.
 - [ ] Run `npm run lint`.
 - [ ] Run `npm run build`.
+- [ ] Run `npm run build:cloudflare`.
+- [ ] Confirm `.open-next/worker.js` and `.open-next/assets` were generated.
 - [ ] Confirm the build contains only expected application routes.
-- [ ] Confirm `.env.local`, Supabase temporary files, dependencies, and build
-      output are not committed.
+- [ ] Confirm `.env.local`, `.dev.vars`, `.wrangler`, `.open-next`, Supabase
+      temporary files, dependencies, and build output are not committed.
+
+## Dependency Security
+
+- [x] Run `npm audit --omit=dev` against the release dependency tree.
+- [x] Confirm the reviewed OpenNext deployment source map does not include
+      PostCSS or Sharp.
+- [ ] Re-run the production audit whenever Next.js or OpenNext changes.
+- [ ] Replace the recorded exception when a compatible patched stable Next.js
+      release is available.
+
+Review note for 2026-07-24: npm reports three high-severity findings through
+the latest stable Next.js 16.2.11 dependency tree (`next`, its nested
+`postcss`, and `sharp`). The reviewed Cloudflare Worker source map contains
+neither PostCSS nor Sharp. Do not use `npm audit fix --force`, because its
+current remediation downgrades Next.js across a breaking major-version
+boundary.
 
 ## Hosting
 
+- [ ] Authenticate the local Wrangler CLI with the intended Cloudflare account.
 - [ ] Configure the deployment root as
       `standalone-projects/client-operations-revenue-workflow`.
-- [ ] Set `NEXT_PUBLIC_SUPABASE_URL` for Preview and Production.
-- [ ] Set `NEXT_PUBLIC_SUPABASE_ANON_KEY` for Preview and Production.
-- [ ] Set `NEXT_PUBLIC_ALLOW_SIGN_UP=false` for Preview and Production.
-- [ ] Deploy a preview before promoting Production.
+- [ ] Confirm `.env.local` contains the approved
+      `NEXT_PUBLIC_SUPABASE_URL` before each build.
+- [ ] Confirm `.env.local` contains the approved
+      `NEXT_PUBLIC_SUPABASE_ANON_KEY` before each build.
+- [ ] Confirm `.env.local` contains `NEXT_PUBLIC_ALLOW_SIGN_UP=false` before
+      each build.
+- [ ] Run `npm run preview` and complete the smoke test in the local Workers
+      runtime before deploying.
+- [ ] Run `npm run deploy` only from the reviewed commit.
+- [ ] Record the resulting `workers.dev` or custom-domain HTTPS origin.
+- [ ] Confirm Cloudflare Workers observability is receiving request and error
+      logs.
 - [ ] Confirm HTTPS is enforced by the hosting provider.
 - [ ] Confirm responses include the configured frame, content-type, referrer,
       and permissions security headers.

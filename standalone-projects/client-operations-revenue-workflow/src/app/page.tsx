@@ -246,12 +246,14 @@ const workspaceViews = new Set<WorkspaceView>([
   "activity",
 ]);
 
-function getWorkspaceViewFromHash(): WorkspaceView {
+function getWorkspaceViewFromHash(
+  fallback: WorkspaceView = "today",
+): WorkspaceView {
   const hashView = window.location.hash.slice(1);
 
   return workspaceViews.has(hashView as WorkspaceView)
     ? (hashView as WorkspaceView)
-    : "today";
+    : fallback;
 }
 
 function getSelectedRecordStorageKey(workspaceId: string) {
@@ -669,7 +671,9 @@ function WorkspaceDashboard({
 
   useEffect(() => {
     function syncWorkspaceView() {
-      setActiveWorkspaceView(getWorkspaceViewFromHash());
+      setActiveWorkspaceView((currentView) =>
+        getWorkspaceViewFromHash(currentView),
+      );
     }
 
     syncWorkspaceView();
