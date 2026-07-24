@@ -5,6 +5,7 @@ import {
   useEffect,
   useMemo,
   useState,
+  type FormEvent,
   type ReactNode,
 } from "react";
 import type { User } from "@supabase/supabase-js";
@@ -20,6 +21,7 @@ type GateStatus =
   | "signed-out"
   | "checking-workspace"
   | "needs-workspace"
+  | "load-error"
   | "ready";
 
 export type WorkspaceGateState = {
@@ -47,37 +49,55 @@ export function WorkspaceGate({
   const [message, setMessage] = useState("");
   const [isSubmittingAuth, setIsSubmittingAuth] = useState(false);
   const [isCreatingWorkspace, setIsCreatingWorkspace] = useState(false);
+  const allowSignUp = process.env.NEXT_PUBLIC_ALLOW_SIGN_UP === "true";
 
   const loadWorkspaceForUser = useCallback(
     async (currentUser: User) => {
-        setStatus("checking-workspace");
+      setStatus("checking-workspace");
+      setMessage("");
 
+      try {
         const ownedWorkspace = await getOwnedWorkspace(supabase, currentUser);
         setWorkspace(ownedWorkspace);
         setStatus(ownedWorkspace ? "ready" : "needs-workspace");
+      } catch {
+        setMessage(
+          "Workspace access could not be checked. Check your connection and try again.",
+        );
+        setStatus("load-error");
+      }
     },
     [supabase],
-    );
+  );
 
   useEffect(() => {
     let isMounted = true;
 
     async function loadUser() {
-      const { data } = await supabase.auth.getUser();
+      const { data, error } = await supabase.auth.getSession();
 
       if (!isMounted) {
         return;
       }
 
-      setUser(data.user);
+      if (error) {
+        setMessage(
+          "Your session could not be checked. Check your connection and try again.",
+        );
+        setStatus("load-error");
+        return;
+      }
 
-      if (!data.user) {
+      const currentUser = data.session?.user ?? null;
+      setUser(currentUser);
+
+      if (!currentUser) {
         setWorkspace(null);
         setStatus("signed-out");
         return;
       }
 
-      await loadWorkspaceForUser(data.user);
+      await loadWorkspaceForUser(currentUser);
     }
 
     void loadUser();
@@ -103,27 +123,34 @@ export function WorkspaceGate({
     };
   }, [loadWorkspaceForUser, supabase]);
 
-  async function handleAuthSubmit() {
+  async function handleAuthSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
     setIsSubmittingAuth(true);
     setMessage("");
 
-    const result =
-      authMode === "sign-up"
-        ? await supabase.auth.signUp({ email, password })
-        : await supabase.auth.signInWithPassword({ email, password });
+    try {
+      const result =
+        authMode === "sign-up" && allowSignUp
+          ? await supabase.auth.signUp({ email, password })
+          : await supabase.auth.signInWithPassword({ email, password });
 
-    setIsSubmittingAuth(false);
+      if (result.error) {
+        setMessage(result.error.message);
+        return;
+      }
 
-    if (result.error) {
-      setMessage(result.error.message);
-      return;
+      setMessage(
+        authMode === "sign-up" && allowSignUp
+          ? "Account created. Check your email if confirmation is required."
+          : "Signed in successfully.",
+      );
+    } catch {
+      setMessage(
+        "The authentication service could not be reached. Check your connection and try again.",
+      );
+    } finally {
+      setIsSubmittingAuth(false);
     }
-
-    setMessage(
-      authMode === "sign-up"
-        ? "Account created. Check your email if confirmation is required."
-        : "Signed in successfully.",
-    );
   }
 
   async function handleSignOut() {
@@ -163,14 +190,54 @@ export function WorkspaceGate({
 
   if (status === "checking-auth" || status === "checking-workspace") {
     return (
-      <main className="min-h-screen bg-[#F7F8F6] px-6 py-16">
+      <main
+        aria-busy="true"
+        className="min-h-screen bg-[#F7F8F6] px-6 py-16"
+      >
         <section className="mx-auto max-w-3xl rounded-lg border border-[#D9DED8] bg-white p-6">
           <h1 className="text-2xl font-bold text-[#17201C]">
             Loading workspace
           </h1>
-          <p className="mt-3 text-[#5F6862]">
+          <p className="mt-3 text-[#5F6862]" role="status">
             Checking your account and workspace access.
           </p>
+        </section>
+      </main>
+    );
+  }
+
+  if (status === "load-error") {
+    return (
+      <main className="min-h-screen bg-[#F7F8F6] px-6 py-16">
+        <section
+          className="mx-auto max-w-3xl rounded-lg border border-[#D9DED8] bg-white p-6"
+          role="alert"
+        >
+          <p className="text-sm font-bold uppercase tracking-[0.2em] text-[#5F6862]">
+            Client Operations Workspace
+          </p>
+          <h1 className="mt-3 text-3xl font-bold text-[#17201C]">
+            Workspace unavailable
+          </h1>
+          <p className="mt-3 leading-7 text-[#5F6862]">{message}</p>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <button
+              className="rounded-md bg-[#174F42] px-5 py-3 font-bold text-white hover:bg-[#1F6F5B]"
+              onClick={() => window.location.reload()}
+              type="button"
+            >
+              Try again
+            </button>
+            {user ? (
+              <button
+                className="rounded-md border border-[#174F42] px-5 py-3 font-bold text-[#174F42] hover:bg-[#EDF3EF]"
+                onClick={() => void handleSignOut()}
+                type="button"
+              >
+                Sign out
+              </button>
+            ) : null}
+          </div>
         </section>
       </main>
     );
@@ -191,18 +258,43 @@ export function WorkspaceGate({
             notes, delivery updates, and activity history.
           </p>
 
-          <div className="mt-6 grid gap-4">
+          <form
+            className="mt-6 grid gap-4"
+            onSubmit={(event) => void handleAuthSubmit(event)}
+          >
+            <label className="font-bold text-[#17201C]" htmlFor="auth-email">
+              Email
+            </label>
             <input
+              aria-describedby={message ? "auth-message" : undefined}
+              autoCapitalize="none"
+              autoComplete="email"
               className="rounded-md border border-[#D9DED8] px-4 py-3 text-[#17201C]"
+              id="auth-email"
+              inputMode="email"
+              name="email"
+              required
+              spellCheck={false}
               type="email"
-              placeholder="Email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
             />
+            <label className="font-bold text-[#17201C]" htmlFor="auth-password">
+              Password
+            </label>
             <input
+              aria-describedby={message ? "auth-message" : undefined}
+              autoComplete={
+                authMode === "sign-up" && allowSignUp
+                  ? "new-password"
+                  : "current-password"
+              }
               className="rounded-md border border-[#D9DED8] px-4 py-3 text-[#17201C]"
+              id="auth-password"
+              minLength={6}
+              name="password"
+              required
               type="password"
-              placeholder="Password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
             />
@@ -210,38 +302,44 @@ export function WorkspaceGate({
             <div className="flex flex-wrap gap-3">
               <button
                 className="rounded-md bg-[#174F42] px-5 py-3 font-bold text-white hover:bg-[#1F6F5B] disabled:opacity-70"
-                type="button"
                 disabled={isSubmittingAuth}
-                onClick={() => void handleAuthSubmit()}
+                type="submit"
               >
                 {isSubmittingAuth
                   ? "Working..."
-                  : authMode === "sign-in"
-                    ? "Sign In"
-                    : "Create Account"}
+                  : authMode === "sign-up" && allowSignUp
+                    ? "Create Account"
+                    : "Sign In"}
               </button>
 
-              <button
-                className="rounded-md border border-[#D9DED8] px-5 py-3 font-bold text-[#17201C] hover:bg-[#EDF3EF]"
-                type="button"
-                onClick={() =>
-                  setAuthMode((currentMode) =>
-                    currentMode === "sign-in" ? "sign-up" : "sign-in",
-                  )
-                }
-              >
-                {authMode === "sign-in"
-                  ? "Create Account Instead"
-                  : "Sign In Instead"}
-              </button>
+              {allowSignUp ? (
+                <button
+                  className="rounded-md border border-[#D9DED8] px-5 py-3 font-bold text-[#17201C] hover:bg-[#EDF3EF]"
+                  type="button"
+                  onClick={() => {
+                    setMessage("");
+                    setAuthMode((currentMode) =>
+                      currentMode === "sign-in" ? "sign-up" : "sign-in",
+                    );
+                  }}
+                >
+                  {authMode === "sign-in"
+                    ? "Create Account Instead"
+                    : "Sign In Instead"}
+                </button>
+              ) : null}
             </div>
 
             {message ? (
-              <p className="rounded-md bg-[#EDF3EF] p-4 font-semibold text-[#5F6862]">
+              <p
+                aria-live="polite"
+                className="rounded-md bg-[#EDF3EF] p-4 font-semibold text-[#5F6862]"
+                id="auth-message"
+              >
                 {message}
               </p>
             ) : null}
-          </div>
+          </form>
         </section>
       </main>
     );
@@ -249,93 +347,110 @@ export function WorkspaceGate({
 
   if (status === "needs-workspace") {
     return (
-        <main className="min-h-screen bg-[#F7F8F6] px-6 py-10 text-[#17201C]">
+      <main className="min-h-screen bg-[#F7F8F6] px-6 py-10 text-[#17201C]">
         <section className="mx-auto max-w-5xl">
-            <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm font-bold uppercase tracking-[0.2em] text-[#5F6862]">
-                Client Operations Workspace
+              Client Operations Workspace
             </p>
 
             <button
-                className="rounded-md border border-[#174F42] bg-white px-4 py-2 font-bold text-[#174F42] hover:bg-[#174F42] hover:text-white"
-                type="button"
-                onClick={() => void handleSignOut()}
+              className="rounded-md border border-[#174F42] bg-white px-4 py-2 font-bold text-[#174F42] hover:bg-[#174F42] hover:text-white"
+              type="button"
+              onClick={() => void handleSignOut()}
             >
-                Sign Out
+              Sign Out
             </button>
-            </div>
+          </div>
 
-            <div className="mt-14 grid gap-8 lg:grid-cols-[1fr_0.8fr] lg:items-start">
+          <div className="mt-14 grid gap-8 lg:grid-cols-[1fr_0.8fr] lg:items-start">
             <div>
-                <h1 className="max-w-3xl text-4xl font-bold leading-tight md:text-6xl">
+              <h1 className="max-w-3xl text-4xl font-bold leading-tight md:text-6xl">
                 Create your client operations workspace
-                </h1>
-                <p className="mt-5 max-w-2xl text-lg leading-8 text-[#5F6862]">
+              </h1>
+              <p className="mt-5 max-w-2xl text-lg leading-8 text-[#5F6862]">
                 Set up one place to track leads, follow-ups, onboarding, delivery
                 work, approvals, payment status, handoff notes, and client
                 workflow activity.
-                </p>
+              </p>
 
-                <div className="mt-8 grid gap-4">
+              <form
+                className="mt-8 grid gap-4"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void handleCreateWorkspace();
+                }}
+              >
                 <label
-                    className="font-bold text-[#17201C]"
-                    htmlFor="workspace-name"
+                  className="font-bold text-[#17201C]"
+                  htmlFor="workspace-name"
                 >
-                    Workspace name
+                  Workspace name
                 </label>
                 <input
-                    id="workspace-name"
-                    className="max-w-xl rounded-md border border-[#D9DED8] px-4 py-3 text-[#17201C]"
-                    type="text"
-                    value={workspaceName}
-                    onChange={(event) => setWorkspaceName(event.target.value)}
+                  aria-describedby={message ? "workspace-message" : undefined}
+                  autoComplete="organization"
+                  className="max-w-xl rounded-md border border-[#D9DED8] px-4 py-3 text-[#17201C]"
+                  id="workspace-name"
+                  minLength={2}
+                  name="workspace-name"
+                  required
+                  type="text"
+                  value={workspaceName}
+                  onChange={(event) => setWorkspaceName(event.target.value)}
                 />
 
                 <button
-                    className="w-fit rounded-md bg-[#174F42] px-6 py-3 font-bold text-white hover:bg-[#1F6F5B] disabled:cursor-not-allowed disabled:opacity-70"
-                    type="button"
-                    disabled={isCreatingWorkspace}
-                    onClick={() => void handleCreateWorkspace()}
+                  className="w-fit rounded-md bg-[#174F42] px-6 py-3 font-bold text-white hover:bg-[#1F6F5B] disabled:cursor-not-allowed disabled:opacity-70"
+                  type="submit"
+                  disabled={isCreatingWorkspace}
                 >
-                    {isCreatingWorkspace ? "Creating Workspace..." : "Create Workspace"}
+                  {isCreatingWorkspace
+                    ? "Creating Workspace..."
+                    : "Create Workspace"}
                 </button>
 
                 {message ? (
-                    <p className="max-w-xl rounded-md bg-[#EDF3EF] p-4 font-semibold text-[#5F6862]">
+                  <p
+                    aria-live="polite"
+                    className="max-w-xl rounded-md bg-[#EDF3EF] p-4 font-semibold text-[#5F6862]"
+                    id="workspace-message"
+                  >
                     {message}
-                    </p>
+                  </p>
                 ) : null}
-                </div>
+              </form>
             </div>
 
             <aside className="rounded-lg border border-[#D9DED8] bg-white p-6">
-                <h2 className="text-2xl font-bold text-[#17201C]">
+              <h2 className="text-2xl font-bold text-[#17201C]">
                 What your workspace will help you manage
-                </h2>
+              </h2>
 
-                <div className="mt-5 grid gap-3">
+              <div className="mt-5 grid gap-3">
                 {[
-                    "Leads and clients in progress",
-                    "Next actions and follow-up dates",
-                    "Work items, blockers, and delivery tasks",
-                    "Handoff notes between people or stages",
-                    "Approvals, payment status, and client risk",
-                    "Activity history for each client record",
+                  "Leads and clients in progress",
+                  "Next actions and follow-up dates",
+                  "Work items, blockers, and delivery tasks",
+                  "Handoff notes between people or stages",
+                  "Approvals, payment status, and client risk",
+                  "Activity history for each client record",
                 ].map((item) => (
-                    <p
+                  <p
                     key={item}
                     className="rounded-md bg-[#EDF3EF] p-3 font-semibold text-[#174F42]"
-                    >
+                  >
                     {item}
-                    </p>
+                  </p>
                 ))}
-                </div>
+              </div>
             </aside>
-            </div>
+          </div>
         </section>
-        </main>
+      </main>
     );
-    }
+  }
+
   return children({
     mode: "workspace",
     workspace,

@@ -68,7 +68,7 @@ function WorkspaceNavigation({
       aria-label="Workspace navigation"
       className={
         isCompact
-          ? "flex gap-2 overflow-x-auto px-4 pb-3 sm:px-6"
+          ? "flex w-full max-w-full gap-2 overflow-x-auto px-4 pb-3 sm:px-6"
           : "grid gap-1"
       }
     >
@@ -121,7 +121,13 @@ export function WorkspaceShell({
   workspaceName,
 }: WorkspaceShellProps) {
   return (
-    <div className="min-h-screen bg-[#F7F8F6] text-[#17201C] lg:grid lg:grid-cols-[15rem_minmax(0,1fr)]">
+    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-[#F7F8F6] text-[#17201C] lg:grid lg:grid-cols-[15rem_minmax(0,1fr)]">
+      <a
+        className="fixed left-4 top-4 z-50 -translate-y-24 rounded-md bg-white px-4 py-3 font-bold text-[#174F42] shadow-lg transition-transform focus:translate-y-0"
+        href="#workspace-view"
+      >
+        Skip to workspace content
+      </a>
       <aside className="sticky top-0 hidden h-screen flex-col border-r border-[#285247] bg-[#10372F] px-4 py-5 text-white lg:flex">
         <div className="border-b border-[#386157] px-2 pb-5">
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#BDD0C9]">
@@ -161,7 +167,7 @@ export function WorkspaceShell({
       </aside>
 
       <div className="min-w-0">
-        <header className="sticky top-0 z-30 border-b border-[#D9DED8] bg-white lg:hidden">
+        <header className="sticky top-0 z-30 max-w-full border-b border-[#D9DED8] bg-white lg:hidden">
           <div className="flex min-h-16 items-center justify-between gap-3 px-4 sm:px-6">
             <div className="min-w-0">
               <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#5F6862]">
@@ -188,7 +194,7 @@ export function WorkspaceShell({
           />
         </header>
 
-        <main className="min-w-0" id="workspace-view">
+        <main className="min-w-0" id="workspace-view" tabIndex={-1}>
           <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
             {children}
           </div>
