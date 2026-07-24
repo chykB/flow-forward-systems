@@ -121,7 +121,7 @@ export function WorkspaceShell({
   workspaceName,
 }: WorkspaceShellProps) {
   return (
-    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-[#F7F8F6] text-[#17201C] lg:grid lg:grid-cols-[15rem_minmax(0,1fr)]">
+    <div className="min-h-screen w-full max-w-full overflow-x-clip bg-[#F7F8F6] text-[#17201C] lg:grid lg:grid-cols-[15rem_minmax(0,1fr)]">
       <a
         className="fixed left-4 top-4 z-50 -translate-y-24 rounded-md bg-white px-4 py-3 font-bold text-[#174F42] shadow-lg transition-transform focus:translate-y-0"
         href="#workspace-view"
