@@ -7,9 +7,9 @@ public launch.
 
 - Production origin:
   `https://client-operations-revenue-workflow.processes.workers.dev`
-- Deployed commit: `14e7511`
-- Cloudflare Worker version: `87a675de-445b-4e46-b06d-160ed1cda88d`
-- Deployment time: `2026-07-24T13:04:12.816Z`
+- Deployed commit: `0eb1009`
+- Cloudflare Worker version: `ef3470e7-fa48-4a55-83aa-24badf49eff7`
+- Deployment time: `2026-07-24T15:24:37.646Z`
 - Deployed by: `malikchika86@gmail.com`
 - Supabase project reference: `kdanlmcobbamwggejrvc`
 - Approved by: `malikchika86@gmail.com`
@@ -22,7 +22,7 @@ public launch.
 
 - [x] Disable new-user registration in Supabase Auth.
 - [x] Keep `NEXT_PUBLIC_ALLOW_SIGN_UP=false`.
-- [ ] Provision only approved Private V1 users.
+- [x] Provision only approved Private V1 users.
 - [x] Confirm every real record is workspace-scoped and row-level security is
       enabled.
 - [x] Confirm no service-role key, database password, or other secret is present
@@ -95,11 +95,11 @@ boundary.
 - [x] Allow `http://localhost:3000/**` only for local development.
 - [x] Add only approved preview redirect patterns.
 - [x] Prefer exact production redirect URLs over production wildcards.
-- [ ] Test sign-in, sign-out, session restoration, and rejected credentials.
+- [x] Test sign-in, sign-out, session restoration, and rejected credentials.
 
 ## Accessibility And Responsive Acceptance
 
-- [ ] Complete the core workflow using only a keyboard.
+- [x] Complete the core workflow using only a keyboard.
 - [x] Confirm focus is always visible.
 - [x] Confirm the skip link moves focus to workspace content.
 - [x] Confirm forms expose visible labels and announce errors or status changes.
@@ -107,7 +107,7 @@ boundary.
 - [x] Confirm mobile workspace navigation scrolls within its own navigation
       region.
 - [x] Confirm the interface remains usable with reduced-motion preferences.
-- [ ] Confirm the light interface remains readable when the operating system
+- [x] Confirm the light interface remains readable when the operating system
       uses dark mode.
 
 ## Product Smoke Test

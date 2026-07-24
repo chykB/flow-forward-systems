@@ -2,7 +2,7 @@
 
 Status: Active technical contract
 
-Implemented slices: Work items, client records, follow-up completion, Work Item handoff context, proposals, engagement-owned Proposal recommendations, proposal-linked Invoice billing, invoices, engagement ownership, engagement-scoped risk review, sequential Work Item controls, and Work Item dependency editing
+Implemented slices: Work items, client records, follow-up completion, Work Item handoff context, proposals, engagement-owned Proposal recommendations, proposal-linked Invoice billing, invoices, engagement ownership, engagement-scoped risk review, sequential Work Item controls, Work Item dependency editing, and the provider-neutral Operations Agent runtime foundation
 
 Public API status: None of the interfaces or database functions in this document are a versioned customer API.
 
@@ -54,6 +54,11 @@ The manual and rules-based product remains fully operational without an AI provi
 - `riskSignals.review(command)`
 - `riskSignals.dismiss(command)`
 
+- `operationsAgent.listRuns()`
+- `operationsAgent.listSteps(runId)`
+- `operationsAgent.startRun(command)`
+- `operationsAgent.cancelRun(command)`
+
 - `workItems.list()`
 - `workItems.listDependencies()`
 - `workItems.create(command)`
@@ -102,6 +107,9 @@ The current function names are:
 
 - `command_update_engagement_risk_signal_review`
 
+- `command_start_operations_agent_run`
+- `command_cancel_operations_agent_run`
+
 - `command_create_engagement_workflow_task`
 - `command_update_engagement_workflow_task_status`
 - `command_replace_engagement_workflow_task_dependencies`
@@ -112,6 +120,16 @@ Proposal and Invoice create/update/recommendation operations and Work Item creat
 
 These database functions are internal implementation details. Granting `authenticated` execution does not make them a supported external API.
 
+The Operations Agent runtime also defines service-only functions for durable
+worker claims, bounded state transitions, and atomic usage accounting:
+
+- `agent_claim_operations_agent_run`
+- `agent_transition_operations_agent_run`
+- `agent_record_operations_agent_usage`
+
+Authenticated browser callers cannot execute these service functions or write
+runtime tables directly.
+
 ## Command Rules
 
 ### Authorization
@@ -120,6 +138,30 @@ These database functions are internal implementation details. Granting `authenti
 - The actor must own the supplied workspace.
 - The referenced client record, engagement, work item, handoff note, Proposal, or Invoice must belong to that workspace.
 - Authorization is checked inside each privileged function because `security definer` functions do not rely on table RLS for their own statements.
+- Operations Agent start and cancel commands require the workspace owner. A
+  server worker must use the service role to claim or advance a run.
+
+### Operations Agent runtime
+
+- The first capability is `guided_client_intake`.
+- Every browser-started run uses `suggest` mode. Approval-required and
+  delegated modes are not enabled by the start command.
+- One active run is allowed per workspace during the foundation rollout.
+- Runs persist objective, initiating user, trigger, context, plan, state,
+  bounded limits, failure details, and outcome.
+- Steps and lifecycle events provide durable resume and audit history without
+  exposing unrestricted workspace data to a model.
+- Per-call usage records attribute provider, model, tokens, tool fees, retries,
+  cost, and usable outcome to a workspace and run.
+- Provider failures without a usable result have zero chargeable cost.
+- Per-run model, tool, retry, duration, and cost ceilings are enforced at the
+  database boundary. A workspace capability policy provides a kill switch,
+  concurrency ceiling, and monthly cost ceiling.
+- Runtime tables are read-only to authenticated callers. The service role can
+  write runtime internals but does not receive permission to bypass existing
+  business commands for consequential workspace changes.
+- No model-provider integration or autonomous workflow write is introduced by
+  this foundation migration.
 
 ### Validation
 
