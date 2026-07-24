@@ -11,18 +11,21 @@ public launch.
 - Cloudflare Worker version: `87a675de-445b-4e46-b06d-160ed1cda88d`
 - Deployment time: `2026-07-24T13:04:12.816Z`
 - Deployed by: `malikchika86@gmail.com`
+- Supabase project reference: `kdanlmcobbamwggejrvc`
+- Approved by: `malikchika86@gmail.com`
+- Acceptance date: 2026-07-24
 - Production smoke test: Passed on 2026-07-24
-- Release status: Private V1 deployed; final account configuration checks
-  remain open below.
+- Release status: Private V1 deployed and approved for continued private use;
+  remaining acceptance checks are listed below.
 
 ## Access And Data
 
-- [ ] Disable new-user registration in Supabase Auth.
+- [x] Disable new-user registration in Supabase Auth.
 - [x] Keep `NEXT_PUBLIC_ALLOW_SIGN_UP=false`.
 - [ ] Provision only approved Private V1 users.
-- [ ] Confirm every real record is workspace-scoped and row-level security is
+- [x] Confirm every real record is workspace-scoped and row-level security is
       enabled.
-- [ ] Confirm no service-role key, database password, or other secret is present
+- [x] Confirm no service-role key, database password, or other secret is present
       in browser environment variables, source control, or client logs.
 - [ ] Keep synthetic fixtures out of real workspaces.
 
@@ -80,7 +83,7 @@ boundary.
       runtime before deploying.
 - [x] Run `npm run deploy` only from the reviewed commit.
 - [x] Record the resulting `workers.dev` or custom-domain HTTPS origin.
-- [ ] Confirm Cloudflare Workers observability is receiving request and error
+- [x] Confirm Cloudflare Workers observability is receiving request and error
       logs.
 - [x] Confirm HTTPS is enforced by the hosting provider.
 - [x] Confirm responses include the configured frame, content-type, referrer,
@@ -88,10 +91,10 @@ boundary.
 
 ## Supabase Auth
 
-- [ ] Set the Auth Site URL to the exact production HTTPS origin.
-- [ ] Allow `http://localhost:3000/**` only for local development.
-- [ ] Add only approved preview redirect patterns.
-- [ ] Prefer exact production redirect URLs over production wildcards.
+- [x] Set the Auth Site URL to the exact production HTTPS origin.
+- [x] Allow `http://localhost:3000/**` only for local development.
+- [x] Add only approved preview redirect patterns.
+- [x] Prefer exact production redirect URLs over production wildcards.
 - [ ] Test sign-in, sign-out, session restoration, and rejected credentials.
 
 ## Accessibility And Responsive Acceptance
@@ -125,8 +128,8 @@ boundary.
 ## Release Decision
 
 - [x] Record the deployed commit SHA and production URL.
-- [ ] Record the Supabase project reference used by the deployment.
-- [ ] Record the person approving the release and the acceptance date.
+- [x] Record the Supabase project reference used by the deployment.
+- [x] Record the person approving the release and the acceptance date.
 - [x] Keep the deployment private until export/delete, backups, monitoring,
       support, complete permissions, and privacy controls meet the later public
       release gate.
