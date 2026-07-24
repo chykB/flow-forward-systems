@@ -14,7 +14,14 @@ import type {
 import { getLifecycleStageLabel } from "@/lib/client-workflow-display";
 
 type ClientRecordFormProps = {
-  onAddRecord: (record: NewClientWorkflowRecord) => void;
+  description?: string;
+  eyebrow?: string;
+  initialRecord?: Partial<NewClientWorkflowRecord>;
+  onAddRecord: (
+    record: NewClientWorkflowRecord,
+  ) => unknown | Promise<unknown>;
+  submitLabel?: string;
+  title?: string;
 };
 
 type FormValues = {
@@ -36,7 +43,7 @@ type FormValues = {
 
 type FormErrors = Partial<Record<keyof FormValues, string>>;
 
-const initialValues: FormValues = {
+const defaultValues: FormValues = {
   name: "",
   email: "",
   businessName: "",
@@ -52,6 +59,37 @@ const initialValues: FormValues = {
   assignedTo: "",
   message: "",
 };
+
+function buildInitialValues(
+  initialRecord?: Partial<NewClientWorkflowRecord>,
+): FormValues {
+  return {
+    ...defaultValues,
+    name: initialRecord?.name ?? defaultValues.name,
+    email: initialRecord?.email ?? defaultValues.email,
+    businessName:
+      initialRecord?.businessName ?? defaultValues.businessName,
+    source: initialRecord?.source ?? defaultValues.source,
+    interest: initialRecord?.interest ?? defaultValues.interest,
+    clientType:
+      initialRecord?.clientType ?? defaultValues.clientType,
+    returningClientStatus:
+      initialRecord?.returningClientStatus ??
+      defaultValues.returningClientStatus,
+    lifecycleStage:
+      initialRecord?.lifecycleStage ?? defaultValues.lifecycleStage,
+    priority: initialRecord?.priority ?? defaultValues.priority,
+    riskLevel: initialRecord?.riskLevel ?? defaultValues.riskLevel,
+    nextAction:
+      initialRecord?.nextAction ?? defaultValues.nextAction,
+    nextFollowUpAt:
+      initialRecord?.nextFollowUpAt ??
+      defaultValues.nextFollowUpAt,
+    assignedTo:
+      initialRecord?.assignedTo ?? defaultValues.assignedTo,
+    message: initialRecord?.message ?? defaultValues.message,
+  };
+}
 
 const clientTypes: ClientType[] = [
   "Lead",
@@ -138,9 +176,20 @@ function FieldError({ message }: { message?: string }) {
   return <p className="text-sm font-semibold text-red-700">{message}</p>;
 }
 
-export function ClientRecordForm({ onAddRecord }: ClientRecordFormProps) {
-  const [values, setValues] = useState<FormValues>(initialValues);
+export function ClientRecordForm({
+  description = "Add a workflow record with the next action, follow-up date, owner, and current stage.",
+  eyebrow = "Add Record",
+  initialRecord,
+  onAddRecord,
+  submitLabel = "Add Lead Or Client",
+  title = "Add a lead or client",
+}: ClientRecordFormProps) {
+  const [values, setValues] = useState<FormValues>(() =>
+    buildInitialValues(initialRecord),
+  );
   const [errors, setErrors] = useState<FormErrors>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submissionError, setSubmissionError] = useState("");
 
   function updateField<Key extends keyof FormValues>(
     field: Key,
@@ -172,7 +221,7 @@ export function ClientRecordForm({ onAddRecord }: ClientRecordFormProps) {
     }));
   }
 
-  function submitForm(event: React.FormEvent<HTMLFormElement>) {
+  async function submitForm(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const validationErrors = validateForm(values);
@@ -182,32 +231,49 @@ export function ClientRecordForm({ onAddRecord }: ClientRecordFormProps) {
       return;
     }
 
-    onAddRecord({
-      name: values.name.trim(),
-      email: values.email.trim(),
-      phone: "",
-      businessName: values.businessName.trim(),
-      source: values.source.trim(),
-      interest: values.interest.trim(),
-      message: values.message.trim(),
-      lifecycleStage: values.lifecycleStage,
-      priority: values.priority,
-      riskLevel: values.riskLevel,
-      nextAction: values.nextAction.trim(),
-      nextFollowUpAt: values.nextFollowUpAt,
-      assignedTo: values.assignedTo.trim(),
-      onboardingStatus: "Not started",
-      deliveryStatus: "Not started",
-      approvalStatus: "Not needed",
-      paymentStatus: "Not needed",
-      clientType: values.clientType,
-      returningClientStatus: values.returningClientStatus,
-      lastProjectDate: "",
-      estimatedValue: 0,
-    });
+    setIsSubmitting(true);
+    setSubmissionError("");
 
-    setValues(initialValues);
-    setErrors({});
+    try {
+      const result = await onAddRecord({
+        name: values.name.trim(),
+        email: values.email.trim(),
+        phone: "",
+        businessName: values.businessName.trim(),
+        source: values.source.trim(),
+        interest: values.interest.trim(),
+        message: values.message.trim(),
+        lifecycleStage: values.lifecycleStage,
+        priority: values.priority,
+        riskLevel: values.riskLevel,
+        nextAction: values.nextAction.trim(),
+        nextFollowUpAt: values.nextFollowUpAt,
+        assignedTo: values.assignedTo.trim(),
+        onboardingStatus: "Not started",
+        deliveryStatus: "Not started",
+        approvalStatus: "Not needed",
+        paymentStatus: "Not needed",
+        clientType: values.clientType,
+        returningClientStatus: values.returningClientStatus,
+        lastProjectDate: "",
+        estimatedValue: 0,
+      });
+
+      if (result === false || result === null) {
+        return;
+      }
+
+      setValues(buildInitialValues(initialRecord));
+      setErrors({});
+    } catch (error) {
+      setSubmissionError(
+        error instanceof Error
+          ? error.message
+          : "The client record could not be saved.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -217,13 +283,10 @@ export function ClientRecordForm({ onAddRecord }: ClientRecordFormProps) {
     >
       <div>
         <p className="text-sm font-bold uppercase tracking-[0.18em] text-[#5F6862]">
-          Add Record
+          {eyebrow}
         </p>
-        <h2 className="mt-3 text-2xl font-bold">Add a lead or client</h2>
-        <p className="mt-2 leading-7 text-[#5F6862]">
-          Add a workflow record with the next action, follow-up date, owner, and
-          current stage.
-        </p>
+        <h2 className="mt-3 text-2xl font-bold">{title}</h2>
+        <p className="mt-2 leading-7 text-[#5F6862]">{description}</p>
       </div>
 
       <div className="mt-6 grid gap-4 md:grid-cols-2">
@@ -465,11 +528,21 @@ export function ClientRecordForm({ onAddRecord }: ClientRecordFormProps) {
         </div>
       </div>
 
+      {submissionError ? (
+        <p
+          className="mt-5 rounded-md bg-red-50 p-4 font-semibold text-red-700"
+          role="alert"
+        >
+          {submissionError}
+        </p>
+      ) : null}
+
       <button
-        className="mt-6 rounded-md bg-[#174F42] px-5 py-3 font-bold text-white hover:bg-[#1F6F5B]"
+        className="mt-6 rounded-md bg-[#174F42] px-5 py-3 font-bold text-white hover:bg-[#1F6F5B] disabled:cursor-not-allowed disabled:opacity-60"
+        disabled={isSubmitting}
         type="submit"
       >
-        Add Lead Or Client
+        {isSubmitting ? "Saving..." : submitLabel}
       </button>
     </form>
   );

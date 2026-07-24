@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import {
+  Bot,
   CalendarDays,
   History,
   ListChecks,
@@ -13,6 +14,7 @@ import {
 
 export type WorkspaceView =
   | "today"
+  | "operations-agent"
   | "workflow-snapshot"
   | "client-records"
   | "action-queue"
@@ -29,6 +31,11 @@ const navigationItems: NavigationItem[] = [
     icon: CalendarDays,
     label: "Today",
     view: "today",
+  },
+  {
+    icon: Bot,
+    label: "Operations Agent",
+    view: "operations-agent",
   },
   {
     icon: Workflow,

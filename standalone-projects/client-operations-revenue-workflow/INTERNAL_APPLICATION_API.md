@@ -2,7 +2,7 @@
 
 Status: Active technical contract
 
-Implemented slices: Work items, client records, follow-up completion, Work Item handoff context, proposals, engagement-owned Proposal recommendations, proposal-linked Invoice billing, invoices, engagement ownership, engagement-scoped risk review, sequential Work Item controls, Work Item dependency editing, and the provider-neutral Operations Agent runtime foundation
+Implemented slices: Work items, client records, follow-up completion, Work Item handoff context, proposals, engagement-owned Proposal recommendations, proposal-linked Invoice billing, invoices, engagement ownership, engagement-scoped risk review, sequential Work Item controls, Work Item dependency editing, the provider-neutral Operations Agent runtime, and Suggest-mode guided client intake
 
 Public API status: None of the interfaces or database functions in this document are a versioned customer API.
 
@@ -126,6 +126,8 @@ worker claims, bounded state transitions, and atomic usage accounting:
 - `agent_claim_operations_agent_run`
 - `agent_transition_operations_agent_run`
 - `agent_record_operations_agent_usage`
+- `agent_record_guided_client_intake_result`
+- `agent_fail_guided_client_intake_run`
 
 Authenticated browser callers cannot execute these service functions or write
 runtime tables directly.
@@ -157,11 +159,18 @@ runtime tables directly.
 - Per-run model, tool, retry, duration, and cost ceilings are enforced at the
   database boundary. A workspace capability policy provides a kill switch,
   concurrency ceiling, and monthly cost ceiling.
+- Guided client intake uses one server-side structured-output call. The model
+  can prepare only a review draft; it cannot create a client record.
+- The initiating user reviews the normal client form before
+  `command_complete_guided_client_intake` atomically calls the existing
+  `command_create_client_workflow_record` boundary and completes the run.
+- Missing and uncertain fields are durable draft data. The server must not
+  invent dates, owners, amounts, statuses, commitments, or relationship state.
 - Runtime tables are read-only to authenticated callers. The service role can
   write runtime internals but does not receive permission to bypass existing
   business commands for consequential workspace changes.
-- No model-provider integration or autonomous workflow write is introduced by
-  this foundation migration.
+- The model provider and service-role keys remain server-only. Browser callers
+  receive neither credential and cannot execute worker functions.
 
 ### Validation
 
@@ -318,10 +327,15 @@ User-facing errors include the command or query request ID. Console diagnostics 
 | Invoices | workspace/client invoices | none directly | engagement-scoped create/update/recommendation + optional accepted-Proposal billing + reconciliation + Activity | Implemented for all Active engagements |
 | Risk signals | workspace risk history | none directly | engagement-scoped review/dismiss + isolated health + Activity | Implemented; source-driven resolution remains separate |
 | Activity | workspace history | direct inserts from legacy flows | command-owned audit writes | Client-record, work-item, handoff-context, Proposal, Invoice, and risk-review audit implemented; other flows pending |
+| Operations Agent | owner-scoped runs, steps, and guided intake drafts | start/cancel; review an editable draft | service-only claim/provider result/failure; atomic reviewed client save | Guided client intake implemented in Suggest mode; no autonomous workflow writes |
 
 ## Assistant Eligibility
 
-The engagement, follow-up, client-record, work-item, handoff-context, Proposal, Invoice, and risk-review commands are structurally suitable for a future protected assistant tool, but they are not exposed to an assistant yet. Assistant enablement also requires:
+Guided client intake is the first protected Operations Agent capability. It
+uses the existing client-record command only after explicit user review. The
+engagement, follow-up, work-item, handoff-context, Proposal, Invoice, and
+risk-review commands are not yet exposed as agent tools. Additional tool
+enablement requires:
 
 - explicit per-tool policy and plan entitlements;
 - user confirmation for consequential changes;
@@ -334,5 +348,8 @@ The assistant should use the same application command contract as the manual UI 
 
 ## Next Slices
 
-1. Move remaining legacy Activity writes behind command-owned audit effects.
-2. Add a protected server tool layer only after the manual command surface is complete and tested.
+1. Browser-test guided client intake, provider failure recovery, cancellation,
+   idempotent review save, and cost accounting.
+2. Add explicit approval records before exposing any additional consequential
+   command as an Operations Agent tool.
+3. Move remaining legacy Activity writes behind command-owned audit effects.

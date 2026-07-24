@@ -95,3 +95,55 @@ export type OperationsAgentRunLimits = {
   durationSeconds: number;
   costUsd: number;
 };
+
+export type GuidedClientIntakeField =
+  | "name"
+  | "email"
+  | "businessName"
+  | "source"
+  | "interest"
+  | "clientType"
+  | "returningClientStatus"
+  | "lifecycleStage"
+  | "priority"
+  | "riskLevel"
+  | "nextAction"
+  | "nextFollowUpAt"
+  | "assignedTo"
+  | "message";
+
+export type GuidedClientIntakeDraftValues = Record<
+  GuidedClientIntakeField,
+  string | null
+> & {
+  summary: string;
+};
+
+export type GuidedClientIntakeUncertainty = {
+  field: GuidedClientIntakeField;
+  reason: string;
+};
+
+export type GuidedClientIntakeDraftState =
+  | "waiting_for_review"
+  | "saved"
+  | "cancelled";
+
+export type GuidedClientIntakeDraft = {
+  id: string;
+  workspaceId: string;
+  runId: string;
+  initiatedBy: string;
+  values: GuidedClientIntakeDraftValues;
+  missingFields: GuidedClientIntakeField[];
+  uncertainFields: GuidedClientIntakeUncertainty[];
+  clarificationQuestions: string[];
+  state: GuidedClientIntakeDraftState;
+  provider: string;
+  model: string;
+  providerResponseId: string;
+  approvedRecord: Record<string, unknown>;
+  savedClientWorkflowRecordId: string;
+  createdAt: string;
+  updatedAt: string;
+};

@@ -21,11 +21,16 @@ import type {
   ProposalWorkflowUpdates,
 } from "@/lib/proposal-workflow";
 import type {
+  GuidedClientIntakeDraft,
   OperationsAgentCapability,
   OperationsAgentRun,
   OperationsAgentRunLimits,
   OperationsAgentStep,
 } from "@/lib/operations-agent-types";
+import {
+  getWorkspaceGuidedClientIntakeDrafts,
+  mapGuidedClientIntakeDraft,
+} from "@/lib/supabase/guided-client-intake-drafts";
 import {
   getWorkspaceRiskSignals,
   mapRiskSignalRow,
@@ -448,10 +453,27 @@ export type CancelOperationsAgentRunCommand = {
   expectedUpdatedAt: string;
 };
 
+export type CompleteGuidedClientIntakeCommand = {
+  commandId: string;
+  clientCreateCommandId: string;
+  runId: string;
+  draftId: string;
+  expectedRunUpdatedAt: string;
+  expectedDraftUpdatedAt: string;
+  approvedRecord: NewClientWorkflowRecord;
+  evaluationDate?: Date;
+};
+
 export type OperationsAgentRunCommandResult = {
   requestId: string;
   run: OperationsAgentRun;
 };
+
+export type GuidedClientIntakeCommandResult =
+  ClientRecordCommandResult & {
+    run: OperationsAgentRun;
+    draft: GuidedClientIntakeDraft;
+  };
 
 export type WorkspaceApplicationApi = {
   engagements: {
@@ -520,12 +542,16 @@ export type WorkspaceApplicationApi = {
   operationsAgent: {
     listRuns: () => Promise<OperationsAgentRun[]>;
     listSteps: (runId: string) => Promise<OperationsAgentStep[]>;
+    listClientIntakeDrafts: () => Promise<GuidedClientIntakeDraft[]>;
     startRun: (
       command: StartOperationsAgentRunCommand,
     ) => Promise<OperationsAgentRunCommandResult>;
     cancelRun: (
       command: CancelOperationsAgentRunCommand,
     ) => Promise<OperationsAgentRunCommandResult>;
+    completeClientIntake: (
+      command: CompleteGuidedClientIntakeCommand,
+    ) => Promise<GuidedClientIntakeCommandResult>;
   };
   workItems: {
     list: () => Promise<WorkflowTask[]>;
@@ -619,6 +645,13 @@ type OperationsAgentRunCommandRpcResult = {
   requestId: string;
   run: OperationsAgentRunRow;
 };
+
+type GuidedClientIntakeCommandRpcResult =
+  OperationsAgentRunCommandRpcResult & {
+    draft: Parameters<typeof mapGuidedClientIntakeDraft>[0];
+    clientRecord: ClientWorkflowRecordRow;
+    reconciliation: unknown;
+  };
 
 const engagementWorkflowStatuses = new Set<
   WorkflowTask["status"]
@@ -1328,6 +1361,43 @@ function mapOperationsAgentRunCommandResult(
   return {
     requestId: result.requestId,
     run: mapOperationsAgentRunRow(result.run),
+  };
+}
+
+function mapGuidedClientIntakeCommandResult(
+  data: unknown,
+  expectedRequestId: string,
+  clientEngagement: ClientEngagement,
+): GuidedClientIntakeCommandResult {
+  const result =
+    data as GuidedClientIntakeCommandRpcResult | null;
+
+  if (
+    !result?.requestId ||
+    result.requestId !== expectedRequestId ||
+    !result.run ||
+    !result.draft ||
+    !result.clientRecord ||
+    !result.reconciliation
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_response",
+      "The guided client intake command returned an invalid response.",
+      expectedRequestId,
+    );
+  }
+
+  return {
+    requestId: result.requestId,
+    run: mapOperationsAgentRunRow(result.run),
+    draft: mapGuidedClientIntakeDraft(result.draft),
+    clientRecord: mapClientWorkflowRecordRow(
+      result.clientRecord,
+    ),
+    clientEngagement,
+    reconciliation: mapRiskSignalReconciliationResult(
+      result.reconciliation,
+    ),
   };
 }
 
@@ -3510,6 +3580,57 @@ function validateCancelOperationsAgentRunCommand(
   }
 }
 
+function validateCompleteGuidedClientIntakeCommand(
+  workspaceId: string,
+  command: CompleteGuidedClientIntakeCommand,
+) {
+  assertRequestId(command.commandId);
+  assertUuid(
+    workspaceId,
+    "The workspace identifier",
+    command.commandId,
+  );
+  assertUuid(
+    command.runId,
+    "The Operations Agent run identifier",
+    command.commandId,
+  );
+  assertUuid(
+    command.draftId,
+    "The client intake draft identifier",
+    command.commandId,
+  );
+  assertRequestId(command.clientCreateCommandId);
+
+  if (command.clientCreateCommandId === command.commandId) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "The client save and agent completion request identifiers must be different.",
+      command.commandId,
+    );
+  }
+
+  [command.expectedRunUpdatedAt, command.expectedDraftUpdatedAt].forEach(
+    (timestamp) => {
+      if (
+        !timestampPattern.test(timestamp) ||
+        Number.isNaN(Date.parse(timestamp))
+      ) {
+        throw new WorkspaceApiError(
+          "invalid_request",
+          "Refresh the guided client intake draft before completing it.",
+          command.commandId,
+        );
+      }
+    },
+  );
+
+  validateClientRecordValues(
+    command.approvedRecord,
+    command.commandId,
+  );
+}
+
 function validateRiskSignalCommand(
   workspaceId: string,
   command: ReviewRiskSignalCommand,
@@ -4580,6 +4701,32 @@ export function createWorkspaceApplicationApi(
         }
       },
 
+      async listClientIntakeDrafts() {
+        const requestId = createOperationRequestId();
+
+        try {
+          assertUuid(
+            workspaceId,
+            "The workspace identifier",
+            requestId,
+          );
+          return await getWorkspaceGuidedClientIntakeDrafts(
+            supabase,
+            workspaceId,
+          );
+        } catch (error) {
+          console.error(
+            "Workspace API guided client intake draft query failed",
+            { requestId, error },
+          );
+          throw mapOperationError(
+            error,
+            requestId,
+            "Guided client intake drafts could not be loaded.",
+          );
+        }
+      },
+
       async startRun(command) {
         validateStartOperationsAgentRunCommand(
           workspaceId,
@@ -4654,6 +4801,77 @@ export function createWorkspaceApplicationApi(
             error,
             command.commandId,
             "The Operations Agent run could not be cancelled.",
+          );
+        }
+      },
+
+      async completeClientIntake(command) {
+        validateCompleteGuidedClientIntakeCommand(
+          workspaceId,
+          command,
+        );
+
+        try {
+          const { data, error } = await supabase.rpc(
+            "command_complete_guided_client_intake",
+            {
+              p_workspace_id: workspaceId,
+              p_run_id: command.runId,
+              p_draft_id: command.draftId,
+              p_expected_run_updated_at:
+                command.expectedRunUpdatedAt,
+              p_expected_draft_updated_at:
+                command.expectedDraftUpdatedAt,
+              p_approved_record: normalizeClientRecordUpdates(
+                command.approvedRecord,
+              ),
+              p_evaluation_date: getLocalDateKey(
+                command.evaluationDate ?? new Date(),
+              ),
+              p_client_create_idempotency_key:
+                command.clientCreateCommandId,
+              p_idempotency_key: command.commandId,
+            },
+          );
+
+          if (error) {
+            throw error;
+          }
+
+          const rpcResult =
+            data as GuidedClientIntakeCommandRpcResult | null;
+          const clientWorkflowRecordId =
+            rpcResult?.clientRecord?.id;
+
+          if (!clientWorkflowRecordId) {
+            throw new WorkspaceApiError(
+              "invalid_response",
+              "The guided client intake returned an invalid client record.",
+              command.commandId,
+            );
+          }
+
+          const clientEngagement =
+            await getPrimaryClientEngagement(
+              supabase,
+              workspaceId,
+              clientWorkflowRecordId,
+            );
+
+          return mapGuidedClientIntakeCommandResult(
+            data,
+            command.commandId,
+            clientEngagement,
+          );
+        } catch (error) {
+          console.error(
+            "Workspace API guided client intake completion failed",
+            { requestId: command.commandId, error },
+          );
+          throw mapOperationError(
+            error,
+            command.commandId,
+            "The guided client intake could not be completed.",
           );
         }
       },

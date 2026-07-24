@@ -125,6 +125,26 @@ boundary.
 - [x] Confirm closed jobs are read-only.
 - [x] Refresh after each consequential write and confirm durable state.
 
+## V1.5 Operations Agent Gate
+
+- [ ] Apply and rollback-verify the guided client intake migration.
+- [ ] Store `OPENAI_API_KEY` and `SUPABASE_SERVICE_ROLE_KEY` only as
+      server-side local or Cloudflare secrets.
+- [ ] Confirm a signed-out caller cannot start or execute an agent run.
+- [ ] Confirm the guided intake draft identifies missing and uncertain fields
+      without inventing dates, owners, amounts, statuses, or commitments.
+- [ ] Confirm the user can edit every drafted field before saving.
+- [ ] Confirm saving creates exactly one client record through the existing
+      client-create command and completes exactly one agent run.
+- [ ] Retry the reviewed save with the same request identifiers and confirm no
+      duplicate record, Activity entry, or cost event is created.
+- [ ] Confirm provider failure records a failed run with zero chargeable cost
+      and leaves the manual client form available.
+- [ ] Confirm cancellation removes the active-run lock without changing client
+      records.
+- [ ] Confirm OpenAI and Supabase service-role credentials are absent from the
+      browser bundle, browser logs, and network response bodies.
+
 ## Release Decision
 
 - [x] Record the deployed commit SHA and production URL.

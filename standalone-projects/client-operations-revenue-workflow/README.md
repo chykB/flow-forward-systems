@@ -5,7 +5,7 @@ lead and proposal through delivery, approval, invoicing, payment, and handoff.
 
 ## Status
 
-Private V1 release candidate.
+Private V1 is deployed. V1.5 Operations Agent work is in progress.
 
 The application uses authenticated, workspace-scoped Supabase data. It is not a
 public demo and must not be deployed with open registration or synthetic data
@@ -18,6 +18,7 @@ existing client operations workflow.
 ## Product Areas
 
 - Today: concise daily priorities and readiness items.
+- Operations Agent: Suggest-mode guided client intake with explicit review.
 - Workflow Snapshot: current engagement stages and active workflow issues.
 - Client Records: clients, jobs, next actions, Work Items, handoff context,
   proposals, invoices, Workflow Health, and Activity.
@@ -51,10 +52,15 @@ Create `.env.local` from `.env.example` and provide:
 NEXT_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=YOUR_PUBLISHABLE_OR_ANON_KEY
 NEXT_PUBLIC_ALLOW_SIGN_UP=false
+SUPABASE_SERVICE_ROLE_KEY=YOUR_SERVER_ONLY_SERVICE_ROLE_KEY
+OPENAI_API_KEY=YOUR_SERVER_ONLY_OPENAI_API_KEY
+OPENAI_OPERATIONS_AGENT_MODEL=gpt-5.6-luna
 ```
 
 Only publishable or anonymous Supabase keys belong in browser environment
-variables. Never expose a service-role key.
+variables. `SUPABASE_SERVICE_ROLE_KEY` and `OPENAI_API_KEY` are server-only
+secrets used by the guided client intake route. Never prefix them with
+`NEXT_PUBLIC_`, expose them to browser code, or commit their values.
 
 `NEXT_PUBLIC_ALLOW_SIGN_UP` defaults to `false`. Keep it false for Private V1
 and disable new-user registration in Supabase Auth. Provision approved users
@@ -68,6 +74,10 @@ npm run dev
 ```
 
 Open `http://localhost:3000`.
+
+Guided client intake requires the two server-only secrets in the uncommitted
+`.env.local`. The rest of the application, including the manual client form,
+continues to work when the AI provider is unavailable.
 
 ## Verification
 
@@ -106,6 +116,18 @@ npm run preview
 The preview normally runs at `http://localhost:8787`. Complete the signed-out
 and signed-in smoke tests there before deploying.
 
+Configure the production server secrets directly in Cloudflare before enabling
+guided client intake:
+
+```bash
+npx wrangler secret put OPENAI_API_KEY
+npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+```
+
+`OPENAI_OPERATIONS_AGENT_MODEL` defaults to `gpt-5.6-luna`. It may be set as a
+non-secret Cloudflare Worker variable. The deployment script preserves
+dashboard-managed variables while Wrangler preserves secrets.
+
 Deploy the exact reviewed source:
 
 ```bash
@@ -118,7 +140,9 @@ required for local development and approved deployment previews. A custom
 domain can replace the `workers.dev` Site URL after it is attached and tested.
 
 Cloudflare hosts the Next.js application only. The planned Python/FastAPI agent
-and external API services remain separate backend components and can be added
+and external API services remain separate backend components. The first
+Operations Agent capability runs in a protected Next.js server route; a future
+worker service can take over the same durable runtime and command contracts
 without moving this frontend.
 
 Use [PRIVATE_V1_RELEASE_CHECKLIST.md](PRIVATE_V1_RELEASE_CHECKLIST.md) for the

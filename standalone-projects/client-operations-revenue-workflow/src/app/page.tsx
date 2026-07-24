@@ -26,6 +26,7 @@ import {
 } from "@/components/WorkspaceShell";
 import { WorkspaceSnapshot } from "@/components/WorkspaceSnapshot";
 import { ClientRecordForm } from "@/components/ClientRecordForm";
+import { OperationsAgentPanel } from "@/components/OperationsAgentPanel";
 import { PriorityCard } from "@/components/PriorityCard";
 import { PrioritySummaryRow } from "@/components/PrioritySummaryRow";
 import { RecordFiltersBar } from "@/components/RecordFiltersBar";
@@ -33,6 +34,7 @@ import { WorkspaceGate } from "@/components/WorkspaceGate";
 import {
   createOperationRequestId,
   createWorkspaceApplicationApi,
+  type ClientRecordCommandResult,
   type CompleteFollowUpInput,
   type ClientEngagementUpdates,
   type ClientWorkflowRecordUpdates,
@@ -240,6 +242,7 @@ function buildPrioritySections(
 
 const workspaceViews = new Set<WorkspaceView>([
   "today",
+  "operations-agent",
   "workflow-snapshot",
   "client-records",
   "action-queue",
@@ -1292,51 +1295,77 @@ function WorkspaceDashboard({
     };
   }, [workspaceApi]);
 
+  async function acceptCreatedClientRecord(
+    result: ClientRecordCommandResult,
+  ) {
+    const savedRecord = result.clientRecord;
+
+    setRecords((currentRecords) => [
+      savedRecord,
+      ...currentRecords.filter(
+        (record) => record.id !== savedRecord.id,
+      ),
+    ]);
+    setEngagements((currentEngagements) => [
+      result.clientEngagement,
+      ...currentEngagements.filter(
+        (engagement) =>
+          engagement.id !== result.clientEngagement.id,
+      ),
+    ]);
+    applyRiskReconciliation(result.reconciliation);
+    setRiskSignalsStatus("ready");
+    setRiskSignalsMessage("");
+    await refreshActivityHistory();
+
+    setRecordFilters(initialRecordFilters);
+    setSelectedRecordId(savedRecord.id);
+    persistSelectedRecordId(workspaceId, savedRecord.id);
+    setSelectedEngagementId(result.clientEngagement.id);
+    persistSelectedEngagementId(
+      workspaceId,
+      savedRecord.id,
+      result.clientEngagement.id,
+    );
+    setSelectedDetailTab("overview");
+    setIsAddRecordOpen(false);
+    setRecordsMessage("");
+  }
+
   async function addRecord(record: NewClientWorkflowRecord) {
     try {
       const result = await workspaceApi.clientRecords.create({
         commandId: createOperationRequestId(),
         record,
       });
-      const savedRecord = result.clientRecord;
 
-      setRecords((currentRecords) => [
-        savedRecord,
-        ...currentRecords,
-      ]);
-      setEngagements((currentEngagements) => [
-        result.clientEngagement,
-        ...currentEngagements,
-      ]);
-      applyRiskReconciliation(result.reconciliation);
-      setRiskSignalsStatus("ready");
-      setRiskSignalsMessage("");
-      await refreshActivityHistory();
-
-      setRecordFilters(initialRecordFilters);
-      setSelectedRecordId(savedRecord.id);
-      persistSelectedRecordId(workspaceId, savedRecord.id);
-      setSelectedEngagementId(result.clientEngagement.id);
-      persistSelectedEngagementId(
-        workspaceId,
-        savedRecord.id,
-        result.clientEngagement.id,
-      );
-      setSelectedDetailTab("overview");
-      setIsAddRecordOpen(false);
-      setRecordsMessage("");
+      await acceptCreatedClientRecord(result);
+      return result;
     } catch (error) {
       console.error(
         "Create client workflow record failed",
         error,
       );
 
-      setRecordsMessage(
+      const recordError =
         error instanceof Error
-          ? error.message
-          : "The record could not be saved. Please try again.",
+          ? error
+          : new Error(
+              "The record could not be saved. Please try again.",
+            );
+
+      setRecordsMessage(
+        recordError.message,
       );
+      throw recordError;
     }
+  }
+
+  async function acceptAgentClientRecord(
+    result: ClientRecordCommandResult,
+  ) {
+    await acceptCreatedClientRecord(result);
+    navigateWorkspaceView("client-records");
   }
 
   async function addClientEngagement(
@@ -2609,6 +2638,14 @@ function WorkspaceDashboard({
           records={records}
           riskSignals={riskSignals}
           tasks={workflowTasks}
+        />
+      ) : null}
+
+      {activeWorkspaceView === "operations-agent" ? (
+        <OperationsAgentPanel
+          onClientCreated={acceptAgentClientRecord}
+          workspaceApi={workspaceApi}
+          workspaceId={workspaceId}
         />
       ) : null}
 
