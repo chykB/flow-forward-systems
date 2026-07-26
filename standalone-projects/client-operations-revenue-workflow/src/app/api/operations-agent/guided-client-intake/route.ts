@@ -130,7 +130,6 @@ const guidedClientIntakeSchema = {
     missingFields: {
       type: "array",
       maxItems: intakeFields.length,
-      uniqueItems: true,
       items: {
         type: "string",
         enum: intakeFields,
