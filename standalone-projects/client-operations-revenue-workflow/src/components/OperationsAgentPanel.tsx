@@ -24,6 +24,7 @@ import type {
 } from "@/lib/client-workflow-types";
 import type {
   GuidedClientIntakeDraft,
+  GuidedClientIntakeField,
   OperationsAgentRun,
 } from "@/lib/operations-agent-types";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser-client";
@@ -62,20 +63,26 @@ const fieldLabels: Record<string, string> = {
 function getAllowedValue<Value extends string>(
   value: string | null,
   allowedValues: readonly Value[],
-  fallback: Value,
 ) {
   return value &&
     (allowedValues as readonly string[]).includes(value)
     ? (value as Value)
-    : fallback;
+    : undefined;
 }
 
 function getInitialRecord(
   draft: GuidedClientIntakeDraft,
 ): Partial<NewClientWorkflowRecord> {
   const values = draft.values;
+  const uncertainFields = new Set(
+    draft.uncertainFields.map((uncertainty) => uncertainty.field),
+  );
+  const reviewedValue = (
+    field: GuidedClientIntakeField,
+    value: string | null,
+  ) => (uncertainFields.has(field) ? null : value);
   const clientType = getAllowedValue<ClientType>(
-    values.clientType,
+    reviewedValue("clientType", values.clientType),
     [
       "Lead",
       "New client",
@@ -83,10 +90,12 @@ function getInitialRecord(
       "Returning client",
       "Past client",
     ],
-    "Lead",
   );
   const returningClientStatus = getAllowedValue<ReturningClientStatus>(
-    values.returningClientStatus,
+    reviewedValue(
+      "returningClientStatus",
+      values.returningClientStatus,
+    ),
     [
       "Not returning",
       "Potential reactivation",
@@ -94,23 +103,19 @@ function getInitialRecord(
       "Reactivated",
       "Dormant",
     ],
-    (clientType === "Returning client"
-      ? "Reactivated"
-      : clientType === "Past client"
-        ? "Dormant"
-        : "Not returning"),
   );
 
   return {
-    name: values.name ?? "",
-    email: values.email ?? "",
-    businessName: values.businessName ?? "",
-    source: values.source ?? "",
-    interest: values.interest ?? "",
+    name: reviewedValue("name", values.name) ?? "",
+    email: reviewedValue("email", values.email) ?? "",
+    businessName:
+      reviewedValue("businessName", values.businessName) ?? "",
+    source: reviewedValue("source", values.source) ?? "",
+    interest: reviewedValue("interest", values.interest) ?? "",
     clientType,
     returningClientStatus,
     lifecycleStage: getAllowedValue<LifecycleStage>(
-      values.lifecycleStage,
+      reviewedValue("lifecycleStage", values.lifecycleStage),
       [
         "New lead",
         "Qualified lead",
@@ -125,22 +130,22 @@ function getInitialRecord(
         "Completed",
         "Lost or inactive",
       ],
-      "New lead",
     ),
     priority: getAllowedValue<PriorityLevel>(
-      values.priority,
+      reviewedValue("priority", values.priority),
       ["High", "Medium", "Low"],
-      "Medium",
     ),
     riskLevel: getAllowedValue<RiskLevel>(
-      values.riskLevel,
+      reviewedValue("riskLevel", values.riskLevel),
       ["High", "Medium", "Low"],
-      "Low",
     ),
-    nextAction: values.nextAction ?? "",
-    nextFollowUpAt: values.nextFollowUpAt ?? "",
-    assignedTo: values.assignedTo ?? "",
-    message: values.message ?? "",
+    nextAction:
+      reviewedValue("nextAction", values.nextAction) ?? "",
+    nextFollowUpAt:
+      reviewedValue("nextFollowUpAt", values.nextFollowUpAt) ?? "",
+    assignedTo:
+      reviewedValue("assignedTo", values.assignedTo) ?? "",
+    message: reviewedValue("message", values.message) ?? "",
   };
 }
 
@@ -553,18 +558,19 @@ export function OperationsAgentPanel({
             ) : null}
 
             <p className="mt-5 text-sm leading-6 text-[#5F6862]">
-              Blank fields remain blank. Any selected starting
-              defaults must also be reviewed before saving.
+              Missing and uncertain fields remain blank. Choose every
+              required classification before saving.
             </p>
           </div>
 
           <div className="mt-6">
             <ClientRecordForm
-              description="Review every field. Saving creates the client record and completes this agent run."
+              description="Review every field and resolve each blank selection. Saving creates the client record and completes this agent run."
               eyebrow="Agent Draft"
               initialRecord={getInitialRecord(reviewDraft)}
               key={reviewDraft.id}
               onAddRecord={saveReviewedDraft}
+              requireExplicitSelections
               submitLabel="Save Reviewed Client"
               title="Review client details"
             />

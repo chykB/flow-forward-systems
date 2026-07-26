@@ -20,6 +20,7 @@ type ClientRecordFormProps = {
   onAddRecord: (
     record: NewClientWorkflowRecord,
   ) => unknown | Promise<unknown>;
+  requireExplicitSelections?: boolean;
   submitLabel?: string;
   title?: string;
 };
@@ -30,11 +31,11 @@ type FormValues = {
   businessName: string;
   source: string;
   interest: string;
-  clientType: ClientType;
-  returningClientStatus: ReturningClientStatus;
-  lifecycleStage: LifecycleStage;
-  priority: PriorityLevel;
-  riskLevel: RiskLevel;
+  clientType: ClientType | "";
+  returningClientStatus: ReturningClientStatus | "";
+  lifecycleStage: LifecycleStage | "";
+  priority: PriorityLevel | "";
+  riskLevel: RiskLevel | "";
   nextAction: string;
   nextFollowUpAt: string;
   assignedTo: string;
@@ -62,6 +63,7 @@ const defaultValues: FormValues = {
 
 function buildInitialValues(
   initialRecord?: Partial<NewClientWorkflowRecord>,
+  requireExplicitSelections = false,
 ): FormValues {
   return {
     ...defaultValues,
@@ -72,14 +74,24 @@ function buildInitialValues(
     source: initialRecord?.source ?? defaultValues.source,
     interest: initialRecord?.interest ?? defaultValues.interest,
     clientType:
-      initialRecord?.clientType ?? defaultValues.clientType,
+      initialRecord?.clientType ??
+      (requireExplicitSelections ? "" : defaultValues.clientType),
     returningClientStatus:
       initialRecord?.returningClientStatus ??
-      defaultValues.returningClientStatus,
+      (requireExplicitSelections
+        ? ""
+        : defaultValues.returningClientStatus),
     lifecycleStage:
-      initialRecord?.lifecycleStage ?? defaultValues.lifecycleStage,
-    priority: initialRecord?.priority ?? defaultValues.priority,
-    riskLevel: initialRecord?.riskLevel ?? defaultValues.riskLevel,
+      initialRecord?.lifecycleStage ??
+      (requireExplicitSelections
+        ? ""
+        : defaultValues.lifecycleStage),
+    priority:
+      initialRecord?.priority ??
+      (requireExplicitSelections ? "" : defaultValues.priority),
+    riskLevel:
+      initialRecord?.riskLevel ??
+      (requireExplicitSelections ? "" : defaultValues.riskLevel),
     nextAction:
       initialRecord?.nextAction ?? defaultValues.nextAction,
     nextFollowUpAt:
@@ -149,6 +161,31 @@ function validateForm(values: FormValues) {
     errors.interest = "Enter what they are interested in.";
   }
 
+  if (!values.clientType) {
+    errors.clientType = "Choose whether this is a lead or client.";
+  }
+
+  if (
+    (values.clientType === "Returning client" ||
+      values.clientType === "Past client") &&
+    !values.returningClientStatus
+  ) {
+    errors.returningClientStatus =
+      "Choose the returning client status.";
+  }
+
+  if (!values.lifecycleStage) {
+    errors.lifecycleStage = "Choose the workflow stage.";
+  }
+
+  if (!values.priority) {
+    errors.priority = "Choose the priority.";
+  }
+
+  if (!values.riskLevel) {
+    errors.riskLevel = "Choose the relationship concern.";
+  }
+
   if (values.nextAction.trim().length < 5) {
     errors.nextAction = "Enter the next action.";
   }
@@ -181,11 +218,12 @@ export function ClientRecordForm({
   eyebrow = "Add Record",
   initialRecord,
   onAddRecord,
+  requireExplicitSelections = false,
   submitLabel = "Add Lead Or Client",
   title = "Add a lead or client",
 }: ClientRecordFormProps) {
   const [values, setValues] = useState<FormValues>(() =>
-    buildInitialValues(initialRecord),
+    buildInitialValues(initialRecord, requireExplicitSelections),
   );
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -206,18 +244,29 @@ export function ClientRecordForm({
     }));
   }
 
-  function updateClientType(clientType: ClientType) {
-    const returningClientStatus: ReturningClientStatus =
+  function updateClientType(clientType: ClientType | "") {
+    const returningClientStatus: ReturningClientStatus | "" =
       clientType === "Returning client"
-        ? "Reactivated"
+        ? requireExplicitSelections
+          ? ""
+          : "Reactivated"
         : clientType === "Past client"
-          ? "Dormant"
-          : "Not returning";
+          ? requireExplicitSelections
+            ? ""
+            : "Dormant"
+          : clientType
+            ? "Not returning"
+            : "";
 
     setValues((currentValues) => ({
       ...currentValues,
       clientType,
       returningClientStatus,
+    }));
+    setErrors((currentErrors) => ({
+      ...currentErrors,
+      clientType: undefined,
+      returningClientStatus: undefined,
     }));
   }
 
@@ -228,6 +277,26 @@ export function ClientRecordForm({
     setErrors(validationErrors);
 
     if (Object.keys(validationErrors).length > 0) {
+      return;
+    }
+
+    const clientType = values.clientType;
+    const lifecycleStage = values.lifecycleStage;
+    const priority = values.priority;
+    const riskLevel = values.riskLevel;
+    const returningClientStatus =
+      clientType === "Returning client" ||
+      clientType === "Past client"
+        ? values.returningClientStatus
+        : "Not returning";
+
+    if (
+      !clientType ||
+      !lifecycleStage ||
+      !priority ||
+      !riskLevel ||
+      !returningClientStatus
+    ) {
       return;
     }
 
@@ -243,9 +312,9 @@ export function ClientRecordForm({
         source: values.source.trim(),
         interest: values.interest.trim(),
         message: values.message.trim(),
-        lifecycleStage: values.lifecycleStage,
-        priority: values.priority,
-        riskLevel: values.riskLevel,
+        lifecycleStage,
+        priority,
+        riskLevel,
         nextAction: values.nextAction.trim(),
         nextFollowUpAt: values.nextFollowUpAt,
         assignedTo: values.assignedTo.trim(),
@@ -253,8 +322,8 @@ export function ClientRecordForm({
         deliveryStatus: "Not started",
         approvalStatus: "Not needed",
         paymentStatus: "Not needed",
-        clientType: values.clientType,
-        returningClientStatus: values.returningClientStatus,
+        clientType,
+        returningClientStatus,
         lastProjectDate: "",
         estimatedValue: 0,
       });
@@ -263,7 +332,12 @@ export function ClientRecordForm({
         return;
       }
 
-      setValues(buildInitialValues(initialRecord));
+      setValues(
+        buildInitialValues(
+          initialRecord,
+          requireExplicitSelections,
+        ),
+      );
       setErrors({});
     } catch (error) {
       setSubmissionError(
@@ -278,6 +352,7 @@ export function ClientRecordForm({
 
   return (
     <form
+      autoComplete={requireExplicitSelections ? "off" : undefined}
       className="rounded-lg border border-[#D9DED8] bg-white p-5"
       onSubmit={submitForm}
     >
@@ -369,15 +444,21 @@ export function ClientRecordForm({
             id="record-client-type"
             value={values.clientType}
             onChange={(event) =>
-              updateClientType(event.target.value as ClientType)
+              updateClientType(
+                event.target.value as ClientType | "",
+              )
             }
           >
+            {requireExplicitSelections ? (
+              <option value="">Select status</option>
+            ) : null}
             {clientTypes.map((clientType) => (
               <option key={clientType} value={clientType}>
                 {clientType}
               </option>
             ))}
           </select>
+          <FieldError message={errors.clientType} />
         </div>
 
         {values.clientType === "Returning client" ||
@@ -393,16 +474,20 @@ export function ClientRecordForm({
               onChange={(event) =>
                 updateField(
                   "returningClientStatus",
-                  event.target.value as ReturningClientStatus,
+                  event.target.value as ReturningClientStatus | "",
                 )
               }
             >
+              {requireExplicitSelections ? (
+                <option value="">Select returning status</option>
+              ) : null}
               {returningClientStatuses.map((status) => (
                 <option key={status} value={status}>
                   {status}
                 </option>
               ))}
             </select>
+            <FieldError message={errors.returningClientStatus} />
           </div>
         ) : null}
 
@@ -417,16 +502,20 @@ export function ClientRecordForm({
             onChange={(event) =>
               updateField(
                 "lifecycleStage",
-                event.target.value as LifecycleStage,
+                event.target.value as LifecycleStage | "",
               )
             }
           >
+            {requireExplicitSelections ? (
+              <option value="">Select workflow stage</option>
+            ) : null}
             {lifecycleStages.map((stage) => (
               <option key={stage} value={stage}>
                 {getLifecycleStageLabel(stage)}
               </option>
             ))}
           </select>
+          <FieldError message={errors.lifecycleStage} />
         </div>
 
         <div className="grid gap-2">
@@ -452,15 +541,22 @@ export function ClientRecordForm({
             id="record-priority"
             value={values.priority}
             onChange={(event) =>
-              updateField("priority", event.target.value as PriorityLevel)
+              updateField(
+                "priority",
+                event.target.value as PriorityLevel | "",
+              )
             }
           >
+            {requireExplicitSelections ? (
+              <option value="">Select priority</option>
+            ) : null}
             {priorities.map((priority) => (
               <option key={priority} value={priority}>
                 {priority}
               </option>
             ))}
           </select>
+          <FieldError message={errors.priority} />
         </div>
 
         <div className="grid gap-2">
@@ -472,15 +568,22 @@ export function ClientRecordForm({
             id="record-risk"
             value={values.riskLevel}
             onChange={(event) =>
-              updateField("riskLevel", event.target.value as RiskLevel)
+              updateField(
+                "riskLevel",
+                event.target.value as RiskLevel | "",
+              )
             }
           >
+            {requireExplicitSelections ? (
+              <option value="">Select relationship concern</option>
+            ) : null}
             {risks.map((risk) => (
               <option key={risk} value={risk}>
                 {risk}
               </option>
             ))}
           </select>
+          <FieldError message={errors.riskLevel} />
         </div>
 
         <div className="grid gap-2 md:col-span-2">
@@ -503,6 +606,9 @@ export function ClientRecordForm({
           </label>
           <input
             className="rounded-md border border-[#D9DED8] px-4 py-3 outline-none focus:border-[#174F42]"
+            autoComplete={
+              requireExplicitSelections ? "off" : undefined
+            }
             id="record-follow-up"
             type="date"
             value={values.nextFollowUpAt}
