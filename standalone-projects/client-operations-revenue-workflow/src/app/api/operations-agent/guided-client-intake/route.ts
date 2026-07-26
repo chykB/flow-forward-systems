@@ -494,7 +494,7 @@ export async function POST(request: Request) {
 
     if (runError || !runData) {
       return jsonResponse(404, {
-        error: "The Operations Agent run is unavailable.",
+        error: "This client draft is no longer available.",
         referenceId,
       });
     }
@@ -507,7 +507,7 @@ export async function POST(request: Request) {
       run.mode !== "suggest"
     ) {
       return jsonResponse(403, {
-        error: "This Operations Agent run is unavailable.",
+        error: "This client draft is no longer available.",
         referenceId,
       });
     }
@@ -525,7 +525,7 @@ export async function POST(request: Request) {
     ) {
       return jsonResponse(409, {
         error:
-          "This Operations Agent run changed elsewhere. Refresh before trying again.",
+          "This client draft changed elsewhere. Refresh before trying again.",
         referenceId,
       });
     }
@@ -577,6 +577,8 @@ export async function POST(request: Request) {
             "If wording is ambiguous, preserve the safest literal value when possible and list the field under uncertainFields.",
             "A relative date such as next week is uncertain and must not be converted to an exact date.",
             "Keep summary factual and concise.",
+            "Write the summary, uncertainty reasons, and clarification questions as plain user-facing copy for the person reviewing the draft.",
+            "Address the reviewer directly when useful; do not say 'the user' or mention models, schemas, tools, confidence scores, inference, or internal system states.",
             "Do not recommend or perform workflow changes.",
           ].join(" "),
           input: claimedRun.objective,

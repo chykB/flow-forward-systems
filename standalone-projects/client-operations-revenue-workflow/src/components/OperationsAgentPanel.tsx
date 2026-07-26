@@ -16,13 +16,6 @@ import {
   type WorkspaceApplicationApi,
 } from "@/lib/application/workspace-api";
 import type {
-  ClientType,
-  LifecycleStage,
-  PriorityLevel,
-  ReturningClientStatus,
-  RiskLevel,
-} from "@/lib/client-workflow-types";
-import type {
   GuidedClientIntakeDraft,
   GuidedClientIntakeField,
   OperationsAgentRun,
@@ -43,6 +36,13 @@ const activeRunStates = new Set([
   "waiting_for_approval",
 ]);
 
+const userSelectedFields: GuidedClientIntakeField[] = [
+  "clientType",
+  "lifecycleStage",
+  "priority",
+  "riskLevel",
+];
+
 const fieldLabels: Record<string, string> = {
   name: "Name",
   email: "Email",
@@ -60,14 +60,17 @@ const fieldLabels: Record<string, string> = {
   message: "Context note",
 };
 
-function getAllowedValue<Value extends string>(
-  value: string | null,
-  allowedValues: readonly Value[],
-) {
-  return value &&
-    (allowedValues as readonly string[]).includes(value)
-    ? (value as Value)
-    : undefined;
+function getReviewMissingFields(draft: GuidedClientIntakeDraft) {
+  const missingFields = new Set<GuidedClientIntakeField>([
+    ...draft.missingFields,
+    ...userSelectedFields,
+  ]);
+
+  // This field becomes required only after the reviewer chooses a returning
+  // or past client status.
+  missingFields.delete("returningClientStatus");
+
+  return [...missingFields];
 }
 
 function getInitialRecord(
@@ -81,29 +84,6 @@ function getInitialRecord(
     field: GuidedClientIntakeField,
     value: string | null,
   ) => (uncertainFields.has(field) ? null : value);
-  const clientType = getAllowedValue<ClientType>(
-    reviewedValue("clientType", values.clientType),
-    [
-      "Lead",
-      "New client",
-      "Active client",
-      "Returning client",
-      "Past client",
-    ],
-  );
-  const returningClientStatus = getAllowedValue<ReturningClientStatus>(
-    reviewedValue(
-      "returningClientStatus",
-      values.returningClientStatus,
-    ),
-    [
-      "Not returning",
-      "Potential reactivation",
-      "Repeat project opportunity",
-      "Reactivated",
-      "Dormant",
-    ],
-  );
 
   return {
     name: reviewedValue("name", values.name) ?? "",
@@ -112,33 +92,11 @@ function getInitialRecord(
       reviewedValue("businessName", values.businessName) ?? "",
     source: reviewedValue("source", values.source) ?? "",
     interest: reviewedValue("interest", values.interest) ?? "",
-    clientType,
-    returningClientStatus,
-    lifecycleStage: getAllowedValue<LifecycleStage>(
-      reviewedValue("lifecycleStage", values.lifecycleStage),
-      [
-        "New lead",
-        "Qualified lead",
-        "Follow-up needed",
-        "Discovery or call booked",
-        "Proposal sent",
-        "Won client",
-        "Onboarding",
-        "In delivery",
-        "Waiting for approval",
-        "Payment follow-up",
-        "Completed",
-        "Lost or inactive",
-      ],
-    ),
-    priority: getAllowedValue<PriorityLevel>(
-      reviewedValue("priority", values.priority),
-      ["High", "Medium", "Low"],
-    ),
-    riskLevel: getAllowedValue<RiskLevel>(
-      reviewedValue("riskLevel", values.riskLevel),
-      ["High", "Medium", "Low"],
-    ),
+    clientType: undefined,
+    returningClientStatus: undefined,
+    lifecycleStage: undefined,
+    priority: undefined,
+    riskLevel: undefined,
     nextAction:
       reviewedValue("nextAction", values.nextAction) ?? "",
     nextFollowUpAt:
@@ -149,8 +107,27 @@ function getInitialRecord(
   };
 }
 
-function formatRunState(state: OperationsAgentRun["state"]) {
-  return state.replaceAll("_", " ");
+const runStateLabels: Record<OperationsAgentRun["state"], string> = {
+  queued: "Waiting to prepare",
+  running: "Preparing draft",
+  waiting_for_approval: "Ready to review",
+  completed: "Client saved",
+  failed: "Draft not prepared",
+  cancelled: "Draft discarded",
+  expired: "Draft expired",
+  partially_completed: "Needs attention",
+};
+
+function getActiveRunHeading(state: OperationsAgentRun["state"]) {
+  if (state === "queued") {
+    return "Waiting to prepare the client draft";
+  }
+
+  if (state === "running") {
+    return "Preparing the client draft";
+  }
+
+  return "The client draft is ready to review";
 }
 
 export function OperationsAgentPanel({
@@ -202,7 +179,7 @@ export function OperationsAgentPanel({
           setMessage(
             error instanceof Error
               ? error.message
-              : "Operations Agent history could not be loaded.",
+              : "Recent agent activity could not be loaded.",
           );
         }
       } finally {
@@ -367,7 +344,9 @@ export function OperationsAgentPanel({
       setMessage(
         error instanceof Error
           ? error.message
-          : "The Operations Agent run could not be cancelled.",
+          : reviewDraft
+            ? "The client draft could not be discarded."
+            : "Client draft preparation could not be cancelled.",
       );
     } finally {
       setIsCancelling(false);
@@ -410,7 +389,7 @@ export function OperationsAgentPanel({
         </h2>
         <div className="mt-3 flex items-center gap-2 text-sm font-bold text-[#174F42]">
           <CheckCircle2 aria-hidden="true" className="size-5" />
-          Suggest mode
+          Nothing is saved without your review
         </div>
 
         <label
@@ -454,7 +433,13 @@ export function OperationsAgentPanel({
               type="button"
             >
               <X aria-hidden="true" className="size-5" />
-              {isCancelling ? "Cancelling..." : "Cancel run"}
+              {isCancelling
+                ? reviewDraft
+                  ? "Discarding..."
+                  : "Cancelling..."
+                : reviewDraft
+                  ? "Discard draft"
+                  : "Cancel preparation"}
             </button>
           ) : null}
         </div>
@@ -471,7 +456,7 @@ export function OperationsAgentPanel({
 
       {isLoading ? (
         <p className="py-8 text-[#5F6862]" role="status">
-          Loading Operations Agent history...
+          Loading recent agent activity...
         </p>
       ) : null}
 
@@ -487,7 +472,7 @@ export function OperationsAgentPanel({
             />
             <div>
               <h3 className="text-xl font-bold">
-                Client intake is {formatRunState(activeRun.state)}
+                {getActiveRunHeading(activeRun.state)}
               </h3>
               <p className="mt-2 leading-7 text-[#5F6862]">
                 {activeRun.objective}
@@ -500,12 +485,12 @@ export function OperationsAgentPanel({
       {activeRun && reviewDraft ? (
         <section className="py-8">
           <div className="border-y border-[#D9DED8] py-5">
-            <h3 className="text-xl font-bold">Review required</h3>
+            <h3 className="text-xl font-bold">Review the draft</h3>
             <p className="mt-2 leading-7 text-[#5F6862]">
               {reviewDraft.values.summary}
             </p>
 
-            {reviewDraft.missingFields.length > 0 ? (
+            {getReviewMissingFields(reviewDraft).length > 0 ? (
               <div className="mt-5">
                 <p className="flex items-center gap-2 font-bold text-[#7A4B00]">
                   <CircleAlert
@@ -515,7 +500,7 @@ export function OperationsAgentPanel({
                   Missing details
                 </p>
                 <p className="mt-2 text-[#5F6862]">
-                  {reviewDraft.missingFields
+                  {getReviewMissingFields(reviewDraft)
                     .map((field) => fieldLabels[field] ?? field)
                     .join(", ")}
                 </p>
@@ -546,7 +531,7 @@ export function OperationsAgentPanel({
 
             {reviewDraft.clarificationQuestions.length > 0 ? (
               <div className="mt-5">
-                <p className="font-bold">Questions to resolve</p>
+                <p className="font-bold">Questions before saving</p>
                 <ul className="mt-2 grid gap-2 text-[#5F6862]">
                   {reviewDraft.clarificationQuestions.map(
                     (question) => (
@@ -558,20 +543,20 @@ export function OperationsAgentPanel({
             ) : null}
 
             <p className="mt-5 text-sm leading-6 text-[#5F6862]">
-              Missing and uncertain fields remain blank. Choose every
-              required classification before saving.
+              Information that needs your confirmation stays blank.
+              Complete every required field before saving.
             </p>
           </div>
 
           <div className="mt-6">
             <ClientRecordForm
-              description="Review every field and resolve each blank selection. Saving creates the client record and completes this agent run."
-              eyebrow="Agent Draft"
+              description="Check the details and complete every blank required field. Saving creates the client record."
+              eyebrow="Prepared Draft"
               initialRecord={getInitialRecord(reviewDraft)}
               key={reviewDraft.id}
               onAddRecord={saveReviewedDraft}
               requireExplicitSelections
-              submitLabel="Save Reviewed Client"
+              submitLabel="Save Client Record"
               title="Review client details"
             />
           </div>
@@ -581,7 +566,9 @@ export function OperationsAgentPanel({
       {runs.length > 0 ? (
         <section className="border-t border-[#D9DED8] py-8">
           <div className="flex items-baseline justify-between gap-4">
-            <h3 className="text-xl font-bold">Recent runs</h3>
+            <h3 className="text-xl font-bold">
+              Recent agent activity
+            </h3>
             <p className="text-sm text-[#5F6862]">
               {runs.length}
             </p>
@@ -600,8 +587,8 @@ export function OperationsAgentPanel({
                     {new Date(run.createdAt).toLocaleString()}
                   </p>
                 </div>
-                <p className="text-sm font-bold capitalize text-[#174F42]">
-                  {formatRunState(run.state)}
+                <p className="text-sm font-bold text-[#174F42]">
+                  {runStateLabels[run.state]}
                 </p>
               </div>
             ))}
