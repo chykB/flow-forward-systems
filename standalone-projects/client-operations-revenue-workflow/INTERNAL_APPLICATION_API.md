@@ -2,7 +2,7 @@
 
 Status: Active technical contract
 
-Implemented slices: Work items, client records, follow-up completion, Work Item handoff context, proposals, engagement-owned Proposal recommendations, proposal-linked Invoice billing, invoices, engagement ownership, engagement-scoped risk review, sequential Work Item controls, Work Item dependency editing, the provider-neutral Operations Agent runtime, Suggest-mode guided client intake, and Suggest-mode guided workspace setup
+Implemented slices: Work items, client records, follow-up completion, Work Item handoff context, proposals, engagement-owned Proposal recommendations, proposal-linked Invoice billing, invoices, engagement ownership, engagement-scoped risk review, sequential Work Item controls, Work Item dependency editing, the provider-neutral Operations Agent runtime, Suggest-mode guided client intake, Suggest-mode guided workspace setup, and explicit Operations Agent approval records
 
 Public API status: None of the interfaces or database functions in this document are a versioned customer API.
 
@@ -56,8 +56,16 @@ The manual and rules-based product remains fully operational without an AI provi
 
 - `operationsAgent.listRuns()`
 - `operationsAgent.listSteps(runId)`
+- `operationsAgent.listClientIntakeDrafts()`
+- `operationsAgent.listWorkspaceSetupDrafts()`
+- `operationsAgent.getWorkspaceProfile()`
+- `operationsAgent.listApprovals()`
 - `operationsAgent.startRun(command)`
 - `operationsAgent.cancelRun(command)`
+- `operationsAgent.approve(command)`
+- `operationsAgent.reject(command)`
+- `operationsAgent.completeClientIntake(command)`
+- `operationsAgent.completeWorkspaceSetup(command)`
 
 - `workItems.list()`
 - `workItems.listDependencies()`
@@ -109,6 +117,10 @@ The current function names are:
 
 - `command_start_operations_agent_run`
 - `command_cancel_operations_agent_run`
+- `command_complete_guided_client_intake`
+- `command_complete_guided_workspace_setup`
+- `command_approve_operations_agent_action`
+- `command_reject_operations_agent_action`
 
 - `command_create_engagement_workflow_task`
 - `command_update_engagement_workflow_task_status`
@@ -130,6 +142,8 @@ worker claims, bounded state transitions, and atomic usage accounting:
 - `agent_fail_guided_client_intake_run`
 - `agent_record_guided_workspace_setup_result`
 - `agent_fail_guided_workspace_setup_run`
+- `agent_create_operations_agent_approval`
+- `agent_expire_operations_agent_approval`
 
 Authenticated browser callers cannot execute these service functions or write
 runtime tables directly.
@@ -181,6 +195,13 @@ runtime tables directly.
 - Runtime tables are read-only to authenticated callers. The service role can
   write runtime internals but does not receive permission to bypass existing
   business commands for consequential workspace changes.
+- An approval-required run can expose only the title, summary, bounded review
+  fields, decision state, and expiry through
+  `query_operations_agent_approvals`. The command name, exact input, input
+  hash, and expected-state snapshot remain server-only.
+- Approval records are immutable after creation. Approving queues the run to
+  resume; rejecting or expiry closes it without applying a workflow change.
+  Approval alone never executes the protected command.
 - The model provider and service-role keys remain server-only. Browser callers
   receive neither credential and cannot execute worker functions.
 
@@ -339,7 +360,7 @@ User-facing errors include the command or query request ID. Console diagnostics 
 | Invoices | workspace/client invoices | none directly | engagement-scoped create/update/recommendation + optional accepted-Proposal billing + reconciliation + Activity | Implemented for all Active engagements |
 | Risk signals | workspace risk history | none directly | engagement-scoped review/dismiss + isolated health + Activity | Implemented; source-driven resolution remains separate |
 | Activity | workspace history | direct inserts from legacy flows | command-owned audit writes | Client-record, work-item, handoff-context, Proposal, Invoice, and risk-review audit implemented; other flows pending |
-| Operations Agent | owner-scoped runs, steps, client-intake drafts, and workspace-setup drafts | start/cancel; review editable drafts | service-only claim/provider result/failure; atomic reviewed client/profile save | Guided client intake and workspace setup implemented in Suggest mode; no autonomous workflow writes |
+| Operations Agent | owner-scoped runs, steps, client-intake drafts, workspace-setup drafts, and user-facing approvals | start/cancel; review drafts; approve/reject one exact action | service-only claim/provider result/failure/approval creation; atomic reviewed client/profile save | Guided intake remains Suggest-only; explicit approval records exist, but no additional workflow command is exposed as an agent tool |
 
 ## Assistant Eligibility
 
@@ -348,7 +369,11 @@ Operations Agent capabilities. Client intake uses the existing client-record
 command only after explicit user review. Workspace setup can write only the
 reviewed operating profile and cannot change client or job workflow data. The
 engagement, follow-up, work-item, handoff-context, Proposal, Invoice, and
-risk-review commands are not yet exposed as agent tools. Additional tool
+risk-review commands are not yet exposed as agent tools. The approval boundary
+stores the exact protected command payload and expected-state snapshot
+server-side, returns only user-facing review fields to the browser, and records
+approve, reject, expiry, cancellation, and run-resume events. Approval does not
+bypass the later execution-time permission and freshness check. Additional tool
 enablement requires:
 
 - explicit per-tool policy and plan entitlements;
@@ -362,8 +387,9 @@ The assistant should use the same application command contract as the manual UI 
 
 ## Next Slices
 
-1. Rollback-verify and browser-test guided workspace setup, including missing
-   choices, cancellation, idempotent review save, and profile updates.
-2. Add explicit approval records before exposing any additional consequential
-   command as an Operations Agent tool.
+1. Rollback-verify and browser-test the explicit approval queue, exact
+   user-facing scope, idempotent approve/reject decisions, expiry, and
+   server-only command payload.
+2. Add one protected internal tool with execution-time permission and freshness
+   checks, an idempotent command call, and recorded execution outcome.
 3. Move remaining legacy Activity writes behind command-owned audit effects.

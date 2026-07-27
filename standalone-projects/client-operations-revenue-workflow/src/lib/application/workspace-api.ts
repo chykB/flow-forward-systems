@@ -25,6 +25,7 @@ import {
   workspaceWorkflowStages,
   type GuidedClientIntakeDraft,
   type GuidedWorkspaceSetupDraft,
+  type OperationsAgentApproval,
   type OperationsAgentCapability,
   type OperationsAgentRun,
   type OperationsAgentRunLimits,
@@ -34,6 +35,11 @@ import {
   type WorkspaceWorkingDay,
   type WorkspaceWorkflowStage,
 } from "@/lib/operations-agent-types";
+import {
+  getWorkspaceOperationsAgentApprovals,
+  mapOperationsAgentApprovalRow,
+  type OperationsAgentApprovalRow,
+} from "@/lib/supabase/operations-agent-approvals";
 import {
   getWorkspaceGuidedClientIntakeDrafts,
   mapGuidedClientIntakeDraft,
@@ -98,7 +104,9 @@ import {
   getOperationsAgentRunSteps,
   getWorkspaceOperationsAgentRuns,
   mapOperationsAgentRunRow,
+  mapOperationsAgentStepRow,
   type OperationsAgentRunRow,
+  type OperationsAgentStepRow,
 } from "@/lib/supabase/operations-agent-runs";
 
 export type NewWorkflowTask = Omit<
@@ -468,6 +476,13 @@ export type CancelOperationsAgentRunCommand = {
   expectedUpdatedAt: string;
 };
 
+export type DecideOperationsAgentApprovalCommand = {
+  commandId: string;
+  approvalId: string;
+  expectedUpdatedAt: string;
+  decisionNote?: string;
+};
+
 export type CompleteGuidedClientIntakeCommand = {
   commandId: string;
   clientCreateCommandId: string;
@@ -491,6 +506,13 @@ export type CompleteGuidedWorkspaceSetupCommand = {
 export type OperationsAgentRunCommandResult = {
   requestId: string;
   run: OperationsAgentRun;
+};
+
+export type OperationsAgentApprovalCommandResult = {
+  requestId: string;
+  approval: OperationsAgentApproval;
+  run: OperationsAgentRun;
+  step: OperationsAgentStep;
 };
 
 export type GuidedClientIntakeCommandResult =
@@ -573,6 +595,7 @@ export type WorkspaceApplicationApi = {
   operationsAgent: {
     listRuns: () => Promise<OperationsAgentRun[]>;
     listSteps: (runId: string) => Promise<OperationsAgentStep[]>;
+    listApprovals: () => Promise<OperationsAgentApproval[]>;
     listClientIntakeDrafts: () => Promise<GuidedClientIntakeDraft[]>;
     listWorkspaceSetupDrafts: () => Promise<
       GuidedWorkspaceSetupDraft[]
@@ -584,6 +607,12 @@ export type WorkspaceApplicationApi = {
     cancelRun: (
       command: CancelOperationsAgentRunCommand,
     ) => Promise<OperationsAgentRunCommandResult>;
+    approve: (
+      command: DecideOperationsAgentApprovalCommand,
+    ) => Promise<OperationsAgentApprovalCommandResult>;
+    reject: (
+      command: DecideOperationsAgentApprovalCommand,
+    ) => Promise<OperationsAgentApprovalCommandResult>;
     completeClientIntake: (
       command: CompleteGuidedClientIntakeCommand,
     ) => Promise<GuidedClientIntakeCommandResult>;
@@ -683,6 +712,12 @@ type OperationsAgentRunCommandRpcResult = {
   requestId: string;
   run: OperationsAgentRunRow;
 };
+
+type OperationsAgentApprovalCommandRpcResult =
+  OperationsAgentRunCommandRpcResult & {
+    approval: OperationsAgentApprovalRow;
+    step: OperationsAgentStepRow;
+  };
 
 type GuidedClientIntakeCommandRpcResult =
   OperationsAgentRunCommandRpcResult & {
@@ -1405,6 +1440,35 @@ function mapOperationsAgentRunCommandResult(
   return {
     requestId: result.requestId,
     run: mapOperationsAgentRunRow(result.run),
+  };
+}
+
+function mapOperationsAgentApprovalCommandResult(
+  data: unknown,
+  expectedRequestId: string,
+): OperationsAgentApprovalCommandResult {
+  const result =
+    data as OperationsAgentApprovalCommandRpcResult | null;
+
+  if (
+    !result?.requestId ||
+    result.requestId !== expectedRequestId ||
+    !result.approval ||
+    !result.run ||
+    !result.step
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_response",
+      "The approval decision returned an invalid response.",
+      expectedRequestId,
+    );
+  }
+
+  return {
+    requestId: result.requestId,
+    approval: mapOperationsAgentApprovalRow(result.approval),
+    run: mapOperationsAgentRunRow(result.run),
+    step: mapOperationsAgentStepRow(result.step),
   };
 }
 
@@ -3656,6 +3720,52 @@ function validateCancelOperationsAgentRunCommand(
   }
 }
 
+function validateOperationsAgentApprovalDecision(
+  workspaceId: string,
+  command: DecideOperationsAgentApprovalCommand,
+  decision: "approve" | "reject",
+) {
+  assertRequestId(command.commandId);
+  assertUuid(
+    workspaceId,
+    "The workspace identifier",
+    command.commandId,
+  );
+  assertUuid(
+    command.approvalId,
+    "The approval identifier",
+    command.commandId,
+  );
+
+  if (
+    !timestampPattern.test(command.expectedUpdatedAt) ||
+    Number.isNaN(Date.parse(command.expectedUpdatedAt))
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Refresh the approval before recording a decision.",
+      command.commandId,
+    );
+  }
+
+  const decisionNote = command.decisionNote?.trim() ?? "";
+  if (decision === "reject" && decisionNote.length < 3) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Add a short reason before rejecting this action.",
+      command.commandId,
+    );
+  }
+
+  if (decisionNote.length > 500) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Keep the approval note under 500 characters.",
+      command.commandId,
+    );
+  }
+}
+
 function validateCompleteGuidedClientIntakeCommand(
   workspaceId: string,
   command: CompleteGuidedClientIntakeCommand,
@@ -4907,6 +5017,32 @@ export function createWorkspaceApplicationApi(
         }
       },
 
+      async listApprovals() {
+        const requestId = createOperationRequestId();
+
+        try {
+          assertUuid(
+            workspaceId,
+            "The workspace identifier",
+            requestId,
+          );
+          return await getWorkspaceOperationsAgentApprovals(
+            supabase,
+            workspaceId,
+          );
+        } catch (error) {
+          console.error(
+            "Workspace API Operations Agent approval query failed",
+            { requestId, error },
+          );
+          throw mapOperationError(
+            error,
+            requestId,
+            "Agent approvals could not be loaded.",
+          );
+        }
+      },
+
       async listClientIntakeDrafts() {
         const requestId = createOperationRequestId();
 
@@ -5059,6 +5195,86 @@ export function createWorkspaceApplicationApi(
             error,
             command.commandId,
             "The Operations Agent run could not be cancelled.",
+          );
+        }
+      },
+
+      async approve(command) {
+        validateOperationsAgentApprovalDecision(
+          workspaceId,
+          command,
+          "approve",
+        );
+
+        try {
+          const { data, error } = await supabase.rpc(
+            "command_approve_operations_agent_action",
+            {
+              p_workspace_id: workspaceId,
+              p_approval_id: command.approvalId,
+              p_expected_updated_at: command.expectedUpdatedAt,
+              p_decision_note: command.decisionNote?.trim() ?? "",
+              p_idempotency_key: command.commandId,
+            },
+          );
+
+          if (error) {
+            throw error;
+          }
+
+          return mapOperationsAgentApprovalCommandResult(
+            data,
+            command.commandId,
+          );
+        } catch (error) {
+          console.error(
+            "Workspace API Operations Agent approval failed",
+            { requestId: command.commandId, error },
+          );
+          throw mapOperationError(
+            error,
+            command.commandId,
+            "The proposed action could not be approved.",
+          );
+        }
+      },
+
+      async reject(command) {
+        validateOperationsAgentApprovalDecision(
+          workspaceId,
+          command,
+          "reject",
+        );
+
+        try {
+          const { data, error } = await supabase.rpc(
+            "command_reject_operations_agent_action",
+            {
+              p_workspace_id: workspaceId,
+              p_approval_id: command.approvalId,
+              p_expected_updated_at: command.expectedUpdatedAt,
+              p_decision_note: command.decisionNote?.trim() ?? "",
+              p_idempotency_key: command.commandId,
+            },
+          );
+
+          if (error) {
+            throw error;
+          }
+
+          return mapOperationsAgentApprovalCommandResult(
+            data,
+            command.commandId,
+          );
+        } catch (error) {
+          console.error(
+            "Workspace API Operations Agent rejection failed",
+            { requestId: command.commandId, error },
+          );
+          throw mapOperationError(
+            error,
+            command.commandId,
+            "The proposed action could not be rejected.",
           );
         }
       },

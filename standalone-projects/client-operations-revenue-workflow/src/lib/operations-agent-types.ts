@@ -89,6 +89,45 @@ export type OperationsAgentStep = {
   updatedAt: string;
 };
 
+export type OperationsAgentApprovalDecision =
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "expired"
+  | "cancelled";
+
+export type OperationsAgentApprovalExecutionState =
+  | "not_ready"
+  | "ready"
+  | "running"
+  | "succeeded"
+  | "failed"
+  | "cancelled";
+
+export type OperationsAgentApprovalReviewField = {
+  label: string;
+  value: string;
+};
+
+export type OperationsAgentApproval = {
+  id: string;
+  workspaceId: string;
+  runId: string;
+  stepId: string;
+  requestedFor: string;
+  actionTitle: string;
+  actionSummary: string;
+  reviewFields: OperationsAgentApprovalReviewField[];
+  decision: OperationsAgentApprovalDecision;
+  executionState: OperationsAgentApprovalExecutionState;
+  decidedBy: string;
+  decidedAt: string;
+  decisionNote: string;
+  expiresAt: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type OperationsAgentRunLimits = {
   modelCalls: number;
   toolCalls: number;

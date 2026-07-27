@@ -144,17 +144,28 @@ boundary.
       records.
 - [x] Confirm OpenAI and Supabase service-role credentials are absent from the
       browser bundle, browser logs, and network response bodies.
-- [ ] Apply and rollback-verify the guided workspace setup migration.
-- [ ] Confirm the setup draft preserves the fixed lifecycle-stage vocabulary.
-- [ ] Confirm business type, stages, owners, working days, and all notification
+- [x] Apply and rollback-verify the guided workspace setup migration.
+- [x] Confirm the setup draft preserves the fixed lifecycle-stage vocabulary.
+- [x] Confirm business type, stages, owners, working days, and all notification
       choices remain editable before saving.
-- [ ] Confirm missing or uncertain setup choices remain blank.
-- [ ] Confirm saving creates or updates exactly one workspace operating profile
+- [x] Confirm missing or uncertain setup choices remain blank.
+- [x] Confirm saving creates or updates exactly one workspace operating profile
       and completes exactly one agent run.
-- [ ] Confirm authenticated callers cannot insert or update operating profiles
+- [x] Confirm authenticated callers cannot insert or update operating profiles
       or setup drafts directly.
-- [ ] Confirm guided workspace setup does not change client records, jobs,
+- [x] Confirm guided workspace setup does not change client records, jobs,
       Workflow Health, readiness, or relationship concerns.
+- [ ] Apply and rollback-verify the explicit Operations Agent approval migration.
+- [ ] Confirm the browser receives only the user-facing action title, summary,
+      review fields, decision state, and expiry.
+- [ ] Confirm the protected command name, input, input hash, and expected-state
+      snapshot remain server-only.
+- [ ] Confirm approve and reject decisions are idempotent and cannot be changed
+      after they are recorded.
+- [ ] Confirm approval expiry and run cancellation cannot apply a workflow
+      change.
+- [ ] Confirm approving an action only queues the run; execution remains blocked
+      until the protected tool re-checks permission and current record state.
 
 ## Release Decision
 
