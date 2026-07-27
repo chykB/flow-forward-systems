@@ -3,12 +3,14 @@
 import { useState } from "react";
 import {
   BriefcaseBusiness,
+  CalendarClock,
   ShieldCheck,
   UserPlus,
 } from "lucide-react";
 import { GuidedClientIntakePanel } from "@/components/GuidedClientIntakePanel";
 import { GuidedWorkspaceSetupPanel } from "@/components/GuidedWorkspaceSetupPanel";
 import { OperationsAgentApprovalQueue } from "@/components/OperationsAgentApprovalQueue";
+import { NextActionUpdatePanel } from "@/components/NextActionUpdatePanel";
 import type {
   GuidedClientIntakeCommandResult,
   WorkspaceApplicationApi,
@@ -25,6 +27,7 @@ type OperationsAgentPanelProps = {
 type AgentTask =
   | "workspace-setup"
   | "client-intake"
+  | "next-actions"
   | "approvals";
 
 export function OperationsAgentPanel({
@@ -69,6 +72,19 @@ export function OperationsAgentPanel({
           Client intake
         </button>
         <button
+          aria-pressed={activeTask === "next-actions"}
+          className={`inline-flex min-h-11 items-center gap-2 rounded-md px-4 py-2 font-bold ${
+            activeTask === "next-actions"
+              ? "bg-[#174F42] text-white"
+              : "bg-[#EDF3EF] text-[#174F42] hover:bg-[#DDE9E2]"
+          }`}
+          onClick={() => setActiveTask("next-actions")}
+          type="button"
+        >
+          <CalendarClock aria-hidden="true" className="size-5" />
+          Next actions
+        </button>
+        <button
           aria-pressed={activeTask === "approvals"}
           className={`inline-flex min-h-11 items-center gap-2 rounded-md px-4 py-2 font-bold ${
             activeTask === "approvals"
@@ -91,6 +107,12 @@ export function OperationsAgentPanel({
       ) : activeTask === "client-intake" ? (
         <GuidedClientIntakePanel
           onClientCreated={onClientCreated}
+          workspaceApi={workspaceApi}
+          workspaceId={workspaceId}
+        />
+      ) : activeTask === "next-actions" ? (
+        <NextActionUpdatePanel
+          onPrepared={() => setActiveTask("approvals")}
           workspaceApi={workspaceApi}
           workspaceId={workspaceId}
         />

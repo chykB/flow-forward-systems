@@ -45,6 +45,28 @@ function formatDateTime(value: string) {
   }).format(new Date(value));
 }
 
+function getApprovalStatusLabel(
+  approval: OperationsAgentApproval,
+) {
+  if (approval.decision !== "approved") {
+    return decisionLabels[approval.decision];
+  }
+
+  if (approval.executionState === "succeeded") {
+    return "Applied";
+  }
+
+  if (approval.executionState === "failed") {
+    return "Not applied";
+  }
+
+  if (approval.executionState === "running") {
+    return "Applying";
+  }
+
+  return "Approved";
+}
+
 export function OperationsAgentApprovalQueue({
   workspaceApi,
   workspaceId,
@@ -134,20 +156,59 @@ export function OperationsAgentApprovalQueue({
     setErrorMessage("");
 
     try {
-      await workspaceApi.operationsAgent.approve({
-        commandId: createOperationRequestId(),
-        approvalId: approval.id,
-        expectedUpdatedAt: approval.updatedAt,
-      });
+      const approved =
+        await workspaceApi.operationsAgent.approve({
+          commandId: createOperationRequestId(),
+          approvalId: approval.id,
+          expectedUpdatedAt: approval.updatedAt,
+        });
+      const executed =
+        await workspaceApi.operationsAgent.executeApprovedAction({
+          commandId: createOperationRequestId(),
+          approvalId: approval.id,
+          expectedUpdatedAt: approved.approval.updatedAt,
+        });
       setMessage(
-        "Approved. The Operations Agent can continue from this review.",
+        executed.approval.executionOutcome ||
+          "Approved and applied.",
       );
       await loadApprovals();
     } catch (error) {
       setErrorMessage(
         error instanceof Error
           ? error.message
-          : "The proposed action could not be approved.",
+          : "The proposed action could not be approved and applied.",
+      );
+      await loadApprovals();
+    } finally {
+      setBusyApprovalId("");
+    }
+  }
+
+  async function applyApprovedAction(
+    approval: OperationsAgentApproval,
+  ) {
+    setBusyApprovalId(approval.id);
+    setMessage("");
+    setErrorMessage("");
+
+    try {
+      const executed =
+        await workspaceApi.operationsAgent.executeApprovedAction({
+        commandId: createOperationRequestId(),
+        approvalId: approval.id,
+        expectedUpdatedAt: approval.updatedAt,
+      });
+      setMessage(
+        executed.approval.executionOutcome ||
+          "The approved action was applied.",
+      );
+      await loadApprovals();
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "The approved action could not be applied.",
       );
     } finally {
       setBusyApprovalId("");
@@ -388,15 +449,46 @@ export function OperationsAgentApprovalQueue({
                       {approval.decisionNote}
                     </p>
                   ) : null}
+                  {approval.executionOutcome ? (
+                    <p className="mt-2 text-[#5F6862]">
+                      {approval.executionOutcome}
+                    </p>
+                  ) : null}
+                  {approval.decision === "approved" &&
+                  approval.executionState === "ready" ? (
+                    <button
+                      className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-md border border-[#174F42] px-4 py-2 font-bold text-[#174F42] hover:bg-[#EDF3EF] disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={busyApprovalId === approval.id}
+                      onClick={() =>
+                        void applyApprovedAction(approval)
+                      }
+                      type="button"
+                    >
+                      {busyApprovalId === approval.id ? (
+                        <LoaderCircle
+                          aria-hidden="true"
+                          className="size-5 animate-spin"
+                        />
+                      ) : (
+                        <Check
+                          aria-hidden="true"
+                          className="size-5"
+                        />
+                      )}
+                      Apply approved action
+                    </button>
+                  ) : null}
                 </div>
                 <p
                   className={`inline-flex items-center gap-2 font-bold ${
-                    approval.decision === "approved"
+                    approval.decision === "approved" &&
+                    approval.executionState === "succeeded"
                       ? "text-[#174F42]"
                       : "text-[#8A5700]"
                   }`}
                 >
-                  {approval.decision === "approved" ? (
+                  {approval.decision === "approved" &&
+                  approval.executionState === "succeeded" ? (
                     <Check aria-hidden="true" className="size-5" />
                   ) : (
                     <CircleAlert
@@ -404,7 +496,7 @@ export function OperationsAgentApprovalQueue({
                       className="size-5"
                     />
                   )}
-                  {decisionLabels[approval.decision]}
+                  {getApprovalStatusLabel(approval)}
                 </p>
               </div>
             ))}

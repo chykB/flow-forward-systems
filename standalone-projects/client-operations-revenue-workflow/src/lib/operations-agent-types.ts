@@ -20,7 +20,8 @@ export type OperationsAgentTrigger =
 
 export type OperationsAgentCapability =
   | "guided_client_intake"
-  | "guided_workspace_setup";
+  | "guided_workspace_setup"
+  | "next_action_update";
 
 export type OperationsAgentStepKind =
   | "model"
@@ -123,6 +124,9 @@ export type OperationsAgentApproval = {
   decidedBy: string;
   decidedAt: string;
   decisionNote: string;
+  executedBy: string;
+  executedAt: string;
+  executionOutcome: string;
   expiresAt: string;
   createdAt: string;
   updatedAt: string;
@@ -134,6 +138,14 @@ export type OperationsAgentRunLimits = {
   retries: number;
   durationSeconds: number;
   costUsd: number;
+};
+
+export type OperationsAgentNextActionProposal = {
+  clientEngagementId: string;
+  expectedUpdatedAt: string;
+  nextAction: string;
+  nextFollowUpAt: string;
+  assignedTo: string;
 };
 
 export type GuidedClientIntakeField =

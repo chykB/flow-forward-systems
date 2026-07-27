@@ -19,7 +19,7 @@ existing client operations workflow.
 
 - Today: concise daily priorities and readiness items.
 - Operations Agent: Suggest-mode workspace setup and client intake, plus an
-  explicit approval inbox for future protected actions.
+  explicit approval inbox and one protected next-action tool.
 - Workflow Snapshot: current engagement stages and active workflow issues.
 - Client Records: clients, jobs, next actions, Work Items, handoff context,
   proposals, invoices, Workflow Health, and Activity.

@@ -155,17 +155,27 @@ boundary.
       or setup drafts directly.
 - [x] Confirm guided workspace setup does not change client records, jobs,
       Workflow Health, readiness, or relationship concerns.
-- [ ] Apply and rollback-verify the explicit Operations Agent approval migration.
-- [ ] Confirm the browser receives only the user-facing action title, summary,
+- [x] Apply and rollback-verify the explicit Operations Agent approval migration.
+- [x] Confirm the browser receives only the user-facing action title, summary,
       review fields, decision state, and expiry.
-- [ ] Confirm the protected command name, input, input hash, and expected-state
+- [x] Confirm the protected command name, input, input hash, and expected-state
       snapshot remain server-only.
-- [ ] Confirm approve and reject decisions are idempotent and cannot be changed
+- [x] Confirm approve and reject decisions are idempotent and cannot be changed
       after they are recorded.
-- [ ] Confirm approval expiry and run cancellation cannot apply a workflow
+- [x] Confirm approval expiry and run cancellation cannot apply a workflow
       change.
-- [ ] Confirm approving an action only queues the run; execution remains blocked
+- [x] Confirm approving an action only queues the run; execution remains blocked
       until the protected tool re-checks permission and current record state.
+- [ ] Apply and rollback-verify the protected next-action tool migration.
+- [ ] Confirm preparing a next-action change does not mutate the selected job.
+- [ ] Confirm approval and execution produce exactly one engagement command,
+      Activity entry, usage event, and completed run.
+- [ ] Confirm a changed or closed job fails safely without overwriting current
+      workflow data.
+- [ ] Confirm disabling the `next_action_update` capability blocks execution
+      even after approval.
+- [ ] Confirm the approval inbox shows only user-facing execution outcomes and
+      never returns command inputs, hashes, expected state, or raw results.
 
 ## Release Decision
 

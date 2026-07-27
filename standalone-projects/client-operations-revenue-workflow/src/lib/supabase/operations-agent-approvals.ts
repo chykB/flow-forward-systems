@@ -20,6 +20,9 @@ export type OperationsAgentApprovalRow = {
   decided_by: string | null;
   decided_at: string | null;
   decision_note: string | null;
+  executed_by: string | null;
+  executed_at: string | null;
+  execution_outcome: string | null;
   expires_at: string;
   created_at: string;
   updated_at: string;
@@ -66,6 +69,9 @@ export function mapOperationsAgentApprovalRow(
     decidedBy: row.decided_by ?? "",
     decidedAt: row.decided_at ?? "",
     decisionNote: row.decision_note ?? "",
+    executedBy: row.executed_by ?? "",
+    executedAt: row.executed_at ?? "",
+    executionOutcome: row.execution_outcome ?? "",
     expiresAt: row.expires_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

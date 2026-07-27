@@ -2,7 +2,7 @@
 
 Status: Active technical contract
 
-Implemented slices: Work items, client records, follow-up completion, Work Item handoff context, proposals, engagement-owned Proposal recommendations, proposal-linked Invoice billing, invoices, engagement ownership, engagement-scoped risk review, sequential Work Item controls, Work Item dependency editing, the provider-neutral Operations Agent runtime, Suggest-mode guided client intake, Suggest-mode guided workspace setup, and explicit Operations Agent approval records
+Implemented slices: Work items, client records, follow-up completion, Work Item handoff context, proposals, engagement-owned Proposal recommendations, proposal-linked Invoice billing, invoices, engagement ownership, engagement-scoped risk review, sequential Work Item controls, Work Item dependency editing, the provider-neutral Operations Agent runtime, Suggest-mode guided client intake, Suggest-mode guided workspace setup, explicit Operations Agent approval records, and the approval-required next-action tool
 
 Public API status: None of the interfaces or database functions in this document are a versioned customer API.
 
@@ -64,6 +64,8 @@ The manual and rules-based product remains fully operational without an AI provi
 - `operationsAgent.cancelRun(command)`
 - `operationsAgent.approve(command)`
 - `operationsAgent.reject(command)`
+- `operationsAgent.prepareNextActionUpdate(command)`
+- `operationsAgent.executeApprovedAction(command)`
 - `operationsAgent.completeClientIntake(command)`
 - `operationsAgent.completeWorkspaceSetup(command)`
 
@@ -161,10 +163,12 @@ runtime tables directly.
 
 ### Operations Agent runtime
 
-- Available capabilities are `guided_client_intake` and
-  `guided_workspace_setup`.
-- Every browser-started run uses `suggest` mode. Approval-required and
-  delegated modes are not enabled by the start command.
+- Available capabilities are `guided_client_intake`,
+  `guided_workspace_setup`, and `next_action_update`.
+- The generic browser start command remains Suggest-only. The dedicated
+  next-action preparation command creates an `approval_required` run with one
+  frozen action and one bounded internal tool step. Delegated mode remains
+  disabled.
 - One active run is allowed per workspace during the foundation rollout.
 - Runs persist objective, initiating user, trigger, context, plan, state,
   bounded limits, failure details, and outcome.
@@ -199,9 +203,18 @@ runtime tables directly.
   fields, decision state, and expiry through
   `query_operations_agent_approvals`. The command name, exact input, input
   hash, and expected-state snapshot remain server-only.
-- Approval records are immutable after creation. Approving queues the run to
+- Approval scope is immutable after creation. Approving queues the run to
   resume; rejecting or expiry closes it without applying a workflow change.
-  Approval alone never executes the protected command.
+  The next-action UI then invokes a separate execution command, which rechecks
+  ownership, capability policy, approval integrity, target scope, active job
+  status, and the exact engagement version before applying anything.
+- The next-action executor accepts only `nextAction`, `nextFollowUpAt`, and
+  `assignedTo`. It calls the existing idempotent engagement update command so
+  the manual and agent paths share validation, primary-record mirroring, and
+  one `Engagement updated` Activity entry.
+- Successful and failed execution attempts record a bounded user-facing
+  outcome, durable tool/run state, lifecycle events, and a zero-cost internal
+  tool usage event. Raw command responses stay server-only.
 - The model provider and service-role keys remain server-only. Browser callers
   receive neither credential and cannot execute worker functions.
 
@@ -360,21 +373,25 @@ User-facing errors include the command or query request ID. Console diagnostics 
 | Invoices | workspace/client invoices | none directly | engagement-scoped create/update/recommendation + optional accepted-Proposal billing + reconciliation + Activity | Implemented for all Active engagements |
 | Risk signals | workspace risk history | none directly | engagement-scoped review/dismiss + isolated health + Activity | Implemented; source-driven resolution remains separate |
 | Activity | workspace history | direct inserts from legacy flows | command-owned audit writes | Client-record, work-item, handoff-context, Proposal, Invoice, and risk-review audit implemented; other flows pending |
-| Operations Agent | owner-scoped runs, steps, client-intake drafts, workspace-setup drafts, and user-facing approvals | start/cancel; review drafts; approve/reject one exact action | service-only claim/provider result/failure/approval creation; atomic reviewed client/profile save | Guided intake remains Suggest-only; explicit approval records exist, but no additional workflow command is exposed as an agent tool |
+| Operations Agent | owner-scoped runs, steps, client-intake drafts, workspace-setup drafts, and user-facing approvals/outcomes | start/cancel; review drafts; prepare/approve/reject/apply one exact next-action change | service-only claim/provider result/failure/approval creation; atomic reviewed client/profile save; protected engagement command execution | Guided flows remain Suggest-only; next-action updates require explicit approval plus execution-time permission and freshness checks |
 
 ## Assistant Eligibility
 
-Guided client intake and guided workspace setup are the first protected
+Guided client intake and guided workspace setup are the first Suggest-mode
 Operations Agent capabilities. Client intake uses the existing client-record
 command only after explicit user review. Workspace setup can write only the
-reviewed operating profile and cannot change client or job workflow data. The
-engagement, follow-up, work-item, handoff-context, Proposal, Invoice, and
-risk-review commands are not yet exposed as agent tools. The approval boundary
-stores the exact protected command payload and expected-state snapshot
-server-side, returns only user-facing review fields to the browser, and records
-approve, reject, expiry, cancellation, and run-resume events. Approval does not
-bypass the later execution-time permission and freshness check. Additional tool
-enablement requires:
+reviewed operating profile and cannot change client or job workflow data.
+
+`next_action_update` is the first approval-required internal tool. It can
+prepare and apply only the selected active engagement's next action,
+follow-up date, and owner. The approval boundary stores the exact command
+payload and expected-state snapshot server-side, returns only user-facing
+review and outcome fields to the browser, and records approval and execution
+events. Approval never bypasses the separate execution-time permission and
+freshness check.
+
+Follow-up completion, Work Items, handoff context, Proposals, Invoices, and risk
+review are not exposed as agent tools. Additional tool enablement requires:
 
 - explicit per-tool policy and plan entitlements;
 - user confirmation for consequential changes;
@@ -387,9 +404,8 @@ The assistant should use the same application command contract as the manual UI 
 
 ## Next Slices
 
-1. Rollback-verify and browser-test the explicit approval queue, exact
-   user-facing scope, idempotent approve/reject decisions, expiry, and
-   server-only command payload.
-2. Add one protected internal tool with execution-time permission and freshness
-   checks, an idempotent command call, and recorded execution outcome.
+1. Rollback-verify and browser-test the protected next-action proposal,
+   approval, execution, stale-target failure, and user-facing outcome.
+2. Keep other workflow commands unavailable to the agent until this first tool
+   passes Private V1 acceptance.
 3. Move remaining legacy Activity writes behind command-owned audit effects.

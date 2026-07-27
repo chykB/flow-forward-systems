@@ -27,6 +27,7 @@ import {
   type GuidedWorkspaceSetupDraft,
   type OperationsAgentApproval,
   type OperationsAgentCapability,
+  type OperationsAgentNextActionProposal,
   type OperationsAgentRun,
   type OperationsAgentRunLimits,
   type OperationsAgentStep,
@@ -483,6 +484,17 @@ export type DecideOperationsAgentApprovalCommand = {
   decisionNote?: string;
 };
 
+export type PrepareOperationsAgentNextActionCommand = {
+  commandId: string;
+  proposal: OperationsAgentNextActionProposal;
+};
+
+export type ExecuteOperationsAgentApprovalCommand = {
+  commandId: string;
+  approvalId: string;
+  expectedUpdatedAt: string;
+};
+
 export type CompleteGuidedClientIntakeCommand = {
   commandId: string;
   clientCreateCommandId: string;
@@ -612,6 +624,12 @@ export type WorkspaceApplicationApi = {
     ) => Promise<OperationsAgentApprovalCommandResult>;
     reject: (
       command: DecideOperationsAgentApprovalCommand,
+    ) => Promise<OperationsAgentApprovalCommandResult>;
+    prepareNextActionUpdate: (
+      command: PrepareOperationsAgentNextActionCommand,
+    ) => Promise<OperationsAgentApprovalCommandResult>;
+    executeApprovedAction: (
+      command: ExecuteOperationsAgentApprovalCommand,
     ) => Promise<OperationsAgentApprovalCommandResult>;
     completeClientIntake: (
       command: CompleteGuidedClientIntakeCommand,
@@ -3720,6 +3738,88 @@ function validateCancelOperationsAgentRunCommand(
   }
 }
 
+function validatePrepareOperationsAgentNextActionCommand(
+  workspaceId: string,
+  command: PrepareOperationsAgentNextActionCommand,
+) {
+  assertRequestId(command.commandId);
+  assertUuid(
+    workspaceId,
+    "The workspace identifier",
+    command.commandId,
+  );
+  assertUuid(
+    command.proposal.clientEngagementId,
+    "The job identifier",
+    command.commandId,
+  );
+
+  if (
+    !timestampPattern.test(command.proposal.expectedUpdatedAt) ||
+    Number.isNaN(Date.parse(command.proposal.expectedUpdatedAt))
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Refresh the selected job before preparing this change.",
+      command.commandId,
+    );
+  }
+
+  const nextAction = command.proposal.nextAction.trim();
+  if (nextAction.length < 3 || nextAction.length > 500) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Enter a next action between 3 and 500 characters.",
+      command.commandId,
+    );
+  }
+
+  if (!dateKeyPattern.test(command.proposal.nextFollowUpAt)) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Choose a valid follow-up date.",
+      command.commandId,
+    );
+  }
+
+  const assignedTo = command.proposal.assignedTo.trim();
+  if (assignedTo.length < 2 || assignedTo.length > 160) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Enter an owner between 2 and 160 characters.",
+      command.commandId,
+    );
+  }
+}
+
+function validateExecuteOperationsAgentApprovalCommand(
+  workspaceId: string,
+  command: ExecuteOperationsAgentApprovalCommand,
+) {
+  assertRequestId(command.commandId);
+  assertUuid(
+    workspaceId,
+    "The workspace identifier",
+    command.commandId,
+  );
+  assertUuid(
+    command.approvalId,
+    "The approval identifier",
+    command.commandId,
+  );
+
+  if (
+    !timestampPattern.test(command.expectedUpdatedAt) ||
+    Number.isNaN(Date.parse(command.expectedUpdatedAt))
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Refresh the approval before applying this action.",
+      command.commandId,
+    );
+  }
+}
+
 function validateOperationsAgentApprovalDecision(
   workspaceId: string,
   command: DecideOperationsAgentApprovalCommand,
@@ -5275,6 +5375,88 @@ export function createWorkspaceApplicationApi(
             error,
             command.commandId,
             "The proposed action could not be rejected.",
+          );
+        }
+      },
+
+      async prepareNextActionUpdate(command) {
+        validatePrepareOperationsAgentNextActionCommand(
+          workspaceId,
+          command,
+        );
+
+        try {
+          const { data, error } = await supabase.rpc(
+            "command_prepare_operations_agent_next_action_update",
+            {
+              p_workspace_id: workspaceId,
+              p_client_engagement_id:
+                command.proposal.clientEngagementId,
+              p_expected_engagement_updated_at:
+                command.proposal.expectedUpdatedAt,
+              p_next_action: command.proposal.nextAction.trim(),
+              p_next_follow_up_at:
+                command.proposal.nextFollowUpAt,
+              p_assigned_to: command.proposal.assignedTo.trim(),
+              p_idempotency_key: command.commandId,
+            },
+          );
+
+          if (error) {
+            throw error;
+          }
+
+          return mapOperationsAgentApprovalCommandResult(
+            data,
+            command.commandId,
+          );
+        } catch (error) {
+          console.error(
+            "Workspace API Operations Agent next-action proposal failed",
+            { requestId: command.commandId, error },
+          );
+          throw mapOperationError(
+            error,
+            command.commandId,
+            "The next-action change could not be prepared for review.",
+          );
+        }
+      },
+
+      async executeApprovedAction(command) {
+        validateExecuteOperationsAgentApprovalCommand(
+          workspaceId,
+          command,
+        );
+
+        try {
+          const { data, error } = await supabase.rpc(
+            "command_execute_approved_operations_agent_action",
+            {
+              p_workspace_id: workspaceId,
+              p_approval_id: command.approvalId,
+              p_expected_updated_at: command.expectedUpdatedAt,
+              p_idempotency_key: command.commandId,
+            },
+          );
+
+          if (error) {
+            throw error;
+          }
+
+          return mapOperationsAgentApprovalCommandResult(
+            data,
+            command.commandId,
+          );
+        } catch (error) {
+          console.error(
+            "Workspace API approved Operations Agent execution failed",
+            { requestId: command.commandId, error },
+          );
+          throw mapOperationError(
+            error,
+            command.commandId,
+            "The approved action could not be applied.",
           );
         }
       },
