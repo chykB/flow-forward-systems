@@ -7,16 +7,17 @@ public launch.
 
 - Production origin:
   `https://client-operations-revenue-workflow.processes.workers.dev`
-- Deployed commit: `0eb1009`
-- Cloudflare Worker version: `ef3470e7-fa48-4a55-83aa-24badf49eff7`
-- Deployment time: `2026-07-24T15:24:37.646Z`
+- Deployed commit: `bdaf3eb`
+- Cloudflare Worker version: `28ea8db0-733f-4051-b68c-3abbba661f2c`
+- Deployment time: `2026-07-27T19:52:47.630Z`
 - Deployed by: `malikchika86@gmail.com`
 - Supabase project reference: `kdanlmcobbamwggejrvc`
 - Approved by: `malikchika86@gmail.com`
-- Acceptance date: 2026-07-24
-- Production smoke test: Passed on 2026-07-24
-- Release status: Private V1 deployed and approved for continued private use;
-  remaining acceptance checks are listed below.
+- Acceptance date: 2026-07-27
+- Production smoke test: Passed on 2026-07-27
+- Release status: Private V1 and the first protected Operations Agent tool are
+  deployed and approved for continued private use; remaining acceptance checks
+  are listed below.
 
 ## Access And Data
 
@@ -166,15 +167,15 @@ boundary.
       change.
 - [x] Confirm approving an action only queues the run; execution remains blocked
       until the protected tool re-checks permission and current record state.
-- [ ] Apply and rollback-verify the protected next-action tool migration.
-- [ ] Confirm preparing a next-action change does not mutate the selected job.
-- [ ] Confirm approval and execution produce exactly one engagement command,
+- [x] Apply and rollback-verify the protected next-action tool migration.
+- [x] Confirm preparing a next-action change does not mutate the selected job.
+- [x] Confirm approval and execution produce exactly one engagement command,
       Activity entry, usage event, and completed run.
-- [ ] Confirm a changed or closed job fails safely without overwriting current
+- [x] Confirm a changed or closed job fails safely without overwriting current
       workflow data.
-- [ ] Confirm disabling the `next_action_update` capability blocks execution
+- [x] Confirm disabling the `next_action_update` capability blocks execution
       even after approval.
-- [ ] Confirm the approval inbox shows only user-facing execution outcomes and
+- [x] Confirm the approval inbox shows only user-facing execution outcomes and
       never returns command inputs, hashes, expected state, or raw results.
 
 ## Release Decision
