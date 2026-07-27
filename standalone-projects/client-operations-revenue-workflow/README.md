@@ -18,7 +18,8 @@ existing client operations workflow.
 ## Product Areas
 
 - Today: concise daily priorities and readiness items.
-- Operations Agent: Suggest-mode guided client intake with explicit review.
+- Operations Agent: Suggest-mode workspace setup and client intake with
+  explicit review.
 - Workflow Snapshot: current engagement stages and active workflow issues.
 - Client Records: clients, jobs, next actions, Work Items, handoff context,
   proposals, invoices, Workflow Health, and Activity.
@@ -59,7 +60,7 @@ OPENAI_OPERATIONS_AGENT_MODEL=gpt-5.6-luna
 
 Only publishable or anonymous Supabase keys belong in browser environment
 variables. `SUPABASE_SERVICE_ROLE_KEY` and `OPENAI_API_KEY` are server-only
-secrets used by the guided client intake route. Never prefix them with
+secrets used by the guided Operations Agent routes. Never prefix them with
 `NEXT_PUBLIC_`, expose them to browser code, or commit their values.
 
 `NEXT_PUBLIC_ALLOW_SIGN_UP` defaults to `false`. Keep it false for Private V1
@@ -75,9 +76,9 @@ npm run dev
 
 Open `http://localhost:3000`.
 
-Guided client intake requires the two server-only secrets in the uncommitted
-`.env.local`. The rest of the application, including the manual client form,
-continues to work when the AI provider is unavailable.
+Guided workspace setup and client intake require the two server-only secrets
+in the uncommitted `.env.local`. The rest of the application, including the
+manual client form, continues to work when the AI provider is unavailable.
 
 ## Verification
 
@@ -117,7 +118,7 @@ The preview normally runs at `http://localhost:8787`. Complete the signed-out
 and signed-in smoke tests there before deploying.
 
 Configure the production server secrets directly in Cloudflare before enabling
-guided client intake:
+the guided Operations Agent:
 
 ```bash
 npx wrangler secret put OPENAI_API_KEY
@@ -141,7 +142,7 @@ domain can replace the `workers.dev` Site URL after it is attached and tested.
 
 Cloudflare hosts the Next.js application only. The planned Python/FastAPI agent
 and external API services remain separate backend components. The first
-Operations Agent capability runs in a protected Next.js server route; a future
+Operations Agent capabilities run in protected Next.js server routes; a future
 worker service can take over the same durable runtime and command contracts
 without moving this frontend.
 

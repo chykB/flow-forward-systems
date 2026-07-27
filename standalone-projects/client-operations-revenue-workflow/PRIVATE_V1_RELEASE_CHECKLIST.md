@@ -127,23 +127,34 @@ boundary.
 
 ## V1.5 Operations Agent Gate
 
-- [ ] Apply and rollback-verify the guided client intake migration.
-- [ ] Store `OPENAI_API_KEY` and `SUPABASE_SERVICE_ROLE_KEY` only as
+- [x] Apply and rollback-verify the guided client intake migration.
+- [x] Store `OPENAI_API_KEY` and `SUPABASE_SERVICE_ROLE_KEY` only as
       server-side local or Cloudflare secrets.
 - [ ] Confirm a signed-out caller cannot start or execute an agent run.
-- [ ] Confirm the guided intake draft identifies missing and uncertain fields
+- [x] Confirm the guided intake draft identifies missing and uncertain fields
       without inventing dates, owners, amounts, statuses, or commitments.
-- [ ] Confirm the user can edit every drafted field before saving.
+- [x] Confirm the user can edit every drafted field before saving.
 - [ ] Confirm saving creates exactly one client record through the existing
       client-create command and completes exactly one agent run.
 - [ ] Retry the reviewed save with the same request identifiers and confirm no
       duplicate record, Activity entry, or cost event is created.
 - [ ] Confirm provider failure records a failed run with zero chargeable cost
       and leaves the manual client form available.
-- [ ] Confirm cancellation removes the active-run lock without changing client
+- [x] Confirm cancellation removes the active-run lock without changing client
       records.
-- [ ] Confirm OpenAI and Supabase service-role credentials are absent from the
+- [x] Confirm OpenAI and Supabase service-role credentials are absent from the
       browser bundle, browser logs, and network response bodies.
+- [ ] Apply and rollback-verify the guided workspace setup migration.
+- [ ] Confirm the setup draft preserves the fixed lifecycle-stage vocabulary.
+- [ ] Confirm business type, stages, owners, working days, and all notification
+      choices remain editable before saving.
+- [ ] Confirm missing or uncertain setup choices remain blank.
+- [ ] Confirm saving creates or updates exactly one workspace operating profile
+      and completes exactly one agent run.
+- [ ] Confirm authenticated callers cannot insert or update operating profiles
+      or setup drafts directly.
+- [ ] Confirm guided workspace setup does not change client records, jobs,
+      Workflow Health, readiness, or relationship concerns.
 
 ## Release Decision
 

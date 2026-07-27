@@ -19,7 +19,8 @@ export type OperationsAgentTrigger =
   | "scheduled";
 
 export type OperationsAgentCapability =
-  | "guided_client_intake";
+  | "guided_client_intake"
+  | "guided_workspace_setup";
 
 export type OperationsAgentStepKind =
   | "model"
@@ -146,4 +147,104 @@ export type GuidedClientIntakeDraft = {
   savedClientWorkflowRecordId: string;
   createdAt: string;
   updatedAt: string;
+};
+
+export const workspaceWorkflowStages = [
+  "New lead",
+  "Qualified lead",
+  "Follow-up needed",
+  "Discovery or call booked",
+  "Proposal sent",
+  "Won client",
+  "Onboarding",
+  "In delivery",
+  "Waiting for approval",
+  "Payment follow-up",
+  "Completed",
+  "Lost or inactive",
+] as const;
+
+export type WorkspaceWorkflowStage =
+  (typeof workspaceWorkflowStages)[number];
+
+export const workspaceWorkingDays = [
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+  "Sunday",
+] as const;
+
+export type WorkspaceWorkingDay =
+  (typeof workspaceWorkingDays)[number];
+
+export type GuidedWorkspaceSetupField =
+  | "businessType"
+  | "workflowStages"
+  | "commonOwners"
+  | "workingDays"
+  | "dailyBriefingEnabled"
+  | "immediateFailureAlertsEnabled"
+  | "opportunityAlertsEnabled";
+
+export type GuidedWorkspaceSetupDraftValues = {
+  businessType: string | null;
+  workflowStages: WorkspaceWorkflowStage[];
+  commonOwners: string[];
+  workingDays: WorkspaceWorkingDay[];
+  dailyBriefingEnabled: boolean | null;
+  immediateFailureAlertsEnabled: boolean | null;
+  opportunityAlertsEnabled: boolean | null;
+  summary: string;
+};
+
+export type GuidedWorkspaceSetupUncertainty = {
+  field: GuidedWorkspaceSetupField;
+  reason: string;
+};
+
+export type GuidedWorkspaceSetupDraft = {
+  id: string;
+  workspaceId: string;
+  runId: string;
+  initiatedBy: string;
+  values: GuidedWorkspaceSetupDraftValues;
+  missingFields: GuidedWorkspaceSetupField[];
+  uncertainFields: GuidedWorkspaceSetupUncertainty[];
+  clarificationQuestions: string[];
+  state: GuidedClientIntakeDraftState;
+  provider: string;
+  model: string;
+  providerResponseId: string;
+  approvedConfiguration: Record<string, unknown>;
+  savedWorkspaceId: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type WorkspaceOperatingProfile = {
+  workspaceId: string;
+  businessType: string;
+  workflowStages: WorkspaceWorkflowStage[];
+  commonOwners: string[];
+  workingDays: WorkspaceWorkingDay[];
+  dailyBriefingEnabled: boolean;
+  immediateFailureAlertsEnabled: boolean;
+  opportunityAlertsEnabled: boolean;
+  createdBy: string;
+  updatedBy: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ReviewedWorkspaceSetup = {
+  businessType: string;
+  workflowStages: WorkspaceWorkflowStage[];
+  commonOwners: string[];
+  workingDays: WorkspaceWorkingDay[];
+  dailyBriefingEnabled: boolean;
+  immediateFailureAlertsEnabled: boolean;
+  opportunityAlertsEnabled: boolean;
 };

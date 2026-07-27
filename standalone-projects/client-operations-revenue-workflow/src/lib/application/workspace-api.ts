@@ -20,17 +20,32 @@ import {
 import type {
   ProposalWorkflowUpdates,
 } from "@/lib/proposal-workflow";
-import type {
-  GuidedClientIntakeDraft,
-  OperationsAgentCapability,
-  OperationsAgentRun,
-  OperationsAgentRunLimits,
-  OperationsAgentStep,
+import {
+  workspaceWorkingDays,
+  workspaceWorkflowStages,
+  type GuidedClientIntakeDraft,
+  type GuidedWorkspaceSetupDraft,
+  type OperationsAgentCapability,
+  type OperationsAgentRun,
+  type OperationsAgentRunLimits,
+  type OperationsAgentStep,
+  type ReviewedWorkspaceSetup,
+  type WorkspaceOperatingProfile,
+  type WorkspaceWorkingDay,
+  type WorkspaceWorkflowStage,
 } from "@/lib/operations-agent-types";
 import {
   getWorkspaceGuidedClientIntakeDrafts,
   mapGuidedClientIntakeDraft,
 } from "@/lib/supabase/guided-client-intake-drafts";
+import {
+  getWorkspaceGuidedWorkspaceSetupDrafts,
+  getWorkspaceOperatingProfile,
+  mapGuidedWorkspaceSetupDraft,
+  mapWorkspaceOperatingProfile,
+  type GuidedWorkspaceSetupDraftRow,
+  type WorkspaceOperatingProfileRow,
+} from "@/lib/supabase/guided-workspace-setup";
 import {
   getWorkspaceRiskSignals,
   mapRiskSignalRow,
@@ -464,6 +479,15 @@ export type CompleteGuidedClientIntakeCommand = {
   evaluationDate?: Date;
 };
 
+export type CompleteGuidedWorkspaceSetupCommand = {
+  commandId: string;
+  runId: string;
+  draftId: string;
+  expectedRunUpdatedAt: string;
+  expectedDraftUpdatedAt: string;
+  approvedConfiguration: ReviewedWorkspaceSetup;
+};
+
 export type OperationsAgentRunCommandResult = {
   requestId: string;
   run: OperationsAgentRun;
@@ -474,6 +498,13 @@ export type GuidedClientIntakeCommandResult =
     run: OperationsAgentRun;
     draft: GuidedClientIntakeDraft;
   };
+
+export type GuidedWorkspaceSetupCommandResult = {
+  requestId: string;
+  run: OperationsAgentRun;
+  draft: GuidedWorkspaceSetupDraft;
+  profile: WorkspaceOperatingProfile;
+};
 
 export type WorkspaceApplicationApi = {
   engagements: {
@@ -543,6 +574,10 @@ export type WorkspaceApplicationApi = {
     listRuns: () => Promise<OperationsAgentRun[]>;
     listSteps: (runId: string) => Promise<OperationsAgentStep[]>;
     listClientIntakeDrafts: () => Promise<GuidedClientIntakeDraft[]>;
+    listWorkspaceSetupDrafts: () => Promise<
+      GuidedWorkspaceSetupDraft[]
+    >;
+    getWorkspaceProfile: () => Promise<WorkspaceOperatingProfile | null>;
     startRun: (
       command: StartOperationsAgentRunCommand,
     ) => Promise<OperationsAgentRunCommandResult>;
@@ -552,6 +587,9 @@ export type WorkspaceApplicationApi = {
     completeClientIntake: (
       command: CompleteGuidedClientIntakeCommand,
     ) => Promise<GuidedClientIntakeCommandResult>;
+    completeWorkspaceSetup: (
+      command: CompleteGuidedWorkspaceSetupCommand,
+    ) => Promise<GuidedWorkspaceSetupCommandResult>;
   };
   workItems: {
     list: () => Promise<WorkflowTask[]>;
@@ -651,6 +689,12 @@ type GuidedClientIntakeCommandRpcResult =
     draft: Parameters<typeof mapGuidedClientIntakeDraft>[0];
     clientRecord: ClientWorkflowRecordRow;
     reconciliation: unknown;
+  };
+
+type GuidedWorkspaceSetupCommandRpcResult =
+  OperationsAgentRunCommandRpcResult & {
+    draft: GuidedWorkspaceSetupDraftRow;
+    profile: WorkspaceOperatingProfileRow;
   };
 
 const engagementWorkflowStatuses = new Set<
@@ -1398,6 +1442,35 @@ function mapGuidedClientIntakeCommandResult(
     reconciliation: mapRiskSignalReconciliationResult(
       result.reconciliation,
     ),
+  };
+}
+
+function mapGuidedWorkspaceSetupCommandResult(
+  data: unknown,
+  expectedRequestId: string,
+): GuidedWorkspaceSetupCommandResult {
+  const result =
+    data as GuidedWorkspaceSetupCommandRpcResult | null;
+
+  if (
+    !result?.requestId ||
+    result.requestId !== expectedRequestId ||
+    !result.run ||
+    !result.draft ||
+    !result.profile
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_response",
+      "The guided workspace setup returned an invalid response.",
+      expectedRequestId,
+    );
+  }
+
+  return {
+    requestId: result.requestId,
+    run: mapOperationsAgentRunRow(result.run),
+    draft: mapGuidedWorkspaceSetupDraft(result.draft),
+    profile: mapWorkspaceOperatingProfile(result.profile),
   };
 }
 
@@ -3438,7 +3511,10 @@ function validateStartOperationsAgentRunCommand(
     command.commandId,
   );
 
-  if (command.capability !== "guided_client_intake") {
+  if (
+    command.capability !== "guided_client_intake" &&
+    command.capability !== "guided_workspace_setup"
+  ) {
     throw new WorkspaceApiError(
       "invalid_request",
       "Choose an available Operations Agent capability.",
@@ -3629,6 +3705,136 @@ function validateCompleteGuidedClientIntakeCommand(
     command.approvedRecord,
     command.commandId,
   );
+}
+
+function validateCompleteGuidedWorkspaceSetupCommand(
+  workspaceId: string,
+  command: CompleteGuidedWorkspaceSetupCommand,
+) {
+  assertRequestId(command.commandId);
+  assertUuid(
+    workspaceId,
+    "The workspace identifier",
+    command.commandId,
+  );
+  assertUuid(
+    command.runId,
+    "The Operations Agent run identifier",
+    command.commandId,
+  );
+  assertUuid(
+    command.draftId,
+    "The workspace setup draft identifier",
+    command.commandId,
+  );
+
+  [command.expectedRunUpdatedAt, command.expectedDraftUpdatedAt].forEach(
+    (timestamp) => {
+      if (
+        !timestampPattern.test(timestamp) ||
+        Number.isNaN(Date.parse(timestamp))
+      ) {
+        throw new WorkspaceApiError(
+          "invalid_request",
+          "Refresh the workspace setup draft before saving it.",
+          command.commandId,
+        );
+      }
+    },
+  );
+
+  const configuration = command.approvedConfiguration;
+  assertMinimumText(
+    configuration.businessType,
+    2,
+    "Add the type of business this workspace supports.",
+    command.commandId,
+  );
+  assertMaximumText(
+    configuration.businessType,
+    120,
+    "Keep the business type under 120 characters.",
+    command.commandId,
+  );
+
+  const allowedStages = new Set<WorkspaceWorkflowStage>(
+    workspaceWorkflowStages,
+  );
+  if (
+    !Array.isArray(configuration.workflowStages) ||
+    configuration.workflowStages.length < 1 ||
+    configuration.workflowStages.length >
+      workspaceWorkflowStages.length ||
+    new Set(configuration.workflowStages).size !==
+      configuration.workflowStages.length ||
+    configuration.workflowStages.some(
+      (stage) => !allowedStages.has(stage),
+    )
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Choose at least one available workflow stage.",
+      command.commandId,
+    );
+  }
+
+  if (
+    !Array.isArray(configuration.commonOwners) ||
+    configuration.commonOwners.length < 1 ||
+    configuration.commonOwners.length > 10 ||
+    configuration.commonOwners.some(
+      (owner) =>
+        typeof owner !== "string" ||
+        owner.trim().length < 1 ||
+        owner.trim().length > 80,
+    ) ||
+    new Set(
+      configuration.commonOwners.map((owner) =>
+        owner.trim().toLowerCase(),
+      ),
+    ).size !== configuration.commonOwners.length
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Add between one and ten distinct owner labels.",
+      command.commandId,
+    );
+  }
+
+  const allowedDays = new Set<WorkspaceWorkingDay>(
+    workspaceWorkingDays,
+  );
+  if (
+    !Array.isArray(configuration.workingDays) ||
+    configuration.workingDays.length < 1 ||
+    configuration.workingDays.length >
+      workspaceWorkingDays.length ||
+    new Set(configuration.workingDays).size !==
+      configuration.workingDays.length ||
+    configuration.workingDays.some(
+      (day) => !allowedDays.has(day),
+    )
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Choose at least one working day.",
+      command.commandId,
+    );
+  }
+
+  [
+    configuration.dailyBriefingEnabled,
+    configuration.immediateFailureAlertsEnabled,
+    configuration.opportunityAlertsEnabled,
+  ].forEach((value) => {
+    if (typeof value !== "boolean") {
+      throw new WorkspaceApiError(
+        "invalid_request",
+        "Review each notification preference before saving.",
+        command.commandId,
+      );
+    }
+  });
 }
 
 function validateRiskSignalCommand(
@@ -4727,6 +4933,58 @@ export function createWorkspaceApplicationApi(
         }
       },
 
+      async listWorkspaceSetupDrafts() {
+        const requestId = createOperationRequestId();
+
+        try {
+          assertUuid(
+            workspaceId,
+            "The workspace identifier",
+            requestId,
+          );
+          return await getWorkspaceGuidedWorkspaceSetupDrafts(
+            supabase,
+            workspaceId,
+          );
+        } catch (error) {
+          console.error(
+            "Workspace API guided workspace setup draft query failed",
+            { requestId, error },
+          );
+          throw mapOperationError(
+            error,
+            requestId,
+            "Workspace setup drafts could not be loaded.",
+          );
+        }
+      },
+
+      async getWorkspaceProfile() {
+        const requestId = createOperationRequestId();
+
+        try {
+          assertUuid(
+            workspaceId,
+            "The workspace identifier",
+            requestId,
+          );
+          return await getWorkspaceOperatingProfile(
+            supabase,
+            workspaceId,
+          );
+        } catch (error) {
+          console.error(
+            "Workspace API operating profile query failed",
+            { requestId, error },
+          );
+          throw mapOperationError(
+            error,
+            requestId,
+            "Workspace setup could not be loaded.",
+          );
+        }
+      },
+
       async startRun(command) {
         validateStartOperationsAgentRunCommand(
           workspaceId,
@@ -4872,6 +5130,63 @@ export function createWorkspaceApplicationApi(
             error,
             command.commandId,
             "The guided client intake could not be completed.",
+          );
+        }
+      },
+
+      async completeWorkspaceSetup(command) {
+        validateCompleteGuidedWorkspaceSetupCommand(
+          workspaceId,
+          command,
+        );
+
+        try {
+          const configuration = command.approvedConfiguration;
+          const { data, error } = await supabase.rpc(
+            "command_complete_guided_workspace_setup",
+            {
+              p_workspace_id: workspaceId,
+              p_run_id: command.runId,
+              p_draft_id: command.draftId,
+              p_expected_run_updated_at:
+                command.expectedRunUpdatedAt,
+              p_expected_draft_updated_at:
+                command.expectedDraftUpdatedAt,
+              p_approved_configuration: {
+                businessType: configuration.businessType.trim(),
+                workflowStages: configuration.workflowStages,
+                commonOwners: configuration.commonOwners.map(
+                  (owner) => owner.trim(),
+                ),
+                workingDays: configuration.workingDays,
+                dailyBriefingEnabled:
+                  configuration.dailyBriefingEnabled,
+                immediateFailureAlertsEnabled:
+                  configuration.immediateFailureAlertsEnabled,
+                opportunityAlertsEnabled:
+                  configuration.opportunityAlertsEnabled,
+              },
+              p_idempotency_key: command.commandId,
+            },
+          );
+
+          if (error) {
+            throw error;
+          }
+
+          return mapGuidedWorkspaceSetupCommandResult(
+            data,
+            command.commandId,
+          );
+        } catch (error) {
+          console.error(
+            "Workspace API guided workspace setup completion failed",
+            { requestId: command.commandId, error },
+          );
+          throw mapOperationError(
+            error,
+            command.commandId,
+            "The workspace setup could not be saved.",
           );
         }
       },

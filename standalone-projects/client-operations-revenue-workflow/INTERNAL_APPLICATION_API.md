@@ -2,7 +2,7 @@
 
 Status: Active technical contract
 
-Implemented slices: Work items, client records, follow-up completion, Work Item handoff context, proposals, engagement-owned Proposal recommendations, proposal-linked Invoice billing, invoices, engagement ownership, engagement-scoped risk review, sequential Work Item controls, Work Item dependency editing, the provider-neutral Operations Agent runtime, and Suggest-mode guided client intake
+Implemented slices: Work items, client records, follow-up completion, Work Item handoff context, proposals, engagement-owned Proposal recommendations, proposal-linked Invoice billing, invoices, engagement ownership, engagement-scoped risk review, sequential Work Item controls, Work Item dependency editing, the provider-neutral Operations Agent runtime, Suggest-mode guided client intake, and Suggest-mode guided workspace setup
 
 Public API status: None of the interfaces or database functions in this document are a versioned customer API.
 
@@ -128,6 +128,8 @@ worker claims, bounded state transitions, and atomic usage accounting:
 - `agent_record_operations_agent_usage`
 - `agent_record_guided_client_intake_result`
 - `agent_fail_guided_client_intake_run`
+- `agent_record_guided_workspace_setup_result`
+- `agent_fail_guided_workspace_setup_run`
 
 Authenticated browser callers cannot execute these service functions or write
 runtime tables directly.
@@ -145,7 +147,8 @@ runtime tables directly.
 
 ### Operations Agent runtime
 
-- The first capability is `guided_client_intake`.
+- Available capabilities are `guided_client_intake` and
+  `guided_workspace_setup`.
 - Every browser-started run uses `suggest` mode. Approval-required and
   delegated modes are not enabled by the start command.
 - One active run is allowed per workspace during the foundation rollout.
@@ -166,6 +169,15 @@ runtime tables directly.
   `command_create_client_workflow_record` boundary and completes the run.
 - Missing and uncertain fields are durable draft data. The server must not
   invent dates, owners, amounts, statuses, commitments, or relationship state.
+- Guided workspace setup uses one server-side structured-output call. The
+  model can prepare only an editable profile draft. The fixed lifecycle-stage
+  vocabulary remains authoritative.
+- The workspace owner reviews business type, preferred stages, common owner
+  labels, working days, and notification choices before
+  `command_complete_guided_workspace_setup` creates or updates the operating
+  profile.
+- Authenticated callers can read their workspace profile and drafts but cannot
+  insert or update either table directly.
 - Runtime tables are read-only to authenticated callers. The service role can
   write runtime internals but does not receive permission to bypass existing
   business commands for consequential workspace changes.
@@ -317,7 +329,7 @@ User-facing errors include the command or query request ID. Console diagnostics 
 
 | Area | Reads | Ordinary writes | Privileged or atomic writes | Current boundary status |
 | --- | --- | --- | --- | --- |
-| Workspace | owned workspace lookup | create workspace | none | Persistence adapter; retain RLS |
+| Workspace | owned workspace lookup + operating profile | create workspace | reviewed operating-profile save | Profile remains owner-scoped; fixed lifecycle values remain authoritative |
 | Engagements | workspace engagements | none directly | create/update + automatic milestone progression + Activity | Implemented; forward-only stage derivation and primary compatibility bridge active |
 | Follow-ups | workspace completion history | none directly | complete + schedule update + reconciliation + Activity | Implemented for all Active engagements |
 | Client records | workspace records | none directly | create/update + reconciliation + Activity | Implemented in second slice |
@@ -327,12 +339,14 @@ User-facing errors include the command or query request ID. Console diagnostics 
 | Invoices | workspace/client invoices | none directly | engagement-scoped create/update/recommendation + optional accepted-Proposal billing + reconciliation + Activity | Implemented for all Active engagements |
 | Risk signals | workspace risk history | none directly | engagement-scoped review/dismiss + isolated health + Activity | Implemented; source-driven resolution remains separate |
 | Activity | workspace history | direct inserts from legacy flows | command-owned audit writes | Client-record, work-item, handoff-context, Proposal, Invoice, and risk-review audit implemented; other flows pending |
-| Operations Agent | owner-scoped runs, steps, and guided intake drafts | start/cancel; review an editable draft | service-only claim/provider result/failure; atomic reviewed client save | Guided client intake implemented in Suggest mode; no autonomous workflow writes |
+| Operations Agent | owner-scoped runs, steps, client-intake drafts, and workspace-setup drafts | start/cancel; review editable drafts | service-only claim/provider result/failure; atomic reviewed client/profile save | Guided client intake and workspace setup implemented in Suggest mode; no autonomous workflow writes |
 
 ## Assistant Eligibility
 
-Guided client intake is the first protected Operations Agent capability. It
-uses the existing client-record command only after explicit user review. The
+Guided client intake and guided workspace setup are the first protected
+Operations Agent capabilities. Client intake uses the existing client-record
+command only after explicit user review. Workspace setup can write only the
+reviewed operating profile and cannot change client or job workflow data. The
 engagement, follow-up, work-item, handoff-context, Proposal, Invoice, and
 risk-review commands are not yet exposed as agent tools. Additional tool
 enablement requires:
@@ -348,8 +362,8 @@ The assistant should use the same application command contract as the manual UI 
 
 ## Next Slices
 
-1. Browser-test guided client intake, provider failure recovery, cancellation,
-   idempotent review save, and cost accounting.
+1. Rollback-verify and browser-test guided workspace setup, including missing
+   choices, cancellation, idempotent review save, and profile updates.
 2. Add explicit approval records before exposing any additional consequential
    command as an Operations Agent tool.
 3. Move remaining legacy Activity writes behind command-owned audit effects.
