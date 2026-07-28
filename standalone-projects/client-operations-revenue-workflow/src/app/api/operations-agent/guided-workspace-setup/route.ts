@@ -9,6 +9,10 @@ import {
   type WorkspaceWorkingDay,
   type WorkspaceWorkflowStage,
 } from "@/lib/operations-agent-types";
+import {
+  fetchOpenAiWithDurableRetry,
+  type DurableProviderRun,
+} from "@/lib/server/operations-agent-provider";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -146,7 +150,7 @@ type SetupResponse = {
   clarificationQuestions: string[];
 };
 
-type RunRow = {
+type RunRow = DurableProviderRun & {
   id: string;
   workspace_id: string;
   initiated_by: string;
@@ -599,52 +603,69 @@ export async function POST(request: Request) {
       throw profileError;
     }
 
-    const providerResponse = await fetch(
-      "https://api.openai.com/v1/responses",
+    const { error: allowanceError } = await serviceClient.rpc(
+      "agent_assert_operations_agent_allowance",
       {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${openAiApiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model,
-          store: false,
-          reasoning: {
-            effort: "low",
-          },
-          safety_identifier: createHash("sha256")
-            .update(user.id)
-            .digest("hex"),
-          instructions: [
-            "You prepare a reviewed operating setup for one workspace.",
-            "Use only facts in the requested setup and any supplied current configuration.",
-            "When a current configuration exists, preserve its values unless the requested setup explicitly changes them.",
-            "Never invent owner roles, working days, workflow stages, or notification choices.",
-            "Use null for a missing boolean or text choice and an empty array for a missing list.",
-            "Use only the provided workflow stage and working-day values.",
-            "If wording is ambiguous, leave the affected value empty and list it under uncertainFields.",
-            "Keep summary factual and concise.",
-            "Write the summary, uncertainty reasons, and clarification questions as plain user-facing copy for the person reviewing the draft.",
-            "Address the reviewer directly when useful; do not say 'the user' or mention models, schemas, tools, confidence scores, inference, or internal system states.",
-            "Do not claim that anything has already been saved.",
-          ].join(" "),
-          input: JSON.stringify({
-            requestedSetup: claimedRun.objective,
-            currentConfiguration: currentProfile ?? null,
-          }),
-          max_output_tokens: 1800,
-          text: {
-            format: {
-              type: "json_schema",
-              name: "guided_workspace_setup",
-              strict: true,
-              schema: guidedWorkspaceSetupSchema,
-            },
-          },
-        }),
+        p_workspace_id: claimedRun.workspace_id,
+        p_run_id: claimedRun.id,
+        p_worker_id: workerId,
       },
     );
+
+    if (allowanceError) {
+      throw allowanceError;
+    }
+
+    const providerResponse = await fetchOpenAiWithDurableRetry({
+      serviceClient,
+      run: claimedRun,
+      workerId,
+      apiKey: openAiApiKey,
+      provider,
+      model,
+      body: {
+        model,
+        store: false,
+        reasoning: {
+          effort: "low",
+        },
+        safety_identifier: createHash("sha256")
+          .update(user.id)
+          .digest("hex"),
+        instructions: [
+          "You prepare a reviewed operating setup for one workspace.",
+          "Use only facts in the requested setup and any supplied current configuration.",
+          "When a current configuration exists, preserve its values unless the requested setup explicitly changes them.",
+          "Never invent owner roles, working days, workflow stages, or notification choices.",
+          "Use null for a missing boolean or text choice and an empty array for a missing list.",
+          "Use only the provided workflow stage and working-day values.",
+          "If wording is ambiguous, leave the affected value empty and list it under uncertainFields.",
+          "Keep summary factual and concise.",
+          "Write the summary, uncertainty reasons, and clarification questions as plain user-facing copy for the person reviewing the draft.",
+          "Address the reviewer directly when useful; do not say 'the user' or mention models, schemas, tools, confidence scores, inference, or internal system states.",
+          "Do not claim that anything has already been saved.",
+        ].join(" "),
+        input: JSON.stringify({
+          requestedSetup: claimedRun.objective,
+          currentConfiguration: currentProfile ?? null,
+        }),
+        max_output_tokens: 1800,
+        text: {
+          format: {
+            type: "json_schema",
+            name: "guided_workspace_setup",
+            strict: true,
+            schema: guidedWorkspaceSetupSchema,
+          },
+        },
+      },
+      onRunUpdated: (run) => {
+        claimedRun = {
+          ...claimedRun!,
+          ...run,
+        };
+      },
+    });
 
     if (!providerResponse.ok) {
       throw new Error(

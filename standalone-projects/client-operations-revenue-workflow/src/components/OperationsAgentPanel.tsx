@@ -4,12 +4,14 @@ import { useState } from "react";
 import {
   BriefcaseBusiness,
   CalendarClock,
+  Gauge,
   ShieldCheck,
   UserPlus,
 } from "lucide-react";
 import { GuidedClientIntakePanel } from "@/components/GuidedClientIntakePanel";
 import { GuidedWorkspaceSetupPanel } from "@/components/GuidedWorkspaceSetupPanel";
 import { OperationsAgentApprovalQueue } from "@/components/OperationsAgentApprovalQueue";
+import { OperationsAgentReliabilityPanel } from "@/components/OperationsAgentReliabilityPanel";
 import { NextActionUpdatePanel } from "@/components/NextActionUpdatePanel";
 import type {
   GuidedClientIntakeCommandResult,
@@ -28,7 +30,8 @@ type AgentTask =
   | "workspace-setup"
   | "client-intake"
   | "next-actions"
-  | "approvals";
+  | "approvals"
+  | "reliability";
 
 export function OperationsAgentPanel({
   onClientCreated,
@@ -97,6 +100,19 @@ export function OperationsAgentPanel({
           <ShieldCheck aria-hidden="true" className="size-5" />
           Approvals
         </button>
+        <button
+          aria-pressed={activeTask === "reliability"}
+          className={`inline-flex min-h-11 items-center gap-2 rounded-md px-4 py-2 font-bold ${
+            activeTask === "reliability"
+              ? "bg-[#174F42] text-white"
+              : "bg-[#EDF3EF] text-[#174F42] hover:bg-[#DDE9E2]"
+          }`}
+          onClick={() => setActiveTask("reliability")}
+          type="button"
+        >
+          <Gauge aria-hidden="true" className="size-5" />
+          Usage & reliability
+        </button>
       </div>
 
       {activeTask === "workspace-setup" ? (
@@ -116,8 +132,13 @@ export function OperationsAgentPanel({
           workspaceApi={workspaceApi}
           workspaceId={workspaceId}
         />
-      ) : (
+      ) : activeTask === "approvals" ? (
         <OperationsAgentApprovalQueue
+          workspaceApi={workspaceApi}
+          workspaceId={workspaceId}
+        />
+      ) : (
+        <OperationsAgentReliabilityPanel
           workspaceApi={workspaceApi}
           workspaceId={workspaceId}
         />

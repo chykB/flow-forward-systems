@@ -140,6 +140,31 @@ export type OperationsAgentRunLimits = {
   costUsd: number;
 };
 
+export type OperationsAgentAllowanceLevel =
+  | "available"
+  | "approaching"
+  | "near_limit"
+  | "limit_reached"
+  | "paused";
+
+export type OperationsAgentReliabilityStatus = {
+  workspaceId: string;
+  enabled: boolean;
+  monthlyCostLimitUsd: number;
+  monthlyEstimatedCostUsd: number;
+  monthlyChargeableCostUsd: number;
+  monthlyRemainingUsd: number;
+  usagePercent: number;
+  allowanceLevel: OperationsAgentAllowanceLevel;
+  warningAtPercent: number;
+  criticalAtPercent: number;
+  activeRunCount: number;
+  staleRunCount: number;
+  failedRunCount: number;
+  monthStartedAt: string;
+  updatedAt: string;
+};
+
 export type OperationsAgentNextActionProposal = {
   clientEngagementId: string;
   expectedUpdatedAt: string;

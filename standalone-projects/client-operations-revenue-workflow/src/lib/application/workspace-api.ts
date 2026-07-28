@@ -28,6 +28,7 @@ import {
   type OperationsAgentApproval,
   type OperationsAgentCapability,
   type OperationsAgentNextActionProposal,
+  type OperationsAgentReliabilityStatus,
   type OperationsAgentRun,
   type OperationsAgentRunLimits,
   type OperationsAgentStep,
@@ -41,6 +42,11 @@ import {
   mapOperationsAgentApprovalRow,
   type OperationsAgentApprovalRow,
 } from "@/lib/supabase/operations-agent-approvals";
+import {
+  getOperationsAgentReliabilityStatus,
+  mapOperationsAgentReliabilityRow,
+  type OperationsAgentReliabilityRow,
+} from "@/lib/supabase/operations-agent-reliability";
 import {
   getWorkspaceGuidedClientIntakeDrafts,
   mapGuidedClientIntakeDraft,
@@ -477,6 +483,18 @@ export type CancelOperationsAgentRunCommand = {
   expectedUpdatedAt: string;
 };
 
+export type RecoverOperationsAgentRunCommand = {
+  commandId: string;
+  runId: string;
+  expectedUpdatedAt: string;
+};
+
+export type UpdateOperationsAgentControlsCommand = {
+  commandId: string;
+  enabled: boolean;
+  monthlyCostLimitUsd: number;
+};
+
 export type DecideOperationsAgentApprovalCommand = {
   commandId: string;
   approvalId: string;
@@ -518,6 +536,11 @@ export type CompleteGuidedWorkspaceSetupCommand = {
 export type OperationsAgentRunCommandResult = {
   requestId: string;
   run: OperationsAgentRun;
+};
+
+export type OperationsAgentControlsCommandResult = {
+  requestId: string;
+  status: OperationsAgentReliabilityStatus;
 };
 
 export type OperationsAgentApprovalCommandResult = {
@@ -613,12 +636,19 @@ export type WorkspaceApplicationApi = {
       GuidedWorkspaceSetupDraft[]
     >;
     getWorkspaceProfile: () => Promise<WorkspaceOperatingProfile | null>;
+    getReliabilityStatus: () => Promise<OperationsAgentReliabilityStatus>;
     startRun: (
       command: StartOperationsAgentRunCommand,
     ) => Promise<OperationsAgentRunCommandResult>;
     cancelRun: (
       command: CancelOperationsAgentRunCommand,
     ) => Promise<OperationsAgentRunCommandResult>;
+    recoverRun: (
+      command: RecoverOperationsAgentRunCommand,
+    ) => Promise<OperationsAgentRunCommandResult>;
+    updateControls: (
+      command: UpdateOperationsAgentControlsCommand,
+    ) => Promise<OperationsAgentControlsCommandResult>;
     approve: (
       command: DecideOperationsAgentApprovalCommand,
     ) => Promise<OperationsAgentApprovalCommandResult>;
@@ -729,6 +759,11 @@ type RiskSignalCommandRpcResult = {
 type OperationsAgentRunCommandRpcResult = {
   requestId: string;
   run: OperationsAgentRunRow;
+};
+
+type OperationsAgentControlsCommandRpcResult = {
+  requestId: string;
+  status: OperationsAgentReliabilityRow;
 };
 
 type OperationsAgentApprovalCommandRpcResult =
@@ -1458,6 +1493,31 @@ function mapOperationsAgentRunCommandResult(
   return {
     requestId: result.requestId,
     run: mapOperationsAgentRunRow(result.run),
+  };
+}
+
+function mapOperationsAgentControlsCommandResult(
+  data: unknown,
+  expectedRequestId: string,
+): OperationsAgentControlsCommandResult {
+  const result =
+    data as OperationsAgentControlsCommandRpcResult | null;
+
+  if (
+    !result?.requestId ||
+    result.requestId !== expectedRequestId ||
+    !result.status
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_response",
+      "The Operations Agent controls returned an invalid response.",
+      expectedRequestId,
+    );
+  }
+
+  return {
+    requestId: result.requestId,
+    status: mapOperationsAgentReliabilityRow(result.status),
   };
 }
 
@@ -3738,6 +3798,66 @@ function validateCancelOperationsAgentRunCommand(
   }
 }
 
+function validateRecoverOperationsAgentRunCommand(
+  workspaceId: string,
+  command: RecoverOperationsAgentRunCommand,
+) {
+  assertRequestId(command.commandId);
+  assertUuid(
+    workspaceId,
+    "The workspace identifier",
+    command.commandId,
+  );
+  assertUuid(
+    command.runId,
+    "The Operations Agent run identifier",
+    command.commandId,
+  );
+
+  if (
+    !timestampPattern.test(command.expectedUpdatedAt) ||
+    Number.isNaN(Date.parse(command.expectedUpdatedAt))
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Refresh the Operations Agent run before recovering it.",
+      command.commandId,
+    );
+  }
+}
+
+function validateUpdateOperationsAgentControlsCommand(
+  workspaceId: string,
+  command: UpdateOperationsAgentControlsCommand,
+) {
+  assertRequestId(command.commandId);
+  assertUuid(
+    workspaceId,
+    "The workspace identifier",
+    command.commandId,
+  );
+
+  if (typeof command.enabled !== "boolean") {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Choose whether the Operations Agent is available.",
+      command.commandId,
+    );
+  }
+
+  if (
+    !Number.isFinite(command.monthlyCostLimitUsd) ||
+    command.monthlyCostLimitUsd < 0.1 ||
+    command.monthlyCostLimitUsd > 1000
+  ) {
+    throw new WorkspaceApiError(
+      "invalid_request",
+      "Choose a monthly Operations Agent limit between $0.10 and $1,000.",
+      command.commandId,
+    );
+  }
+}
+
 function validatePrepareOperationsAgentNextActionCommand(
   workspaceId: string,
   command: PrepareOperationsAgentNextActionCommand,
@@ -5221,6 +5341,32 @@ export function createWorkspaceApplicationApi(
         }
       },
 
+      async getReliabilityStatus() {
+        const requestId = createOperationRequestId();
+
+        try {
+          assertUuid(
+            workspaceId,
+            "The workspace identifier",
+            requestId,
+          );
+          return await getOperationsAgentReliabilityStatus(
+            supabase,
+            workspaceId,
+          );
+        } catch (error) {
+          console.error(
+            "Workspace API Operations Agent reliability query failed",
+            { requestId, error },
+          );
+          throw mapOperationError(
+            error,
+            requestId,
+            "Operations Agent usage and reliability could not be loaded.",
+          );
+        }
+      },
+
       async startRun(command) {
         validateStartOperationsAgentRunCommand(
           workspaceId,
@@ -5295,6 +5441,83 @@ export function createWorkspaceApplicationApi(
             error,
             command.commandId,
             "The Operations Agent run could not be cancelled.",
+          );
+        }
+      },
+
+      async recoverRun(command) {
+        validateRecoverOperationsAgentRunCommand(
+          workspaceId,
+          command,
+        );
+
+        try {
+          const { data, error } = await supabase.rpc(
+            "command_recover_operations_agent_run",
+            {
+              p_workspace_id: workspaceId,
+              p_run_id: command.runId,
+              p_expected_updated_at: command.expectedUpdatedAt,
+              p_idempotency_key: command.commandId,
+            },
+          );
+
+          if (error) {
+            throw error;
+          }
+
+          return mapOperationsAgentRunCommandResult(
+            data,
+            command.commandId,
+          );
+        } catch (error) {
+          console.error(
+            "Workspace API Operations Agent recovery failed",
+            { requestId: command.commandId, error },
+          );
+          throw mapOperationError(
+            error,
+            command.commandId,
+            "The Operations Agent run could not be recovered.",
+          );
+        }
+      },
+
+      async updateControls(command) {
+        validateUpdateOperationsAgentControlsCommand(
+          workspaceId,
+          command,
+        );
+
+        try {
+          const { data, error } = await supabase.rpc(
+            "command_update_operations_agent_controls",
+            {
+              p_workspace_id: workspaceId,
+              p_enabled: command.enabled,
+              p_monthly_cost_limit_usd:
+                command.monthlyCostLimitUsd,
+              p_idempotency_key: command.commandId,
+            },
+          );
+
+          if (error) {
+            throw error;
+          }
+
+          return mapOperationsAgentControlsCommandResult(
+            data,
+            command.commandId,
+          );
+        } catch (error) {
+          console.error(
+            "Workspace API Operations Agent controls update failed",
+            { requestId: command.commandId, error },
+          );
+          throw mapOperationError(
+            error,
+            command.commandId,
+            "Operations Agent controls could not be updated.",
           );
         }
       },

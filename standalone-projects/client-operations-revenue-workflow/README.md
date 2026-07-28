@@ -19,7 +19,8 @@ existing client operations workflow.
 
 - Today: concise daily priorities and readiness items.
 - Operations Agent: Suggest-mode workspace setup and client intake, plus an
-  explicit approval inbox and one protected next-action tool.
+  explicit approval inbox, one protected next-action tool, and owner-managed
+  reliability and allowance controls.
 - Workflow Snapshot: current engagement stages and active workflow issues.
 - Client Records: clients, jobs, next actions, Work Items, handoff context,
   proposals, invoices, Workflow Health, and Activity.
@@ -35,6 +36,8 @@ existing client operations workflow.
 - Reviewed SQL migrations under `supabase/migrations`.
 - Typed application commands for consequential writes, idempotency, stale-write
   protection, and Activity history.
+- Durable agent runs with bounded retries and duration, database-enforced
+  workspace cost limits, safe recovery, and manual workflow fallback.
 - Deterministic workflow stages, readiness, risk reconciliation, and health
   scoring.
 
@@ -78,7 +81,14 @@ Open `http://localhost:3000`.
 
 Guided workspace setup and client intake require the two server-only secrets
 in the uncommitted `.env.local`. The rest of the application, including the
-manual client form, continues to work when the AI provider is unavailable.
+manual client form and Action Queue, continues to work when the AI provider is
+unavailable, a run reaches its limits, or the Operations Agent is paused.
+
+The Operations Agent Usage & reliability view shows monthly allowance, warns at
+70% and 90%, blocks chargeable usage at the configured hard limit, and lets the
+workspace owner pause new agent work. Only interrupted guided runs with an
+expired worker lease and remaining retry and duration allowance can be
+recovered.
 
 ## Verification
 

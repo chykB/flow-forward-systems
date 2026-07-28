@@ -278,7 +278,7 @@ export function GuidedWorkspaceSetupPanel({
             source: "operations_agent_workspace_setup",
           },
           limits: {
-            modelCalls: 1,
+            modelCalls: 2,
             toolCalls: 0,
             retries: 1,
             durationSeconds: 120,

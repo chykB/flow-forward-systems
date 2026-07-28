@@ -177,6 +177,30 @@ boundary.
       even after approval.
 - [x] Confirm the approval inbox shows only user-facing execution outcomes and
       never returns command inputs, hashes, expected state, or raw results.
+- [ ] Apply and rollback-verify the Operations Agent reliability and allowance
+      migration.
+- [ ] Confirm one transient provider failure records one zero-charge retry and
+      cannot exceed the run's retry or model-call ceiling.
+- [ ] Confirm worker leases and retries cannot extend a run beyond its original
+      execution deadline.
+- [ ] Confirm the Usage & reliability view warns at 70% and 90% of the monthly
+      allowance.
+- [ ] Confirm chargeable usage is rejected at the exact monthly hard limit and
+      provider failures without a usable result remain zero-charge.
+- [ ] Confirm paused or over-limit guided runs are rejected before any model
+      provider request is sent.
+- [ ] Confirm pausing the Operations Agent blocks new chargeable work while
+      preserving the manual client form and Action Queue.
+- [ ] Confirm only a stale guided run with remaining retry and duration
+      allowance can be recovered.
+- [ ] Confirm recovery rejects a live worker lease and expires a run that has
+      passed its bounded deadline.
+- [ ] Confirm recovery replay creates one command and one recovery event without
+      changing clients, jobs, Workflow Health, or Activity.
+- [ ] Confirm the browser receives only aggregate allowance and run counts, not
+      provider, model, worker, lease, request hash, context, or plan data.
+- [ ] Confirm failed, expired, paused, and over-limit states offer a clear
+      manual workflow path before another agent write tool is enabled.
 
 ## Release Decision
 

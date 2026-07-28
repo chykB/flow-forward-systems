@@ -2,7 +2,7 @@
 
 Status: Active technical contract
 
-Implemented slices: Work items, client records, follow-up completion, Work Item handoff context, proposals, engagement-owned Proposal recommendations, proposal-linked Invoice billing, invoices, engagement ownership, engagement-scoped risk review, sequential Work Item controls, Work Item dependency editing, the provider-neutral Operations Agent runtime, Suggest-mode guided client intake, Suggest-mode guided workspace setup, explicit Operations Agent approval records, and the approval-required next-action tool
+Implemented slices: Work items, client records, follow-up completion, Work Item handoff context, proposals, engagement-owned Proposal recommendations, proposal-linked Invoice billing, invoices, engagement ownership, engagement-scoped risk review, sequential Work Item controls, Work Item dependency editing, the provider-neutral Operations Agent runtime, Suggest-mode guided client intake, Suggest-mode guided workspace setup, explicit Operations Agent approval records, the approval-required next-action tool, and Operations Agent reliability and allowance controls
 
 Public API status: None of the interfaces or database functions in this document are a versioned customer API.
 
@@ -60,8 +60,11 @@ The manual and rules-based product remains fully operational without an AI provi
 - `operationsAgent.listWorkspaceSetupDrafts()`
 - `operationsAgent.getWorkspaceProfile()`
 - `operationsAgent.listApprovals()`
+- `operationsAgent.getReliabilityStatus()`
 - `operationsAgent.startRun(command)`
 - `operationsAgent.cancelRun(command)`
+- `operationsAgent.recoverRun(command)`
+- `operationsAgent.updateControls(command)`
 - `operationsAgent.approve(command)`
 - `operationsAgent.reject(command)`
 - `operationsAgent.prepareNextActionUpdate(command)`
@@ -119,6 +122,8 @@ The current function names are:
 
 - `command_start_operations_agent_run`
 - `command_cancel_operations_agent_run`
+- `command_recover_operations_agent_run`
+- `command_update_operations_agent_controls`
 - `command_complete_guided_client_intake`
 - `command_complete_guided_workspace_setup`
 - `command_approve_operations_agent_action`
@@ -139,7 +144,9 @@ worker claims, bounded state transitions, and atomic usage accounting:
 
 - `agent_claim_operations_agent_run`
 - `agent_transition_operations_agent_run`
+- `agent_assert_operations_agent_allowance`
 - `agent_record_operations_agent_usage`
+- `agent_record_operations_agent_retry`
 - `agent_record_guided_client_intake_result`
 - `agent_fail_guided_client_intake_run`
 - `agent_record_guided_workspace_setup_result`
@@ -180,6 +187,24 @@ runtime tables directly.
 - Per-run model, tool, retry, duration, and cost ceilings are enforced at the
   database boundary. A workspace capability policy provides a kill switch,
   concurrency ceiling, and monthly cost ceiling.
+- Chargeable usage is rejected at the usage-ledger boundary when a capability
+  is paused or the workspace monthly hard limit would be exceeded. Provider
+  failures and retry records without a usable result remain zero-charge.
+- Guided server routes repeat the allowance check after claiming a run and
+  before contacting the model provider. This closes the gap when an owner pauses
+  the agent or lowers the monthly limit after a run was originally queued.
+- The owner-safe reliability query exposes only aggregate monthly allowance,
+  warning level, and active, stale, and failed run counts. It warns at 70% and
+  90%, reports the exact hard-limit state at 100%, and does not expose provider,
+  model, worker, lease, request hash, context, or plan data.
+- A transient guided-route provider failure can schedule only the retries
+  already reserved on the durable run. Each retry renews the worker lease only
+  within the original execution deadline; retry and model-call ceilings remain
+  authoritative.
+- The recovery command can requeue only a stale guided run with remaining retry
+  and duration allowance. It rejects a live lease, expires a run past its
+  deadline, and returns a manual-workflow outcome when recovery is unavailable.
+  Recovery does not mutate clients, jobs, Workflow Health, or Activity.
 - Guided client intake uses one server-side structured-output call. The model
   can prepare only a review draft; it cannot create a client record.
 - The initiating user reviews the normal client form before
@@ -373,7 +398,7 @@ User-facing errors include the command or query request ID. Console diagnostics 
 | Invoices | workspace/client invoices | none directly | engagement-scoped create/update/recommendation + optional accepted-Proposal billing + reconciliation + Activity | Implemented for all Active engagements |
 | Risk signals | workspace risk history | none directly | engagement-scoped review/dismiss + isolated health + Activity | Implemented; source-driven resolution remains separate |
 | Activity | workspace history | direct inserts from legacy flows | command-owned audit writes | Client-record, work-item, handoff-context, Proposal, Invoice, and risk-review audit implemented; other flows pending |
-| Operations Agent | owner-scoped runs, steps, client-intake drafts, workspace-setup drafts, and user-facing approvals/outcomes | start/cancel; review drafts; prepare/approve/reject/apply one exact next-action change | service-only claim/provider result/failure/approval creation; atomic reviewed client/profile save; protected engagement command execution | Guided flows remain Suggest-only; next-action updates require explicit approval plus execution-time permission and freshness checks |
+| Operations Agent | owner-scoped runs, steps, client-intake drafts, workspace-setup drafts, user-facing approvals/outcomes, and aggregate reliability status | start/cancel/recover; pause/resume and set monthly limit; review drafts; prepare/approve/reject/apply one exact next-action change | service-only claim/provider result/failure/retry/approval creation; atomic reviewed client/profile save; protected engagement command execution | Guided flows remain Suggest-only; retries, duration, and chargeable usage are bounded; next-action updates require explicit approval plus execution-time permission and freshness checks |
 
 ## Assistant Eligibility
 
@@ -404,8 +429,9 @@ The assistant should use the same application command contract as the manual UI 
 
 ## Next Slices
 
-1. Rollback-verify and browser-test the protected next-action proposal,
-   approval, execution, stale-target failure, and user-facing outcome.
-2. Keep other workflow commands unavailable to the agent until this first tool
-   passes Private V1 acceptance.
+1. Rollback-verify and browser-test stale-run recovery, bounded retry and
+   duration behavior, allowance warnings, hard-limit rejection, pause/resume,
+   and manual fallback.
+2. Keep other workflow commands unavailable to the agent until the reliability
+   and allowance gate passes Private V1 acceptance.
 3. Move remaining legacy Activity writes behind command-owned audit effects.
